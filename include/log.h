@@ -5,10 +5,10 @@
 #include <string>
 using namespace std;
 
-void Log(int level, const char*file, int line, const char*fmt,...);
-void Log_full(int level, const char*file, int line,
-	const char*fmt,...);
-void log_setlevel(int level);
+void Log (int level, const char*file, int line, const char*fmt, ...);
+void Log_full (int level, const char*file, int line,
+	       const char*fmt, ...);
+void log_setlevel (int level);
 
 #define DEBUG 0
 #define INFO 1
