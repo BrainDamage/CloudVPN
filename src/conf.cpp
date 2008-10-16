@@ -104,8 +104,7 @@ bool config_parse (int argc, char**argv)
 			char* option_name = (*argv) + 1;
 			++argv;
 			if (! (*argv) ) {
-				Log_error ("config: missing value for\
-commandline `%s'", option_name);
+				Log_error ("config: missing value for commandline option `%s'", option_name);
 				return false;
 			}
 			if (!strcmp (option_name, include_directive) ) {

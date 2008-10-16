@@ -31,7 +31,7 @@ All nodes must
 	a] act as switches in a graph network. (NO tree, we allow circles)
 	   -remember where which MAC address is
 	   -send packets which arent for our MAC to the other guys.
-	   -do NOT duplicate data packets.
+	   -do NOT duplicate data packets, unless they are marked as broadcasts.
 	b] provide and update reasonable info about "what MACs I can send to"
 	c] provide and update reasonable info about MAC distances, so there's a
 	   possibility to select a best route for a packet.
@@ -40,6 +40,7 @@ All nodes must
 	e] if a connection to a server is lost, send the update info to
 	   neighbors, and then send all the packets to any alternative route,
 	   possibly back.
+	f] randomly send packet which is sent to unknown destination mac.
 
 Every broadcast packet
 	a] has a random-generated ID
@@ -49,45 +50,45 @@ Every broadcast packet
 	   cache)
 
 All clients must note, that
-	a] we are simulating the real Ethernet LAN with all its "feats", so
+	a] we are simulating the REAL Ethernet with all its "feats", so
 	   ARP spoofs, sniffing, and things like that ARE possible.
-	b] They don't get a route and/or IP address. This should be handled by
-	   classical dhcp server which sits somewhere on the network.
+	b] They don't get any route and/or IP address with the connection, like
+	   the OpenVPN guys do. This should be handled by some classical dhcp
+	   server which sits on any host of the network (and is best at it).
+	c] ONLY form of authentication (that server and client both fit into the
+	   network here) IS actually the CA certification. Someone could look
+	   for using the ssh-like server certificate change-checking, but this
+	   could be a little complicated and not really usuable here, when we
+	   assume that IF the attacker already has taken over the CA key, he is
+	   not gonna have much trouble taking over (or maybe bruteforcing
+	   similarly) the server key.
 
-
-*** PACKET FORMAT ***
+	*** PACKET FORMAT ***
 
 Connection and authentication is done through SSL
 
-MAC struct --- (8B)
+struct NEIGHBOR --- (10B)
 6B mac_addr
-2B distance
+4B distance --distance is in relative units. Let it be the "ping"
 
-MAC INFO RESET packet ---   "hey thats exactly what I can have
-NEW MAC packet ---
-LOST MAC packet ---
+struct packet_header --- (4B)
+1B packet_type
+1B reserved
+2B size
 
-1B id == 1 or 2 or 3
-1B mac_count
-( 8B struct mac ) * mac_count    --hey maan were sending le big macques
+PACKET TYPES are:
 
-DATA packet ---
+1 - route information set, size is the count of following neighbors
+2 - route information add, -"-
+3 - ethernet packet, followed by to[6],from[6],type[2],data[size]
+4 - broadcast ethernet packet, followed by id[4], to[6], from[6], data[size]
 
-1B id == 4
-6B source_mac
-6B dest_mac
-2B length
-xB some data  --irl no need to checksum.
+EVERY PACKET has format:
 
-DATAB packet --- broadcast
+4B struct packet header
+xB data
 
-1B ID == 5
-6B source_mac
-4B packet_ID   --to kill resending
-2B length
-xB some data
-
-*** CONFIGURATION ***
+	*** CONFIGURATION ***
 
 we should stay as simple as OpenVPN guys are -- command line parameters combined
 with the config file of the same format, only without the "minuses".
@@ -100,17 +101,15 @@ config options:
 
 connect IP:port  --repeat as needed
 connection_retry time
-client_cert path
-client_key path
 
 listen IP:port --repeat as needed
 server_default_accept yes/no
 server_allow_mask IP/mask --repeat both as needed
 server_reject_mask IP/mask
-server_key path
-server_cert path
 
 ca_cert path
+key path  //this key pair can be successfully used for both servers and clients
+cert path
 
 iface yes/no
 tunctl /dev/net/tun
@@ -123,7 +122,7 @@ uid nobody
 gid nobody
 
 
-*** INTERNALS ***
+	*** INTERNALS ***
 
 modules are:
 
@@ -132,8 +131,8 @@ iface - local interface handler, creates/destroys iface, gets/writes packets.
 comm - tcp/ssl wrapper, communication. Able to infinately retry some of
 	the lost connections. Incoming packets and information is
 	passed to route. output queue.
-route - information about "which mac is where". information about broadcasts.
-	iface connection.
+route - routing information for packets
+utils - just some utilities
 cloudvpn - the thing that reads the config and runs all of it
 main.c - neatly separated main()
 

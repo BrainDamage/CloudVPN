@@ -17,10 +17,12 @@
 
 #define CLEAR(x) memset(&(x),0,sizeof(x))
 
+#define hwaddr_digits (2*hwaddr_size)
+
 static bool read_mac_addr (const char*b, uint8_t*addr)
 {
 	int digits = 0, res;
-	while ( (*b) && (digits < 12) ) {
+	while ( (*b) && (digits < hwaddr_digits) ) {
 		res = -1;
 		if ( (*b >= '0') && (*b <= '9') ) res = *b - '0';
 		else if ( (*b >= 'A') && (*b <= 'F') ) res = *b - 'A' + 10;
@@ -31,7 +33,7 @@ static bool read_mac_addr (const char*b, uint8_t*addr)
 		}
 		++b;
 	}
-	if (digits == 12) return true;
+	if (digits == hwaddr_digits) return true;
 	else return false;
 }
 
@@ -39,8 +41,8 @@ static string format_mac_addr (uint8_t*addr)
 {
 	string r;
 	int t;
-	r.reserve (17);
-	for (int i = 0;i < 12;++i) {
+	r.reserve (hwaddr_size + hwaddr_digits - 1);
+	for (int i = 0;i < hwaddr_digits;++i) {
 		if (i && (! (i % 2) ) ) r.append (1, ':');
 		t = (addr[i/2] >> ( (i % 2) ? 4 : 0) ) & 0xF;
 		if (t < 10) r.append (1, '0' + t);
@@ -106,7 +108,7 @@ bool iface_create()
 	}
 
 	if (config_is_set ("mac") ) { //set mac address
-		uint8_t hwaddr[6];
+		uint8_t hwaddr[hwaddr_size];
 		string mac;
 		config_get ("mac", mac);
 		if (read_mac_addr (mac.c_str(), hwaddr) ) {
@@ -178,16 +180,6 @@ void iface_destroy()
 	tun = -1;
 }
 
-bool is_hwaddr_broadcast (uint8_t*hwaddr)
-{
-	/*
-	 * According to the specification, ff:ff:ff:ff:ff:ff IS broadcast, but
-	 * other (with least significant bit of first byte set to 1) are kind
-	 * of multicast. For simplicity, we are handling them as broadcast too.
-	 */
-	return (hwaddr[0]&1);
-}
-
 int iface_write (void*buf, size_t len)
 {
 	int res = write (tun, buf, len);
@@ -215,4 +207,30 @@ int iface_read (void*buf, size_t len)
 	}
 	return res;
 }
+
+#include "route.h"
+
+void iface_update()
+{
+	if(tun<0) {
+		Log_error("iface_update: tun not configured");
+		return;
+	}
+
+	char buffer[4096];
+	int ret;
+	while(1){
+		ret=iface_read(buffer,4096);
+		if(ret<=0) break;
+		if(ret<=2+(2*hwaddr_size)) {
+			Log_debug("iface_update: discarding packet too short for Ethernet");
+			continue;
+		}
+		route_dispatch_packet(buffer,ret);
+	}
+}
+		
+
+		
+
 
