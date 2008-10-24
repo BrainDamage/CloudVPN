@@ -17,6 +17,7 @@ int iface_set_hwaddr (uint8_t*hwaddr);
 int iface_retrieve_hwaddr (uint8_t*hwaddr);
 
 void iface_update(); //reads things and routes them
+int iface_get_sockfd();
 
 #endif
 

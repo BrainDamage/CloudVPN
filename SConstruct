@@ -7,6 +7,7 @@ SetOption('num_jobs',3)
 env=Environment(ENV=os.environ)
 env['CPPPATH']=['#include/']
 env['CXXFLAGS']=['-g']
+env['LIBS']=['ssl']
 
 sources = glob('src/*.c') + glob('src/*.cpp')
 env.Program('cloudvpn',sources)

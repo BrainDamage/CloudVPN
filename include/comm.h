@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include <map>
+#include <set>
 #include <string>
 using namespace std;
 
@@ -33,11 +34,12 @@ public:
 	string host_to_connect;
 };
 
-void comm_init();
-void comm_shutdown();
-void comm_update();
+int comm_init();
+int comm_shutdown();
+int comm_update(int socket=-1); //-1 = all sockets
 
 const map<int,connection>& comm_connections();
+const set<int> comm_listeners();
 
 #endif
 

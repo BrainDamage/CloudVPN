@@ -19,8 +19,7 @@ connection, so it can grow arbitrarily to enhance security.
 we simulate "real ethernet". If a node wants to act as a real client, he
 simply assigns himself some network address (preferably mac-like 6byte) and
 waits for packet to this address, and sends packet which are for another
-addresses to another nodes. Client may even check if the address is not already
-in use.
+addresses to another nodes. Mac address collisions are possible!
 
 All nodes can
 	a] connect to (more) other or allow other to get a connection
@@ -107,9 +106,10 @@ server_default_accept yes/no
 server_allow_mask IP/mask --repeat both as needed
 server_reject_mask IP/mask
 
-ca_cert path
-key path  //this key pair can be successfully used for both servers and clients
-cert path
+ca_cert path --auth
+key path  --this key pair is used for both server and client connections
+key_pass string  --key unlocker
+cert path  --public certificate preferably signed by CA
 
 iface yes/no
 tunctl /dev/net/tun

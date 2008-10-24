@@ -226,7 +226,7 @@ void iface_update()
 			Log_debug("iface_update: discarding packet too short for Ethernet");
 			continue;
 		}
-		route_dispatch_packet(buffer,ret);
+		route_packet(buffer,ret);
 	}
 }
 		
