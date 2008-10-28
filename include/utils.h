@@ -4,20 +4,34 @@
 
 #include "iface.h"
 
-class hwaddr {
+class hwaddr
+{
 public:
 	uint8_t addr[hwaddr_size];
-	
-	void set(uint8_t*);
-	void get(uint8_t*);
 
-	bool operator<(const hwaddr&);
+	void set (uint8_t*);
+	void get (uint8_t*);
+
+	inline hwaddr (uint8_t* data) {
+		set (data);
+	}
+	inline hwaddr (void* data) {
+		set ( (uint8_t*) data);
+	}
+
+	bool operator< (const hwaddr&) const;
 };
 
-inline bool is_packet_broadcast(const void*buf)
+inline bool is_packet_broadcast (const void*buf)
 {
-	return ((const char*)buf)[0]&1;
+	return ( (const char*) buf) [0]&1;
 }
+
+inline bool is_addr_broadcast (const hwaddr&a)
+{
+	return is_packet_broadcast (a.addr);
+}
+
 
 #endif
 

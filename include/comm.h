@@ -12,34 +12,49 @@
 #include <string>
 using namespace std;
 
-class connection {
+class connection
+{
 
 	//some ssl stuff here
-	
+
 	int flush();
-	int write(void*buf, int len);
-	int read(void*buf, int len);
+	int write (void*buf, int len);
+	int read (void*buf, int len);
 
+	bool working;
 public:
-	map<hwaddr,int> remote_routes;
+	map<hwaddr, int> remote_routes;
 
-	int write_packet(void*buf, int len);
-	int read_packet(void*buf, int maxlen);
+	inline connection (string recon = "") {
+		ping = 1; //at least measure the distance
+		reconnect = recon;
+		working = true;
+	}
 
-	bool status(); //false == can be deleted safely
+	int ping;
+
+	int write_packet (void*buf, int len);
+	int read_packet (void*buf, int maxlen);
+
+	inline bool status() {
+		//false == can be deleted safely
+		if (working) return true;
+		if (reconnect.length() ) return true;
+		return false;
+	}
 
 	void update();
 	void disconnect();
 
-	string host_to_connect;
+	string reconnect;
 };
 
 int comm_init();
 int comm_shutdown();
-int comm_update(int socket=-1); //-1 = all sockets
+int comm_update (int socket = -1); //-1 = all sockets
 
-const map<int,connection>& comm_connections();
-const set<int> comm_listeners();
+map<int, connection>& comm_connections();
+set<int> comm_listeners();
 
 #endif
 

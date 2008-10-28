@@ -212,25 +212,25 @@ int iface_read (void*buf, size_t len)
 
 void iface_update()
 {
-	if(tun<0) {
-		Log_error("iface_update: tun not configured");
+	if (tun < 0) {
+		Log_error ("iface_update: tun not configured");
 		return;
 	}
 
 	char buffer[4096];
 	int ret;
-	while(1){
-		ret=iface_read(buffer,4096);
-		if(ret<=0) break;
-		if(ret<=2+(2*hwaddr_size)) {
-			Log_debug("iface_update: discarding packet too short for Ethernet");
+	while (1) {
+		ret = iface_read (buffer, 4096);
+		if (ret <= 0) break;
+		if (ret <= 2 + (2*hwaddr_size) ) {
+			Log_debug ("iface_update: discarding packet too short for Ethernet");
 			continue;
 		}
-		route_packet(buffer,ret);
+		route_packet (buffer, ret);
 	}
 }
-		
 
-		
+
+
 
 
