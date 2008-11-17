@@ -26,3 +26,17 @@ void hwaddr::get (uint8_t*c)
 {
 	memcpy (c, addr, hwaddr_size);
 }
+
+#include <stdlib.h>
+
+void sockaddr_free(struct sockaddr**addr)
+{
+	if(*addr)free(*addr);
+	*addr=0;
+}
+
+bool sockaddr_parse(const char *addr,
+	struct sockaddr**newaddr,int*len)
+{
+	return false;
+}

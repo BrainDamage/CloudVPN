@@ -32,6 +32,10 @@ inline bool is_addr_broadcast (const hwaddr&a)
 	return is_packet_broadcast (a.addr);
 }
 
+bool sockaddr_parse(const char*a,
+	struct sockaddr**newaddr,int*len);
+
+void sockaddr_free(struct sockaddr**addr);
 
 #endif
 

@@ -74,6 +74,20 @@ static int initialize_ssl()
 }
 
 /*
+ * raw network stuff
+ */
+
+int tcp_listen_socket(const string&addr)
+{
+	return -1;
+}
+
+int tcp_connect_socket(const string&addr)
+{
+	return -1;
+}
+
+/*
  * class connection stuff
  */
 

@@ -1,0 +1,6 @@
+
+* IP address parser to sockaddr_in
+* SSL connect
+* SSL read/write
+* poll interface to comm
+

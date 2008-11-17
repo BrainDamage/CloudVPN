@@ -62,6 +62,16 @@ All clients must note, that
 	   not gonna have much trouble taking over (or maybe bruteforcing
 	   similarly) the server key.
 
+There are 2 modes of connection (for both sides)
+	a] the other side doesn't want to know about my environs,
+	   so I dont send him anything
+	b] the other side wants to know my neighbor info,
+	   si I spam him with data.
+	-> This is particularly useful when creating tree and similar network
+	   topologies. a] is default, so network doesnt get filled with
+	   unnecessary maclist dumps. Preferred way to trigger this is to use
+	   connect_parent.
+
 	*** PACKET FORMAT ***
 
 Connection and authentication is done through SSL
@@ -72,15 +82,21 @@ struct NEIGHBOR --- (10B)
 
 struct packet_header --- (4B)
 1B packet_type
-1B reserved
+1B special
 2B size
 
 PACKET TYPES are:
 
-1 - route information set, size is the count of following neighbors
+1 - route information set, size is the *count* of following neighbors
 2 - route information add, -"-
 3 - ethernet packet, followed by to[6],from[6],type[2],data[size]
 4 - broadcast ethernet packet, followed by id[4], to[6], from[6], data[size]
+5 - set mode, special==1 when we want network info from a remote host,
+	and special==0 (default) when we dont really want any remote neighbors.
+6 - echo request, special == ID
+7 - echo reply, special == ID
+
+NOTE that login/logout is handled by SSL
 
 EVERY PACKET has format:
 
@@ -98,11 +114,16 @@ config options:
 
 @include path
 
-connect IP:port  --repeat as needed
-connection_retry time
+connect IP port  --repeat as needed, normal topology connect
+connect_parent IP port
+	--one parent node which is believed to be able of handling all packets
+	--we don't know what to do with.
 
-listen IP:port --repeat as needed
-server_default_accept yes/no
+connect_retry time   --in seconds, probably.
+
+listen IP port --repeat as needed, should be set like 0.0.0.0 20
+
+server_default_accept yes/no --ip connection policy
 server_allow_mask IP/mask --repeat both as needed
 server_reject_mask IP/mask
 
@@ -111,7 +132,7 @@ key path  --this key pair is used for both server and client connections
 key_pass string  --key unlocker
 cert path  --public certificate preferably signed by CA
 
-iface yes/no
+iface yes/no  --we can be headless
 tunctl /dev/net/tun
 iface_dev tapX --for example.
 iface_persist yes/no

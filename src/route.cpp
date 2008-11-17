@@ -77,7 +77,7 @@ void route_packet (void*buf, size_t len, int conn)
 		route_broadcast_packet (new_packet_uid(), buf, len, conn);
 		return;
 	}
-	if (!route.count (a) ) return;
+	if (!route.count (a) ) return; //TODO fallback route to parent
 	comm_connections() [route[a].id].write_packet (buf, len);
 }
 
