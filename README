@@ -4,13 +4,21 @@
 |____|__|_____|_____|_____|\_____/|___|  |__|____|
                                                     
 
-The cloud clustering open VPN by [exa]
+The cloud&clustering&open VPN by [exa]
 
 Needed goals:
 
-whole network consists of connected nodes, all with equal functionality.
+Whole network consists of connected nodes, all with equal functionality.
+Nodes are connected in a mesh of any shape, topology really doesnt matter.
 
-when connecting, nodes can act as server or client, therefore use server or
+Optional goals:
+
+Don't use a single malloc(), so everyone knows that STL is powerful enough as
+a memory management alternative.
+
+	*** IMPLEMENTATION NOTES ***
+
+When connecting, nodes can act as server or client, therefore use server or
 client SSL keys. Authorization to connect is given, when both sides have
 certificates signed by the same certificate authority, signing a key means
 allowing a client to connect to the network. Sign is verified once per
