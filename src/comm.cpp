@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include <string>
+
 using namespace std;
 
 static map<int, connection> connections;
@@ -42,7 +43,9 @@ static int ssl_password_callback (char*buffer, int num, int rwflag, void*udata)
 		Log_warn ("ssl_pw_cb: supplied buffer too small");
 		return 0;
 	}
+
 	strcpy (buffer, ssl_pass.c_str() );
+
 	return ssl_pass.length();
 }
 
@@ -51,15 +54,17 @@ static int initialize_ssl()
 	SSL_METHOD* meth;
 
 	string keypath, certpath, capath;
+
 	if ( (!config_get ("key", keypath) ) ||
-			(!config_get ("cert", certpath) ) ||
-			(!config_get ("ca_cert", capath) ) ) {
+	        (!config_get ("cert", certpath) ) ||
+	        (!config_get ("ca_cert", capath) ) ) {
 		Log_fatal ("init_ssl: you must correctly specify key, cert and ca_cert options");
 		return 1;
 	}
 
 
 	SSL_library_init();
+
 	SSL_load_error_strings();
 
 	//TODO, maybe signal(sigpipe) here? no idea why.
@@ -77,12 +82,12 @@ static int initialize_ssl()
  * raw network stuff
  */
 
-int tcp_listen_socket(const string&addr)
+int tcp_listen_socket (const string&addr)
 {
 	return -1;
 }
 
-int tcp_connect_socket(const string&addr)
+int tcp_connect_socket (const string&addr)
 {
 	return -1;
 }
@@ -107,6 +112,11 @@ int connection::read (void*buf, int len)
 }
 
 int connection::write_packet (void*buf, int len)
+{
+	return 0;
+}
+
+int connection::write_broadcast_packet (uint32_t id, void*buf, int len)
 {
 	return 0;
 }

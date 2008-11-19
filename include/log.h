@@ -3,11 +3,12 @@
 #define _CVPN_LOG_H
 
 #include <string>
+
 using namespace std;
 
 void Log (int level, const char*file, int line, const char*fmt, ...);
 void Log_full (int level, const char*file, int line,
-	       const char*fmt, ...);
+               const char*fmt, ...);
 void log_setlevel (int level);
 
 #define DEBUG 0

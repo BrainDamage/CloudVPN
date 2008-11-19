@@ -12,6 +12,7 @@ uint64_t timestamp()
 
 void timestamp_update()
 {
+
 	struct timeval tv;
 	gettimeofday (&tv, 0);
 	lasttime = (1000000 * tv.tv_sec) + tv.tv_usec;

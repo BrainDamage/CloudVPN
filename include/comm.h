@@ -10,6 +10,7 @@
 #include <map>
 #include <set>
 #include <string>
+
 using namespace std;
 
 class connection
@@ -22,6 +23,7 @@ class connection
 	int read (void*buf, int len);
 
 	bool working;
+
 public:
 	map<hwaddr, int> remote_routes;
 
@@ -34,12 +36,15 @@ public:
 	int ping;
 
 	int write_packet (void*buf, int len);
+	int write_broadcast_packet (uint32_t id, void*buf, int len);
 	int read_packet (void*buf, int maxlen);
 
 	inline bool status() {
 		//false == can be deleted safely
 		if (working) return true;
+
 		if (reconnect.length() ) return true;
+
 		return false;
 	}
 

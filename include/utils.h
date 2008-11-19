@@ -6,6 +6,7 @@
 
 class hwaddr
 {
+
 public:
 	uint8_t addr[hwaddr_size];
 
@@ -15,11 +16,14 @@ public:
 	inline hwaddr (uint8_t* data) {
 		set (data);
 	}
+
 	inline hwaddr (void* data) {
 		set ( (uint8_t*) data);
 	}
 
 	bool operator< (const hwaddr&) const;
+	bool operator== (const hwaddr&) const;
+	bool operator== (const uint8_t*) const;
 };
 
 inline bool is_packet_broadcast (const void*buf)
@@ -32,10 +36,10 @@ inline bool is_addr_broadcast (const hwaddr&a)
 	return is_packet_broadcast (a.addr);
 }
 
-bool sockaddr_parse(const char*a,
-	struct sockaddr**newaddr,int*len);
+bool sockaddr_parse (const char*a,
+                     struct sockaddr**newaddr, int*len);
 
-void sockaddr_free(struct sockaddr**addr);
+void sockaddr_free (struct sockaddr**addr);
 
 #endif
 

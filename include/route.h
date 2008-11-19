@@ -19,6 +19,7 @@ void route_broadcast_packet (uint32_t id, void*buf, size_t len, int ic = -1);
 
 class route_info
 {
+
 public:
 	int ping;
 	int id;
@@ -26,6 +27,7 @@ public:
 		ping = p;
 		id = i;
 	}
+
 	inline route_info() {
 		//this shall never be called
 		ping = 0;
