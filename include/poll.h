@@ -5,7 +5,7 @@
 int poll_init();
 int poll_deinit();
 int poll_recreate_set();
-int poll_wait_for_event(int timeout);
+int poll_wait_for_event (int timeout);
 
 #endif
 

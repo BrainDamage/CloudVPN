@@ -4,6 +4,12 @@
 
 #include "iface.h"
 
+int setup_sighandler();
+
+/*
+ * hwaddr stuff
+ */
+
 class hwaddr
 {
 

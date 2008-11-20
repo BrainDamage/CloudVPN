@@ -18,7 +18,7 @@ int poll_recreate_set()
 	return 0;
 }
 
-int poll_wait_for_event(int timeout)
+int poll_wait_for_event (int timeout)
 {
 	return 0;
 }

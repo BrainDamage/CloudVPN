@@ -1,7 +1,32 @@
 
 #include "utils.h"
-#include <string.h>
+#include "log.h"
 
+#include "cloudvpn.h"
+
+#include <signal.h>
+
+int setup_sighandler()
+{
+	struct sigaction a;
+
+	Log_info ("setting up signal handler");
+
+	sigemptyset (&a.sa_mask);
+	a.sa_flags = 0;
+	a.sa_handler = kill_cloudvpn;
+
+	sigaction (SIGTERM, &a, 0);
+	sigaction (SIGINT, &a, 0);
+
+	return 0;
+}
+
+/*
+ * hwaddr stuff
+ */
+
+#include <string.h>
 
 static int hwaddr_cmp (const uint8_t*a, const uint8_t*b)
 {
