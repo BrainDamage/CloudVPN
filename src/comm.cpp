@@ -13,10 +13,10 @@
 using namespace std;
 
 static map<int, connection> connections;
-static set<int> listeners;
+static list<int> listeners;
 
 /*
- * NOTICE
+ * NOTICE (FUKKEN IMPORTANT)
  * because of good pollability, connections shall be IDed by their socket fds.
  */
 
@@ -25,7 +25,7 @@ map<int, connection>& comm_connections()
 	return connections;
 }
 
-set<int> comm_listeners()
+list<int> comm_listeners()
 {
 	return listeners;
 }

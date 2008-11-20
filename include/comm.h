@@ -8,7 +8,7 @@
 #include <stdint.h>
 
 #include <map>
-#include <set>
+#include <list>
 #include <string>
 
 using namespace std;
@@ -59,7 +59,7 @@ int comm_shutdown();
 int comm_update (int socket = -1); //-1 = all sockets
 
 map<int, connection>& comm_connections();
-set<int> comm_listeners();
+list<int> comm_listeners();
 
 #endif
 
