@@ -94,10 +94,8 @@ PACKET TYPES are:
 2 - route information add, -"-
 3 - ethernet packet, followed by to[6],from[6],type[2],data[size]
 4 - broadcast ethernet packet, followed by id[4], to[6], from[6], data[size]
-5 - set mode, special==1 when we want network info from a remote host,
-	and special==0 (default) when we dont really want any remote neighbors.
-6 - echo request, special == ID
-7 - echo reply, special == ID
+5 - echo request, special == ID
+6 - echo reply, special == ID
 
 NOTE that login/logout is handled by SSL
 
