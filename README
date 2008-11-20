@@ -162,6 +162,8 @@ route - routing information for packets, send_id cache
 utils - just some utilities
 cloudvpn - the thing that reads the config and runs all of it
 main.c - neatly separated main()
+poll - waiting for events
+timestamp - usec timer
 
 Please format the code using $ astyle --style=linux -pdt
 
