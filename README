@@ -121,10 +121,6 @@ connect_retry time   --in seconds, probably.
 
 listen IP port --repeat as needed, should be set like 0.0.0.0 20
 
-server_default_accept yes/no --ip connection policy
-server_allow_mask IP/mask --repeat both as needed
-server_reject_mask IP/mask
-
 ca_cert path --auth
 key path  --this key pair is used for both server and client connections
 key_pass string  --key unlocker
