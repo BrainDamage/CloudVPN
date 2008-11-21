@@ -6,6 +6,8 @@
 
 #include <unistd.h>
 
+int g_terminate = 0;
+
 int run_cloudvpn (int argc, char**argv)
 {
 	Log_info ("cloudvpn: starting");
@@ -17,17 +19,16 @@ int run_cloudvpn (int argc, char**argv)
 		return 1;
 	}
 
-	while (1) {
+	while (!g_terminate) {
 		//TODO fill;
 	}
 
-	return -1; //shall never return!
+	Log_info ("cloudvpn: exitting gracefully");
+	return 0;
 }
 
 void kill_cloudvpn (int signum)
 {
-	Log_info ("cloudvpn: killed by signal %d", signum);
-	//TODO deinitialize
-	Log_info ("cloudvpn: exitting gracefully");
-	_exit (0); //properly killed
+	Log_info ("cloudvpn: killed by signal %d, will terminate", signum);
+	g_terminate = 1;
 }
