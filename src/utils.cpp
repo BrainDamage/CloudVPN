@@ -63,17 +63,41 @@ void hwaddr::get (uint8_t*c)
 	memcpy (c, addr, hwaddr_size);
 }
 
+/*
+ * ip/name -> sockaddr resolution
+ */
+
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <stdio.h>
 #include <stdlib.h>
 
-void sockaddr_free (struct sockaddr**addr)
+bool sockaddr_from_str (const char *str,
+                        struct sockaddr*addr, int*len, int*sock_domain)
 {
-	if (*addr) free (*addr);
+	char ip_buf[1025], port_buf[65]; //which should be enough for everyone.
+	int port = 0;
 
-	*addr = 0;
-}
+	if (! (str && addr) ) return false;
 
-bool sockaddr_parse (const char *addr,
-                     struct sockaddr**newaddr, int*len)
-{
-	return false;
+	if (sscanf (str, " %1024s %64d", ip_buf, port_buf) < 2) return false;
+
+	struct addrinfo hints, *res;
+	memset (&hints, 0, sizeof (struct addrinfo) );
+	hints.ai_family = AF_UNSPEC;
+
+	if (getaddrinfo (ip_buf, port_buf, &hints, &res) ) {
+		Log_warn ("getaddrinfo failed for entry `%s %s'", ip_buf, port_buf);
+		return false;
+	}
+
+	if (len) *len = res->ai_addrlen;
+	if (sock_domain) *sock_domain = res->ai_addrlen;
+
+	memcpy (addr, res->ai_addr, res->ai_addrlen);
+
+	freeaddrinfo (res);
+
+	return true;
 }

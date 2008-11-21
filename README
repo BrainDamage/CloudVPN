@@ -111,6 +111,9 @@ with the config file of the same format, only without the "minuses".
 
 Maybe files without parameter could specify "yes", it would be logical. unimpl.
 
+IP adresses are in format IP [space] service, where IP can be IPv4, IPv6 or
+DNS-type hostname, and port can be numerical port, or service name (e.g. 'http')
+
 config options:
 
 @include path
@@ -119,7 +122,7 @@ connect IP port  --repeat as needed, normal topology connect
 
 connect_retry time   --in seconds, probably.
 
-listen IP port --repeat as needed, should be set like 0.0.0.0 20
+listen IP port --repeat as needed, should be set like 0.0.0.0 60606
 
 ca_cert path --auth
 key path  --this key pair is used for both server and client connections

@@ -42,10 +42,9 @@ inline bool is_addr_broadcast (const hwaddr&a)
 	return is_packet_broadcast (a.addr);
 }
 
-bool sockaddr_parse (const char*a,
-                     struct sockaddr**newaddr, int*len);
+bool sockaddr_from_str (const char *str, struct sockaddr*addr,
+                        int*len = 0, int * sock_domain = 0);
 
-void sockaddr_free (struct sockaddr**addr);
 
 #endif
 
