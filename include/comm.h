@@ -37,7 +37,9 @@ public:
 
 	int write_packet (void*buf, int len);
 	int write_broadcast_packet (uint32_t id, void*buf, int len);
-	int read_packet (void*buf, int maxlen);
+
+	void poll_read();
+	void poll_write();
 
 	inline bool status() {
 		//false == can be deleted safely

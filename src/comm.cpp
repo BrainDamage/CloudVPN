@@ -121,11 +121,6 @@ int connection::write_broadcast_packet (uint32_t id, void*buf, int len)
 	return 0;
 }
 
-int connection::read_packet (void*buf, int len)
-{
-	return 0;
-}
-
 void connection::update()
 {
 

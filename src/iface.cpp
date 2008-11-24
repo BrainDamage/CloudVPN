@@ -78,7 +78,10 @@ char iface_name[IFNAMSIZ] = "";
 
 bool iface_create()
 {
-	if (!config_is_true ("iface") ) return true; //no need
+	if (!config_is_true ("iface") ) {
+		Log_info("not creating local interface");
+		return true; //no need
+	}
 
 	struct ifreq ifr;
 
@@ -219,6 +222,8 @@ int iface_retrieve_hwaddr (uint8_t*hwaddr)
 
 void iface_destroy()
 {
+	Log_info("destroying local interface");
+
 	if (tun >= 0) {
 		int ret;
 
@@ -263,7 +268,7 @@ int iface_read (void*buf, size_t len)
 
 #include "route.h"
 
-void iface_update()
+void iface_poll_read()
 {
 	if (tun < 0) {
 		Log_error ("iface_update: tun not configured");
@@ -288,7 +293,7 @@ void iface_update()
 	}
 }
 
-
-
-
+int iface_get_sockfd() {
+	return tun;
+}
 

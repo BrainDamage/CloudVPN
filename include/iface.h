@@ -17,7 +17,8 @@ int iface_set_hwaddr (uint8_t*hw);
 int iface_retrieve_hwaddr (uint8_t*hw);
 const uint8_t* iface_cached_hwaddr();
 
-void iface_update(); //reads things and routes them
+void iface_poll_read();
+void iface_poll_write();
 int iface_get_sockfd();
 
 #endif
