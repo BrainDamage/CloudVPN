@@ -12,9 +12,14 @@
 
 int g_terminate = 0;
 
+static int get_heartbeat(int*);
+
 int run_cloudvpn (int argc, char**argv)
 {
 	int ret=0;
+	int heartbeat_usec=10000;
+	uint64_t last_beat=0;
+
 	Log_info ("cloudvpn: starting");
 
 	setup_sighandler();
@@ -29,7 +34,11 @@ int run_cloudvpn (int argc, char**argv)
 		goto failed_config;
 	}
 
-	timestamp_update(); //initial timestamp
+	if(get_heartbeat(&heartbeat_usec))
+		Log_warn ("could not read heartbeat from config!");
+	Log_info("heartbeat is set to %d usec",heartbeat_usec);
+
+	timestamp_update(); //get initial timestamp
 
 	if(poll_init()) {
 		Log_error("poll initialization failed");
@@ -49,11 +58,23 @@ int run_cloudvpn (int argc, char**argv)
 
 	Log_info("initialization complete, entering main loop");
 
+	last_beat=0; //update immediately.
+
 	while (!g_terminate) {
-		poll_wait_for_event(10000); //0.01s looks pretty good.
+
 		timestamp_update();
-		//TODO, with some heartbeat, update everything updatable here.
-		timestamp_update();
+
+		if((timestamp()-last_beat)<heartbeat_usec) {
+			//poll more stuff
+			poll_wait_for_event(heartbeat_usec
+				-timestamp()
+				+last_beat);
+			continue;
+		}
+
+		last_beat=timestamp();
+
+		Log_info("periodical update at %lu usec unixtime", last_beat);
 	}
 
 	/*
@@ -82,3 +103,16 @@ void kill_cloudvpn (int signum)
 	Log_info ("cloudvpn: killed by signal %d, will terminate", signum);
 	g_terminate = 1;
 }
+
+#include <string>
+using namespace std;
+
+static int get_heartbeat(int*i){
+	string s;
+	if(config_get("heartbeat",s))
+		if(sscanf(s.c_str(),"%d",i)==1)
+			return 0;
+	
+	return 1;
+}
+

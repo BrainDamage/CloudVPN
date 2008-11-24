@@ -144,8 +144,6 @@ int poll_wait_for_event (int timeout)
 			poll_handle_event(*i,READ_READY);
 	}
 
-	timestamp_update(); //sending/receiving can also eat time.
-
 	return 0;
 }
 
