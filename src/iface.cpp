@@ -79,7 +79,7 @@ char iface_name[IFNAMSIZ] = "";
 bool iface_create()
 {
 	if (!config_is_true ("iface") ) {
-		Log_info("not creating local interface");
+		Log_info ("not creating local interface");
 		return true; //no need
 	}
 
@@ -222,7 +222,7 @@ int iface_retrieve_hwaddr (uint8_t*hwaddr)
 
 void iface_destroy()
 {
-	Log_info("destroying local interface");
+	Log_info ("destroying local interface");
 
 	if (tun >= 0) {
 		int ret;
@@ -293,7 +293,8 @@ void iface_poll_read()
 	}
 }
 
-int iface_get_sockfd() {
+int iface_get_sockfd()
+{
 	return tun;
 }
 
