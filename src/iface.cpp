@@ -1,5 +1,7 @@
 
 #include "iface.h"
+
+#include "utils.h"
 #include "conf.h"
 #include "log.h"
 
@@ -68,19 +70,18 @@ static string format_mac_addr (uint8_t*addr)
 	return r;
 }
 
-static bool set_nonblock (int fd)
-{
-	return fcntl (fd, F_SETFL, O_NONBLOCK) >= 0;
-}
+/*
+ * variables
+ */
 
 int tun = -1;
 char iface_name[IFNAMSIZ] = "";
 
-bool iface_create()
+int iface_create()
 {
 	if (!config_is_true ("iface") ) {
 		Log_info ("not creating local interface");
-		return true; //no need
+		return 0; //no need
 	}
 
 	struct ifreq ifr;
@@ -93,7 +94,7 @@ bool iface_create()
 
 	if ( (tun = open (tun_dev.c_str(), O_RDWR) ) < 0) {
 		Log_error ("iface: cannot open `%s'", tun_dev.c_str() );
-		return false;
+		return 1;
 	}
 
 	CLEAR (ifr);
@@ -114,7 +115,7 @@ bool iface_create()
 		Log_error ("iface: cannot configure tap device");
 		close (tun);
 		tun = -1;
-		return false;
+		return 2;
 	}
 
 	strncpy (iface_name, ifr.ifr_name, IFNAMSIZ); //store for later use
@@ -123,11 +124,11 @@ bool iface_create()
 
 	//set nonblocking mode. Please note that failing this IS fatal.
 
-	if (!set_nonblock (tun) ) {
-		Log_fatal ("iface: set_nonblock failed on fd %d, probably terminating.");
+	if (!sock_nonblock (tun) ) {
+		Log_fatal ("iface: sock_nonblock failed on fd %d, probably terminating.");
 		close (tun);
 		tun = -1;
-		return false;
+		return 3;
 	}
 
 	if (config_is_set ("mac") ) { //set mac address
@@ -148,7 +149,7 @@ bool iface_create()
 
 	iface_retrieve_hwaddr (0); //cache the mac
 
-	return true;
+	return 0;
 }
 
 int iface_set_hwaddr (uint8_t*hwaddr)
@@ -220,18 +221,20 @@ int iface_retrieve_hwaddr (uint8_t*hwaddr)
 	return 0;
 }
 
-void iface_destroy()
+int iface_destroy()
 {
 	Log_info ("destroying local interface");
 
-	if (tun >= 0) {
-		int ret;
+	if (tun < 0) return 0; //already closed
+	int ret;
 
-		if (ret = close (tun) )
-			Log_error ("iface_destroy: close(%d) failed with %d (%s). this may cause errors later.", tun, errno, strerror (errno) );
+	if (ret = close (tun) ) {
+		Log_error ("iface_destroy: close(%d) failed with %d (%s). this may cause trouble elsewhere.", tun, errno, strerror (errno) );
+		return 1;
 	}
 
 	tun = -1;
+	return 0;
 }
 
 int iface_write (void*buf, size_t len)

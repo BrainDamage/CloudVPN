@@ -25,6 +25,8 @@ class connection
 	bool working;
 
 public:
+	int fd;
+
 	map<hwaddr, int> remote_routes;
 
 	inline connection (string recon = "") {
@@ -58,7 +60,8 @@ public:
 
 int comm_init();
 int comm_shutdown();
-int comm_update (int socket = -1); //-1 = all sockets
+
+int comm_update_connections();
 
 map<int, connection>& comm_connections();
 list<int> comm_listeners();

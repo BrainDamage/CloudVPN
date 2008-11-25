@@ -42,9 +42,18 @@ inline bool is_addr_broadcast (const hwaddr&a)
 	return is_packet_broadcast (a.addr);
 }
 
+/*
+ * sockaddr stuff
+ */
+
 bool sockaddr_from_str (const char *str, struct sockaddr*addr,
                         int*len = 0, int * sock_domain = 0);
 
+/*
+ * set socket to nonblocking state
+ */
+
+bool sock_nonblock (int fd);
 
 #endif
 

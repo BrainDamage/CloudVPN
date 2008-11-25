@@ -2,8 +2,8 @@
 #ifndef _CVPN_IFACE_H
 #define _CVPN_IFACE_H
 
-bool iface_create();
-void iface_destroy();
+int iface_create();
+int iface_destroy();
 
 #include <stddef.h>
 

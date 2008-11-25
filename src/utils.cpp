@@ -101,3 +101,11 @@ bool sockaddr_from_str (const char *str,
 
 	return true;
 }
+
+#include <fcntl.h>
+#include <unistd.h>
+
+bool sock_nonblock (int fd)
+{
+	return fcntl (fd, F_SETFL, O_NONBLOCK) >= 0;
+}

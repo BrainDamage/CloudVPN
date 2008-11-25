@@ -58,7 +58,7 @@ static int initialize_ssl()
 	if ( (!config_get ("key", keypath) ) ||
 	        (!config_get ("cert", certpath) ) ||
 	        (!config_get ("ca_cert", capath) ) ) {
-		Log_fatal ("init_ssl: you must correctly specify key, cert and ca_cert options");
+		Log_fatal ("you must correctly specify key, cert and ca_cert options");
 		return 1;
 	}
 
@@ -137,13 +137,27 @@ void connection::disconnect()
 
 int comm_init()
 {
+	return 0;
 }
 
 int comm_shutdown()
 {
+	return 0;
 }
 
-int comm_update (int sockfd)
+/*
+ * update_connections helper
+ * When a connection gets reconnected, it usually has a new sockfd.
+ * The operation reindexes only badly placed connections, so
+ * it's generally fast enough. (O(n)+O(bad*log(n)))
+ *
+ * Should be called everytime a connection changes socket fd.
+ *
+ * Also checks for no-longer-active connections and deletes them.
+ */
+
+int comm_update_connections()
 {
-}
 
+	return 0;
+}

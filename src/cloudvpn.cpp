@@ -1,12 +1,13 @@
 
 #include "cloudvpn.h"
 
-#include "conf.h"
-#include "iface.h"
 #include "log.h"
+#include "comm.h"
+#include "conf.h"
 #include "poll.h"
-#include "timestamp.h"
+#include "iface.h"
 #include "utils.h"
+#include "timestamp.h"
 
 #include <unistd.h>
 
@@ -41,15 +42,21 @@ int run_cloudvpn (int argc, char**argv)
 	timestamp_update(); //get initial timestamp
 
 	if (poll_init() ) {
-		Log_error ("poll initialization failed");
+		Log_fatal ("poll initialization failed");
 		ret = 2;
 		goto failed_poll;
 	}
 
-	if (!iface_create() ) {
-		Log_error ("local interface initialization failed");
+	if (iface_create() ) {
+		Log_fatal ("local interface initialization failed");
 		ret = 3;
 		goto failed_iface;
+	}
+
+	if (comm_init() ) {
+		Log_fatal ("communication initialization failed");
+		ret = 4;
+		goto failed_comm;
 	}
 
 	/*
@@ -74,7 +81,7 @@ int run_cloudvpn (int argc, char**argv)
 
 		last_beat = timestamp();
 
-		Log_info ("periodical update at %lu usec unixtime", last_beat);
+		Log_debug ("periodical update at %lu usec unixtime", last_beat);
 	}
 
 	/*
@@ -82,6 +89,10 @@ int run_cloudvpn (int argc, char**argv)
 	 */
 
 	Log_info ("shutting down");
+
+	comm_shutdown();
+
+failed_comm:
 
 	iface_destroy();
 
