@@ -3,7 +3,10 @@
 #include <stdarg.h>
 #include <time.h>
 
-static int log_level = 0;
+/*
+ * Log_info is verbose enough by default. Debug not shown.
+ */
+static int log_level = 1;
 
 void log_setlevel (int l)
 {
