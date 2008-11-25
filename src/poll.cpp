@@ -8,7 +8,10 @@
  * Polling implementations are conditionally compiled, usually the best one
  * available for given platform gets into.
  *
- * Available:
+ * Please note that epoll_set_remove_* should be called WAAAYYY before the
+ * sock/fd is closed. otherwise data corruption may appear.
+ *
+ * Available backends:
  *
  * epoll device
  * select()
@@ -153,45 +156,158 @@ int poll_wait_for_event (int timeout)
  * epoll engine
  */
 
+#include <sys/epoll.h>
+#include <errno.h>
+
+int epfd = -1;
+
 int poll_init()
 {
-	//not much
+	epfd = epoll_create (128);
+	if (epfd < 0) return 1;
 	return 0;
 }
 
 int poll_deinit()
 {
-	//also not much
+	if (epfd < 0) {
+		Log_warn ("trying to close uninitialized epoll");
+		return 1;
+	}
+	if (close (epfd) ) {
+		Log_error ("closing epoll failed");
+		return 2;
+	}
+	epfd = -1;
 	return 0;
+}
+
+#include <map>
+using std::map;
+
+static map<int, int> fdmap;
+
+#define mask_read 1
+#define mask_write 2
+
+static int epoll_set_update (int fd, int mask)
+{
+	if (!mask) {
+		fdmap.erase (fd);
+		if (epoll_ctl (epfd, EPOLL_CTL_DEL, fd, 0) )
+			if (errno != ENOENT) {
+				Log_warn ("removing fd %d from epoll failed, forgetting it anyway", fd);
+				return 1;
+			}
+		return 0;
+	}
+
+	struct epoll_event ev;
+
+	memset (&ev, 0, sizeof (ev) );
+
+	ev.data.fd = fd;
+	ev.events = ( (mask & mask_read) ? (EPOLLIN | EPOLLERR | EPOLLHUP) : 0)
+	            | ( (mask & mask_write) ? (EPOLLOUT) : 0);
+
+	//try the more probable possibility of ctl_mod/add first, fallback.
+	if (fdmap.count (fd) ) {
+		if (epoll_ctl (epfd, EPOLL_CTL_MOD, fd, &ev) ) {
+			if (errno != ENOENT) {
+				Log_warn ("epoll ctl_mod on fd %d failed", fd);
+				return 2;
+			} else if (epoll_ctl (epfd, EPOLL_CTL_ADD, fd, &ev) ) {
+				Log_warn ("fallback epoll ctl_add on fd %d failed", fd);
+				return 3;
+			}
+		}
+	} else {
+		if (epoll_ctl (epfd, EPOLL_CTL_ADD, fd, &ev) ) {
+			if (errno != EEXIST) {
+				Log_warn ("epoll ctl_add on fd %d failed", fd);
+				return 4;
+			} else if (epoll_ctl (epfd, EPOLL_CTL_MOD, fd, &ev) ) {
+				Log_warn ("fallback epoll ctl_mod on fd %d failed", fd);
+				return 5;
+			}
+		}
+	}
+
+	fdmap[fd] = mask;
+	return 0;
+}
+
+static int epoll_set_get (int fd)
+{
+	if (!fdmap.count (fd) ) return 0;
+	return fdmap[fd];
 }
 
 int poll_set_add_read (int fd)
 {
-	return 0;
+	int t = epoll_set_get (fd);
+	if (t&mask_read) return 0;
+	return epoll_set_update (fd, t | mask_read);
 }
 
 int poll_set_remove_read (int fd)
 {
+	int t = epoll_set_get (fd);
+	if (t&mask_read) return epoll_set_update (fd, t& (~mask_read) );
 	return 0;
 }
 
 int poll_set_add_write (int fd)
 {
-	return 0;
+	int t = epoll_set_get (fd);
+	if (t&mask_write) return 0;
+	return epoll_set_update (fd, t | mask_write);
 }
 
 int poll_set_remove_write (int fd)
 {
+	int t = epoll_set_get (fd);
+	if (t&mask_write) return epoll_set_update (fd, t& (~mask_write) );
 	return 0;
 }
 
 int poll_set_clear (int fd)
 {
+	while (fdmap.size() > 0)
+		epoll_set_update (fdmap.begin()->first, 0);
 	return 0;
 }
 
 int poll_wait_for_event (int timeout)
 {
+	int n = fdmap.size(), ret;
+
+	if (n < 8) n = 8;
+	if (n > 128) n = 128;
+
+	struct epoll_event ev[n];
+
+	ret = epoll_wait (epfd, ev, n, timeout / 1000); //convert timeout to msec
+
+	timestamp_update();
+
+	if (ret < 0) {
+		int e = errno;
+		if (e == EINTR) Log_info ("epoll_wait() interrupted");
+		else Log_error ("epoll_wait failed with errno %d", e);
+		return 1;
+	}
+
+	int i;
+	for (i = 0;i < ret;++i)
+		if (ev[i].events & EPOLLOUT)
+			poll_handle_event (ev[i].data.fd, WRITE_READY);
+	for (i = 0;i < ret;++i) {
+		if (ev[i].events & (EPOLLHUP | EPOLLERR) )
+			poll_handle_event (ev[i].data.fd, EXCEPTION_READY);
+		if (ev[i].events & EPOLLIN)
+			poll_handle_event (ev[i].data.fd, READ_READY);
+	}
 	return 0;
 }
 

@@ -17,7 +17,7 @@ static int get_heartbeat (int*);
 int run_cloudvpn (int argc, char**argv)
 {
 	int ret = 0;
-	int heartbeat_usec = 10000;
+	int heartbeat_usec = 50000; //20Hz is ok by default
 	uint64_t last_beat = 0;
 
 	Log_info ("cloudvpn: starting");
