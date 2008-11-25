@@ -13,8 +13,7 @@ Nodes are connected in a mesh of any shape, topology really doesnt matter.
 
 Optional goals:
 
-Don't use a single malloc(), so everyone knows that STL is powerful enough as
-a memory management alternative.
+Don't use a single malloc(), only stack/STL allocation allowed.
 
 	*** IMPLEMENTATION NOTES ***
 
