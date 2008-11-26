@@ -49,7 +49,7 @@ static int ssl_password_callback (char*buffer, int num, int rwflag, void*udata)
 	return ssl_pass.length();
 }
 
-static int initialize_ssl()
+static int ssl_initialize()
 {
 	SSL_METHOD* meth;
 
@@ -62,6 +62,11 @@ static int initialize_ssl()
 		return 1;
 	}
 
+	ssl_pass = "";
+	if (config_get ("key_pass", ssl_pass) )
+		Log_info ("SSL key password loaded");
+	else	Log_info ("SSL key password left blank");
+
 
 	SSL_library_init();
 
@@ -71,13 +76,39 @@ static int initialize_ssl()
 
 	meth = SSLv23_method();
 	ssl_ctx = SSL_CTX_new (meth);
-	SSL_CTX_set_options (ssl_ctx, SSL_OP_NO_SSLv2); //stay as safe as we can
+	SSL_CTX_set_options (ssl_ctx, SSL_OP_NO_SSLv2);
 
 	SSL_CTX_set_default_passwd_cb (ssl_ctx, ssl_password_callback);
 
+	if (!SSL_CTX_use_certificate_chain_file (ssl_ctx, certpath.c_str() ) ) {
+		Log_error ("SSL Certificate loading failed: %s",
+		           ERR_error_string (ERR_get_error(), 0) );
+		return 2;
+	}
+
+	if (!SSL_CTX_use_PrivateKey_file (ssl_ctx,
+	                                  keypath.c_str(),
+	                                  SSL_FILETYPE_PEM) ) {
+		Log_error ("SSL Key loading failed: %s",
+		           ERR_error_string (ERR_get_error(), 0) );
+		return 3;
+	}
+
+	if (!SSL_CTX_load_verify_locations (ssl_ctx, capath.c_str(), 0) ) {
+		Log_error ("SSL CA loading failed: %s",
+		           ERR_error_string (ERR_get_error(), 0) );
+		return 4;
+	}
+
+	Log_info ("SSL initialized OK");
 	return 0;
 }
 
+static int ssl_destroy()
+{
+	SSL_CTX_free (ssl_ctx);
+	return 0;
+}
 /*
  * raw network stuff
  */
@@ -88,6 +119,11 @@ int tcp_listen_socket (const string&addr)
 }
 
 int tcp_connect_socket (const string&addr)
+{
+	return -1;
+}
+
+int tcp_accept (int sock)
 {
 	return -1;
 }
@@ -137,11 +173,17 @@ void connection::disconnect()
 
 int comm_init()
 {
+	if (ssl_initialize() ) {
+		Log_fatal ("SSL initialization failed");
+		return 1;
+	}
 	return 0;
 }
 
 int comm_shutdown()
 {
+	if (ssl_destroy() )
+		Log_warn ("SSL shutdown failed!");
 	return 0;
 }
 
