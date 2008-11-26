@@ -13,6 +13,24 @@ void log_setlevel (int l)
 	log_level = l;
 }
 
+static const char* loglevel_mark (int level)
+{
+	switch (level) {
+	case DEBUG:
+		return "debug ";
+	case INFO:
+		return "(info) ";
+	case WARN:
+		return "* warning ";
+	case ERROR:
+		return "*** Error ";
+	case FATAL:
+		return "FATAL ";
+	default:
+		return "";
+	}
+}
+
 void Log (int lvl, const char*fmt, ...)
 {
 	if (lvl < log_level) return;
@@ -24,6 +42,8 @@ void Log (int lvl, const char*fmt, ...)
 	strftime (date_buf, 32, "%c ", localtime (&t) );
 
 	fprintf (stderr, date_buf);
+	
+	fprintf (stderr, loglevel_mark (lvl) );
 
 	va_list ap;
 
@@ -48,6 +68,8 @@ void Log_full (int lvl, const char*file, int line,
 	strftime (date_buf, 32, "%c ", localtime (&t) );
 
 	fprintf (stderr, date_buf);
+
+	fprintf (stderr, loglevel_mark (lvl) );
 
 	fprintf (stderr, "in `%s' line %d: ", file, line);
 
