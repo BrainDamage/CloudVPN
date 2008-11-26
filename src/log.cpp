@@ -42,7 +42,7 @@ void Log (int lvl, const char*fmt, ...)
 	strftime (date_buf, 32, "%c ", localtime (&t) );
 
 	fprintf (stderr, date_buf);
-	
+
 	fprintf (stderr, loglevel_mark (lvl) );
 
 	va_list ap;
