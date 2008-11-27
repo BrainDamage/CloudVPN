@@ -81,11 +81,10 @@ bool sockaddr_from_str (const char *str,
 
 	if (! (str && addr) ) return false;
 
-	if (sscanf (str, " %1024s %64d", ip_buf, port_buf) < 2) return false;
+	if (sscanf (str, " %1024s %64s", ip_buf, port_buf) < 2) return false;
 
 	struct addrinfo hints, *res;
 	memset (&hints, 0, sizeof (struct addrinfo) );
-	hints.ai_family = AF_UNSPEC;
 
 	if (getaddrinfo (ip_buf, port_buf, &hints, &res) ) {
 		Log_warn ("getaddrinfo failed for entry `%s %s'", ip_buf, port_buf);
@@ -93,7 +92,7 @@ bool sockaddr_from_str (const char *str,
 	}
 
 	if (len) *len = res->ai_addrlen;
-	if (sock_domain) *sock_domain = res->ai_addrlen;
+	if (sock_domain) *sock_domain = res->ai_family;
 
 	memcpy (addr, res->ai_addr, res->ai_addrlen);
 
