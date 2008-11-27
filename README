@@ -81,6 +81,7 @@ Connection and authentication is done through SSL
 struct NEIGHBOR --- (10B)
 6B mac_addr
 4B distance --distance is in relative units. Let it be the "ping"
+	--in diff, the most significant bit is 0 to remove or 1 to add.
 
 struct packet_header --- (4B)
 1B packet_type
@@ -90,7 +91,7 @@ struct packet_header --- (4B)
 PACKET TYPES are:
 
 1 - route information set, size is the *count* of following neighbors
-2 - route information add, -"-
+2 - route information diff, -"- .. diffs
 3 - ethernet packet, followed by to[6],from[6],type[2],data[size]
 4 - broadcast ethernet packet, followed by id[4], to[6], from[6], data[size]
 5 - echo request, special == ID

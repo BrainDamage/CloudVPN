@@ -230,18 +230,25 @@ static int try_accept_connection (int sock)
 	connection&c = connections[s];
 	c.fd = s;
 	c.state = cs_accepting;
+
+	c.try_accept(); //bump the connection, so it sets its poll state
+	
 	return 0;
 }
 
 static int connect_connection (const string&addr)
 {
 	connection c;
+	
 	c.fd = -1;
 	c.address = addr;
 	c.state = cs_retry_timeout;
 	c.last_retry = 0; //asap
+	
 	inactive_connections.push_back (c);
+	
 	Log_info ("connecting to `%s'", addr.c_str() );
+
 	return 0;
 }
 
@@ -249,14 +256,72 @@ static int connect_connection (const string&addr)
  * class connection stuff
  */
 
-int connection::write_packet (void*buf, int len)
+void connection::handle_packet (void*buf, int len)
 {
-	return 0;
 }
 
-int connection::write_broadcast_packet (uint32_t id, void*buf, int len)
+void connection::handle_broadcast_packet (uint32_t id, void*buf, int len)
 {
-	return 0;
+}
+
+void connection::handle_route_set()
+{
+}
+
+void connection::handle_route_diff()
+{
+}
+
+void connection::handle_ping (uint32_t id)
+{
+}
+
+void connection::handle_pong (uint32_t id)
+{
+}
+
+void connection::write_packet (void*buf, int len)
+{
+}
+
+void connection::write_broadcast_packet (uint32_t id, void*buf, int len)
+{
+}
+
+void connection::write_route_set()
+{
+}
+
+void connection::write_route_diff()
+{
+}
+
+void connection::write_ping (uint32_t id)
+{
+}
+
+void connection::write_pong (uint32_t id)
+{
+}
+
+void connection::try_read()
+{
+}
+
+void connection::try_write()
+{
+}
+
+void connection::try_accept()
+{
+}
+
+void connection::try_connect()
+{
+}
+
+void connection::try_close()
+{
 }
 
 void connection::poll_read()
