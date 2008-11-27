@@ -105,6 +105,42 @@ static int ssl_initialize()
 		return 4;
 	}
 
+	string dh_file;
+	if (config_get ("dh", dh_file) ) {
+
+		BIO*bio;
+		DH*dh;
+
+		bio = BIO_new_file (dh_file.c_str(), "r");
+
+		if (!bio) {
+			Log_error ("opening DH file `%s' failed",
+			           dh_file.c_str() );
+			return 5;
+		}
+
+		dh = PEM_read_bio_DHparams (bio, 0, 0, 0);
+
+		BIO_free (bio);
+
+		if (!dh) {
+			Log_error ("loading DH params failed");
+			return 6;
+		}
+
+		if (!SSL_CTX_set_tmp_dh (ssl_ctx, dh) ) {
+			Log_error ("could not set DH parameters");
+			return 7;
+		}
+
+		Log_info ("DH parameters of size %db loaded OK",
+		          8*DH_size (dh) );
+
+	} else {
+		Log_error ("you need to supply server DH parameters");
+		return 8;
+	}
+
 	Log_info ("SSL initialized OK");
 	return 0;
 }
@@ -232,21 +268,21 @@ static int try_accept_connection (int sock)
 	c.state = cs_accepting;
 
 	c.try_accept(); //bump the connection, so it sets its poll state
-	
+
 	return 0;
 }
 
 static int connect_connection (const string&addr)
 {
 	connection c;
-	
+
 	c.fd = -1;
 	c.address = addr;
 	c.state = cs_retry_timeout;
 	c.last_retry = 0; //asap
-	
+
 	inactive_connections.push_back (c);
-	
+
 	Log_info ("connecting to `%s'", addr.c_str() );
 
 	return 0;
