@@ -8,31 +8,33 @@
 #include <stdint.h>
 
 #include <map>
-#include <list>
+#include <set>
 #include <string>
 
 using namespace std;
 
 class connection
 {
-
-	//some ssl stuff here
-
-	int flush();
-	int write (void*buf, int len);
-	int read (void*buf, int len);
-
-	bool working;
-
 public:
 	int fd;
 
+	int state;
+#define cs_inactive 0
+#define cs_retry_timeout 1
+
+#define cs_connecting 2
+#define cs_ssl_connecting 3
+#define cs_accepting 4
+#define cs_closing 5
+
+#define cs_active 6
+
+	int last_retry;
+
 	map<hwaddr, int> remote_routes;
 
-	inline connection (string recon = "") {
-		ping = 1; //at least measure the distance
-		reconnect = recon;
-		working = true;
+	inline connection () {
+		ping = 1; //measure the distance at least
 	}
 
 	int ping;
@@ -44,27 +46,19 @@ public:
 	void poll_write();
 
 	inline bool status() {
-		//false == can be deleted safely
-		if (working) return true;
-
-		if (reconnect.length() ) return true;
-
-		return false;
+		return state ? true : false;
 	}
 
-	void update();
-	void disconnect();
-
-	string reconnect;
+	string address;
 };
+
+void comm_listener_poll (int fd);
 
 int comm_init();
 int comm_shutdown();
 
-int comm_update_connections();
-
 map<int, connection>& comm_connections();
-list<int> comm_listeners();
+set<int>& comm_listeners();
 
 #endif
 

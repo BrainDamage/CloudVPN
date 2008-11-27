@@ -1,23 +1,28 @@
 
 #include "comm.h"
+
 #include "conf.h"
 #include "log.h"
+#include "poll.h"
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+#include <sys/types.h>
+#include <sys/socket.h>
+
 #include <string.h>
 
-#include <string>
-
+#include <list>
 using namespace std;
 
+list<connection> inactive_connections;
 static map<int, connection> connections;
-static list<int> listeners;
+static set<int> listeners;
 
 /*
  * NOTICE (FUKKEN IMPORTANT)
- * because of good pollability, connections shall be IDed by their socket fds.
+ * because of good pollability, connections MUST be IDed by their socket fds.
  */
 
 map<int, connection>& comm_connections()
@@ -25,7 +30,7 @@ map<int, connection>& comm_connections()
 	return connections;
 }
 
-list<int> comm_listeners()
+set<int>& comm_listeners()
 {
 	return listeners;
 }
@@ -109,43 +114,140 @@ static int ssl_destroy()
 	SSL_CTX_free (ssl_ctx);
 	return 0;
 }
+
 /*
  * raw network stuff
  */
 
-int tcp_listen_socket (const string&addr)
+static int listen_backlog_size = 32;
+
+static int tcp_listen_socket (const string&addr)
 {
-	return -1;
+	struct sockaddr sa;
+	int sa_len, domain;
+	if (!sockaddr_from_str (addr.c_str(), &sa, &sa_len, &domain) ) {
+		Log_error ("could not resolve address and port `%s'",
+		           addr.c_str() );
+		return -1;
+	}
+
+	int s = socket (domain, SOCK_STREAM, 0);
+
+	if (s < 0) {
+		Log_error ("socket() failed with %d", errno);
+		return -2;
+	}
+
+	if (!sock_nonblock (s) ) {
+		Log_error ("can't set socket %d to nonblocking mode", s);
+		close (s);
+		return -3;
+	}
+
+	if (bind (s, &sa, sa_len) ) {
+		Log_error ("binding socket %d failed with %d", s, errno);
+		close (s);
+		return -4;
+	}
+
+	if (listen (s, listen_backlog_size) ) {
+		Log_error ("listen(%d,%d) failed with %d",
+		           s, listen_backlog_size, errno);
+		close (s);
+		return -5;
+	}
+
+	Log_info ("created listening socket %d", s);
+
+	return s;
 }
 
-int tcp_connect_socket (const string&addr)
+static int tcp_connect_socket (const string&addr)
 {
-	return -1;
+	struct sockaddr sa;
+	int sa_len, domain;
+	if (!sockaddr_from_str (addr.c_str(), &sa, &sa_len, &domain) ) {
+		Log_error ("could not resolve address and port `%s'",
+		           addr.c_str() );
+		return -1;
+	}
+
+	int s = socket (domain, SOCK_STREAM, 0);
+
+	if (s < 0) {
+		Log_error ("socket() failed with %d", errno);
+		return -2;
+	}
+
+	if (!sock_nonblock (s) ) {
+		Log_error ("can't set socket %d to nonblocking mode", s);
+		close (s);
+		return -3;
+	}
+
+	if (!connect (s, &sa, sa_len) ) {
+		int e = errno;
+		if (e != EINPROGRESS) {
+			Log_error ("connect(%d) to `%s' failed with %d",
+			           s, addr.c_str(), e);
+			return -4;
+		}
+	}
+
+	return s;
 }
 
-int tcp_accept (int sock)
+static int tcp_close_socket (int sock)
 {
-	return -1;
+	if (close (sock) ) {
+		Log_warn ("closing socket %d failed with %d!", sock, errno);
+		return 1;
+	}
+	return 0;
+}
+
+/*
+ * This should accept a connection, and link it into the structure.
+ * Generally, only these 2 functions really create connections.
+ */
+
+static int try_accept_connection (int sock)
+{
+	int s = accept (sock, 0, 0);
+	if (s < 0) {
+		if (errno == EAGAIN) return 0;
+		Log_error ("accept(%d) failed with %d", errno);
+		return 1;
+	}
+
+	if (!sock_nonblock (s) ) {
+		Log_error ("could not put accepted socket %d in nonblocking mode", s);
+		return 2;
+	}
+
+	Log_info ("get connection on socket %d", s);
+
+	connection&c = connections[s];
+	c.fd = s;
+	c.state = cs_accepting;
+	return 0;
+}
+
+static int connect_connection (const string&addr)
+{
+	connection c;
+	c.fd = -1;
+	c.address = addr;
+	c.state = cs_retry_timeout;
+	c.last_retry = 0; //asap
+	inactive_connections.push_back (c);
+	Log_info ("connecting to `%s'", addr.c_str() );
+	return 0;
 }
 
 /*
  * class connection stuff
  */
-
-int connection::flush()
-{
-	return 0;
-}
-
-int connection::write (void*buf, int len)
-{
-	return 0;
-}
-
-int connection::read (void*buf, int len)
-{
-	return 0;
-}
 
 int connection::write_packet (void*buf, int len)
 {
@@ -157,26 +259,131 @@ int connection::write_broadcast_packet (uint32_t id, void*buf, int len)
 	return 0;
 }
 
-void connection::update()
+void connection::poll_read()
 {
-
 }
 
-void connection::disconnect()
+void connection::poll_write()
 {
+}
 
+
+/*
+ * comm_listener stuff
+ */
+
+static int comm_listeners_init()
+{
+	list<string> l;
+	list<string>::iterator i;
+	int s;
+
+	config_get_list ("listen", l);
+
+	if (!l.size() ) {
+		Log_info ("no listeners specified");
+		return 0;
+	}
+
+	for (i = l.begin();i != l.end();++i) {
+		Log_info ("trying to listen on `%s'", i->c_str() );
+		s = tcp_listen_socket (*i);
+		if (s >= 0) {
+			listeners.insert (s);
+			poll_set_add_read (s);
+		} else return 1;
+	}
+
+	Log_info ("listeners ready");
+
+	return 0;
+}
+
+static int comm_listeners_close()
+{
+	set<int>::iterator i;
+	int ret = 0;
+	for (i = listeners.begin();i != listeners.end();++i) {
+		Log_info ("closing listener %d", *i);
+		if (close (*i) ) {
+			Log_warn ("problem closing listener socket %d", *i);
+			++ret;
+		}
+	}
+	listeners.clear();
+	return ret;
+}
+
+void comm_listener_poll (int fd)
+{
+	try_accept_connection (fd);
+	//TODO maybe do something if this fails
 }
 
 /*
- * comm_ stuff
+ * create/destroy the connections
+ */
+
+static int comm_connections_init()
+{
+	list<string> c;
+	list<string>::iterator i;
+
+	config_get_list ("connect", c);
+
+	if (!c.size() ) {
+		Log_info ("no connections specified");
+		return 0;
+	}
+
+	for (i = c.begin();i != c.end();++i)
+		if (connect_connection (*i) ) {
+			Log_error ("couldn't start connection to `%s'");
+			return 1;
+		}
+
+	Log_info ("connections ready for connecting");
+	return 0;
+}
+
+static int comm_connections_close()
+{
+	/*
+	 * TODO: wait (with some timeout) for all connections to close.
+	 * This involves calling disconnect() on every active connection,
+	 * do some poll cycle, and periodically clean inactive connections.
+	 */
+}
+
+/*
+ * base comm_ stuff
  */
 
 int comm_init()
 {
+	string t;
+	if (config_get ("listen_backlog", t) ) {
+		if (sscanf (t.c_str(), "%d", &listen_backlog_size) != 1) {
+			Log_error ("specified listen_backlog is not an integer");
+			return 1;
+		}
+	} else listen_backlog_size = 32;
+
 	if (ssl_initialize() ) {
 		Log_fatal ("SSL initialization failed");
-		return 1;
+		return 2;
 	}
+
+	if (comm_listeners_init() ) {
+		Log_fatal ("couldn't initialize listeners");
+		return 3;
+	}
+
+	if (comm_connections_init() ) {
+		Log_fatal ("couldn't initialize connections");
+		return 4;
+	}
+
 	return 0;
 }
 
@@ -184,22 +391,13 @@ int comm_shutdown()
 {
 	if (ssl_destroy() )
 		Log_warn ("SSL shutdown failed!");
-	return 0;
-}
 
-/*
- * update_connections helper
- * When a connection gets reconnected, it usually has a new sockfd.
- * The operation reindexes only badly placed connections, so
- * it's generally fast enough. (O(n)+O(bad*log(n)))
- *
- * Should be called everytime a connection changes socket fd.
- *
- * Also checks for no-longer-active connections and deletes them.
- */
+	if (comm_listeners_close() )
+		Log_warn ("closing of some listening sockets failed!");
 
-int comm_update_connections()
-{
+	if (comm_connections_close() )
+		Log_warn ("closing of some connections failed!");
 
 	return 0;
 }
+

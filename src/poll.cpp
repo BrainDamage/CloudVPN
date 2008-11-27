@@ -24,13 +24,49 @@
  * function that poll implementations call on detected activity
  */
 
-#define READ_READY 0
-#define WRITE_READY 1
-#define EXCEPTION_READY 2
+#define READ_READY (1<<0)
+#define WRITE_READY (1<<1)
+#define EXCEPTION_READY (1<<2)
+
+#include "comm.h"
+#include "iface.h"
 
 static void poll_handle_event (int fd, int what)
 {
-	//TODO locate the fd, touch it in the right way.
+	if (!what) return;
+	/*
+	 * Let's assume that local interface has the simplest check, so
+	 * try it first. Second try the connections, and then
+	 * the listening sockets, as they probably don't have much traffic.
+	 *
+	 * the time needed is 1+log+log, so pretty good.
+	 */
+	if (fd == iface_get_sockfd() ) {
+		if (what&WRITE_READY)
+			iface_poll_write();
+		if (what& (READ_READY | EXCEPTION_READY) )
+			iface_poll_read();
+		return;
+	}
+
+	map<int, connection>::iterator con = comm_connections().find (fd);
+
+	if (con != comm_connections().end() ) {
+		if (what&WRITE_READY)
+			con->second.poll_write();
+		if (what& (READ_READY | EXCEPTION_READY) )
+			con->second.poll_write();
+		return;
+	}
+
+	set<int>::iterator lis = comm_listeners().find (fd);
+
+	if (lis != comm_listeners().end() ) {
+		comm_listener_poll (fd);
+		return;
+	}
+
+	Log_warn ("polled a nonexistent fd %d!", fd);
 }
 
 /*
@@ -298,16 +334,13 @@ int poll_wait_for_event (int timeout)
 		return 1;
 	}
 
-	int i;
-	for (i = 0;i < ret;++i)
-		if (ev[i].events & EPOLLOUT)
-			poll_handle_event (ev[i].data.fd, WRITE_READY);
-	for (i = 0;i < ret;++i) {
-		if (ev[i].events & (EPOLLHUP | EPOLLERR) )
-			poll_handle_event (ev[i].data.fd, EXCEPTION_READY);
-		if (ev[i].events & EPOLLIN)
-			poll_handle_event (ev[i].data.fd, READ_READY);
-	}
+	int i, t;
+	for (i = 0;i < ret;++i) poll_handle_event (ev[i].data.fd,
+		        ( (ev[i].events & EPOLLOUT) ? WRITE_READY : 0) |
+		        ( (ev[i].events & EPOLLIN) ? READ_READY : 0) |
+		        ( (ev[i].events & (EPOLLHUP | EPOLLERR) )
+		          ? EXCEPTION_READY : 0) );
+
 	return 0;
 }
 

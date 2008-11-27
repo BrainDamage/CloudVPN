@@ -296,6 +296,10 @@ void iface_poll_read()
 	}
 }
 
+void iface_poll_write()
+{
+}
+
 int iface_get_sockfd()
 {
 	return tun;
