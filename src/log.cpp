@@ -71,7 +71,7 @@ void Log_full (int lvl, const char*file, int line,
 
 	fprintf (stderr, loglevel_mark (lvl) );
 
-	fprintf (stderr, "in `%s' line %d: ", file, line);
+	fprintf (stderr, "in `%s' line %d:\t", file, line);
 
 	va_list ap;
 
