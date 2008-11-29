@@ -49,6 +49,11 @@ inline bool is_addr_broadcast (const hwaddr&a)
 bool sockaddr_from_str (const char *str, struct sockaddr*addr,
                         int*len = 0, int * sock_domain = 0);
 
+#define sockaddr_type(x)	\
+union { struct sockaddr x;	\
+struct sockaddr_in x##_4;	\
+struct sockaddr_in6 x##_6; };
+
 /*
  * set socket to nonblocking state
  */

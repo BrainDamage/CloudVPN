@@ -150,6 +150,8 @@ heartbeat 10000 -- core update heartbeat in usec. Smaller values improve
 	--a cost of slight overhead (global update is done once per period.)
 	--Higher values dont harm much, but greater networks with frequent
 	--topology changes may suffer.
+listen_backlog 32 --parameter to listen(), maximum number of accept-pendings.
+max_connections 1024 -- overall maximum number of communication channels.
 
 	*** INTERNALS ***
 

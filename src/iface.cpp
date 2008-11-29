@@ -7,6 +7,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <netinet/in.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
 #include <stdint.h>

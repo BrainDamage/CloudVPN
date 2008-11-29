@@ -8,6 +8,7 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+#include <netinet/in.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 
@@ -164,7 +165,7 @@ static int listen_backlog_size = 32;
 
 static int tcp_listen_socket (const string&addr)
 {
-	struct sockaddr sa;
+	sockaddr_type (sa);
 	int sa_len, domain;
 	if (!sockaddr_from_str (addr.c_str(), &sa, &sa_len, &domain) ) {
 		Log_error ("could not resolve address and port `%s'",
@@ -205,7 +206,7 @@ static int tcp_listen_socket (const string&addr)
 
 static int tcp_connect_socket (const string&addr)
 {
-	struct sockaddr sa;
+	sockaddr_type (sa);
 	int sa_len, domain;
 	if (!sockaddr_from_str (addr.c_str(), &sa, &sa_len, &domain) ) {
 		Log_error ("could not resolve address and port `%s'",
@@ -547,12 +548,21 @@ static int comm_connections_close()
 int comm_init()
 {
 	string t;
+	if (config_get ("max_connections", t) ) {
+		if (sscanf (t.c_str(), "%d", &max_connections) != 1) {
+			Log_error ("specified max_connections is not an integer");
+			return 1;
+		}
+	} else max_connections = 1024;
+	Log_info ("max connections count is %d", max_connections);
+
 	if (config_get ("listen_backlog", t) ) {
 		if (sscanf (t.c_str(), "%d", &listen_backlog_size) != 1) {
 			Log_error ("specified listen_backlog is not an integer");
 			return 1;
 		}
 	} else listen_backlog_size = 32;
+	Log_info ("listen backlog size is %d", listen_backlog_size);
 
 	if (ssl_initialize() ) {
 		Log_fatal ("SSL initialization failed");
