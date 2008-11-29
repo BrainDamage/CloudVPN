@@ -49,9 +49,19 @@ static void poll_handle_event (int fd, int what)
 		return;
 	}
 
-	map<int, connection>::iterator con = comm_connections().find (fd);
+	map<int, int>::iterator cid = comm_connection_index().find (fd);
 
-	if (con != comm_connections().end() ) {
+
+	if (cid != comm_connection_index().end() ) {
+		map<int, connection>::iterator
+		con = comm_connections().find (cid->second);
+
+		if (con == comm_connections().end() ) {
+			Log_warn ("fd %d indexed to nonexistent connection %d",
+			          cid->first, cid->second);
+			return;
+		}
+
 		if (what&WRITE_READY)
 			con->second.poll_write();
 		if (what& (READ_READY | EXCEPTION_READY) )

@@ -10,13 +10,29 @@
 #include <map>
 #include <set>
 #include <string>
-
 using namespace std;
 
 class connection
 {
 public:
-	int fd; //set to -1 on inactivity
+	int id; //not meant to be modified.
+
+	int fd; //set to -1 if there's no socket
+
+	void index();
+	void deindex();
+
+	void set_fd (int i) {
+		if (i < 0) return;
+		deindex();
+		fd = i;
+		index();
+	}
+
+	void unset_fd() {
+		deindex();
+		fd = -1;
+	}
 
 	int state;
 #define cs_inactive 0
@@ -34,9 +50,12 @@ public:
 	//all routes the peer is aware of.
 	map<hwaddr, int> remote_routes;
 
-	inline connection () {
+	explicit inline connection (int ID) {
+		id = ID;
 		ping = 1; //measure the distance at least
 	}
+
+	connection (); //this is supposed to fail, always use c(ID)
 
 	int ping;
 
@@ -87,6 +106,7 @@ void comm_listener_poll (int fd);
 int comm_init();
 int comm_shutdown();
 
+map<int, int>& comm_connection_index();
 map<int, connection>& comm_connections();
 set<int>& comm_listeners();
 

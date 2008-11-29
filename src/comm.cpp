@@ -16,7 +16,7 @@
 #include <list>
 using namespace std;
 
-list<connection> inactive_connections;
+static map<int, int> conn_index;
 static map<int, connection> connections;
 static set<int> listeners;
 
@@ -24,6 +24,11 @@ static set<int> listeners;
  * NOTICE (FUKKEN IMPORTANT)
  * because of good pollability, connections MUST be IDed by their socket fds.
  */
+
+map<int, int>&comm_connection_index()
+{
+	return conn_index;
+}
 
 map<int, connection>& comm_connections()
 {
@@ -77,7 +82,7 @@ static int ssl_initialize()
 
 	SSL_load_error_strings();
 
-	//TODO, maybe signal(sigpipe) here? no idea why.
+//TODO, maybe signal(sigpipe) here? no idea why.
 
 	meth = SSLv23_method();
 	ssl_ctx = SSL_CTX_new (meth);
@@ -243,8 +248,57 @@ static int tcp_close_socket (int sock)
 }
 
 /*
+ * connection creation helper
+ */
+
+static int max_connections = 1024;
+
+/*
+ * connections are allocated in range [0..max_connections)
+ *
+ * returns -1 on fail.
+ *
+ * Too bad it has O(n_connections) time, but what can we do.
+ */
+
+static int connection_alloc()
+{
+	int i;
+	map<int, connection>::iterator ci;
+
+	i = 0;
+	ci = connections.begin();
+	while ( (i < max_connections) && ci != connections.end() ) {
+		if (ci->first == i) {
+			++ci;
+			++i;
+		} else if (i < ci->first) {
+			goto do_alloc;
+		} else { //if i>ci->first, which should never happen.
+			Log_warn ("some corruption in the connection list at Cid %d", ci->first);
+			++ci;
+		}
+	}
+	if (i == max_connections)
+		return -1;
+
+//add at tail
+do_alloc:
+	connections[i] = connection (i);
+	return i;
+}
+
+void connection_delete (int id)
+{
+	map<int, connection>::iterator i = connections.find (id);
+	if (i == connections.end() ) return;
+	i->second.unset_fd();
+	connections.erase (i);
+}
+
+/*
  * This should accept a connection, and link it into the structure.
- * Generally, only these 2 functions really create connections.
+ * Generally, only these 2 functions really create connections:
  */
 
 static int try_accept_connection (int sock)
@@ -263,27 +317,37 @@ static int try_accept_connection (int sock)
 
 	Log_info ("get connection on socket %d", s);
 
-	connection&c = connections[s];
-	c.fd = s;
+	int cid = connection_alloc();
+	if (cid < 0) {
+		Log_info ("connection limit %d hit, closing %d",
+		          max_connections, s);
+		return 0;
+	}
+
+	connection&c = connections[cid];
+
+	c.set_fd (s);
 	c.state = cs_accepting;
 
-	c.try_accept(); //bump the connection, so it sets its poll state
+	c.try_accept(); //bump the thing
 
 	return 0;
 }
 
 static int connect_connection (const string&addr)
 {
-	connection c;
+	int cid = connection_alloc();
+	if (cid < 0) {
+		Log_warn ("connection limit %d hit, will NOT connect to `%s'");
+		Log_info ("consider increasing the limit");
+		return 1;
+	}
 
-	c.fd = -1;
-	c.address = addr;
+	connection&c = connections[cid];
+
 	c.state = cs_retry_timeout;
-	c.last_retry = 0; //asap
-
-	inactive_connections.push_back (c);
-
-	Log_info ("connecting to `%s'", addr.c_str() );
+	c.last_retry = 0;
+	c.address = addr;
 
 	return 0;
 }
@@ -291,6 +355,16 @@ static int connect_connection (const string&addr)
 /*
  * class connection stuff
  */
+
+void connection::index()
+{
+	conn_index[fd] = id;
+}
+
+void connection::deindex()
+{
+	conn_index.erase (fd);
+}
 
 void connection::handle_packet (void*buf, int len)
 {
@@ -368,6 +442,16 @@ void connection::poll_write()
 {
 }
 
+/*
+ * connection object must always be created with ID; if not, warn.
+ */
+
+connection::connection()
+{
+	Log_fatal ("connection at %p instantiated without ID", this);
+	Log_fatal ("... That should never happen. Not terminating,");
+	Log_fatal ("... but expect weird behavior and/or segfault.");
+}
 
 /*
  * comm_listener stuff
