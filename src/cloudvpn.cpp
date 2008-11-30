@@ -8,6 +8,7 @@
 #include "iface.h"
 #include "utils.h"
 #include "timestamp.h"
+#include "sq.h"
 
 #include <unistd.h>
 
@@ -33,11 +34,17 @@ int run_cloudvpn (int argc, char**argv)
 		goto failed_config;
 	}
 
-	if (!config_get_int ("heartbeat", heartbeat_usec) );
-	heartbeat_usec = 50000;
+	if (!config_get_int ("heartbeat", heartbeat_usec) )
+		heartbeat_usec = 50000;
 	Log_info ("heartbeat is set to %d usec", heartbeat_usec);
 
 	timestamp_update(); //get initial timestamp
+
+	if (sq_init() ) {
+		Log_fatal ("sq setup failed");
+		ret = 2;
+		goto failed_sq;
+	}
 
 	if (poll_init() ) {
 		Log_fatal ("poll initialization failed");
@@ -100,8 +107,11 @@ failed_iface:
 		Log_warn ("poll_deinit somehow failed!");
 
 failed_poll:
-failed_config:
 
+	sq_shutdown();
+
+failed_sq:
+failed_config:
 	if (!ret) Log_info ("cloudvpn: exiting gracefully");
 	else Log_error ("cloudvpn: exiting with code %d", ret);
 	return ret;
