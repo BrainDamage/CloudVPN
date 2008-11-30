@@ -547,21 +547,12 @@ static int comm_connections_close()
 
 int comm_init()
 {
-	string t;
-	if (config_get ("max_connections", t) ) {
-		if (sscanf (t.c_str(), "%d", &max_connections) != 1) {
-			Log_error ("specified max_connections is not an integer");
-			return 1;
-		}
-	} else max_connections = 1024;
+	int t;
+
+	if (!config_get_int ("max_connections", t) ) max_connections = 1024;
 	Log_info ("max connections count is %d", max_connections);
 
-	if (config_get ("listen_backlog", t) ) {
-		if (sscanf (t.c_str(), "%d", &listen_backlog_size) != 1) {
-			Log_error ("specified listen_backlog is not an integer");
-			return 1;
-		}
-	} else listen_backlog_size = 32;
+	if (!config_get_int ("listen_backlog", t) ) listen_backlog_size = 32;
 	Log_info ("listen backlog size is %d", listen_backlog_size);
 
 	if (ssl_initialize() ) {

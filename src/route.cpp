@@ -42,9 +42,11 @@ static size_t queue_max_size = 1024;
 
 static void queue_init()
 {
-	string t;
-	if (config_get ("br_id_cache_size", t) )
-		sscanf (t.c_str(), "%u", &queue_max_size);
+	int t;
+	if (!config_get_int ("br_id_cache_size", t) )
+		t = 1024;
+
+	queue_max_size = t;
 }
 
 static void queue_add_id (uint32_t id)

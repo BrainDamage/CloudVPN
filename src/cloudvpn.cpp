@@ -13,8 +13,6 @@
 
 int g_terminate = 0;
 
-static int get_heartbeat (int*);
-
 int run_cloudvpn (int argc, char**argv)
 {
 	int ret = 0;
@@ -35,8 +33,8 @@ int run_cloudvpn (int argc, char**argv)
 		goto failed_config;
 	}
 
-	if (get_heartbeat (&heartbeat_usec) )
-		Log_warn ("could not read heartbeat from config!");
+	if (!config_get_int ("heartbeat", heartbeat_usec) );
+	heartbeat_usec = 50000;
 	Log_info ("heartbeat is set to %d usec", heartbeat_usec);
 
 	timestamp_update(); //get initial timestamp
@@ -117,14 +115,4 @@ void kill_cloudvpn (int signum)
 
 #include <string>
 using namespace std;
-
-static int get_heartbeat (int*i)
-{
-	string s;
-	if (config_get ("heartbeat", s) )
-		if (sscanf (s.c_str(), "%d", i) == 1)
-			return 0;
-
-	return 1;
-}
 

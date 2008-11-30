@@ -52,6 +52,21 @@ bool config_is_true (const string&name)
 	return (v[0] == 'y') || (v[0] == 'Y') || (v[0] == '1');
 }
 
+#include <stdio.h>
+
+bool config_get_int (const string&name, int&val)
+{
+	string t;
+	if (config_get (name, t) ) {
+		if (1 == sscanf (t.c_str(), "%d", &val) )
+			return true;
+		else Log_warn ("could not parse value `%s' of `%s' to integer",
+			               t.c_str(), name.c_str() );
+	}
+	Log_info ("`%s' is not set", name.c_str() );
+	return false;
+}
+
 static bool is_white (char c)
 {
 	return (c == ' ') || (c == '\t');

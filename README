@@ -10,10 +10,16 @@ Needed goals:
 
 Whole network consists of connected nodes, all with equal functionality.
 Nodes are connected in a mesh of any shape, topology really doesnt matter.
+Each node works exactly like a simple mesh router.
 
 Optional goals:
 
 Don't use a single malloc(), only stack/STL allocation allowed.
+
+Future goals:
+
+Transparently bridge the VPN ethernet to local network.
+(which only means that the tap iface has multiple routes)
 
 	*** IMPLEMENTATION NOTES ***
 
