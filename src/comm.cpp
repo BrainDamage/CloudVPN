@@ -435,6 +435,10 @@ void connection::try_close()
 {
 }
 
+void connection::start_connect()
+{
+}
+
 void connection::poll_read()
 {
 }

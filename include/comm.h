@@ -35,19 +35,20 @@ public:
 	}
 
 	int state;
+
 #define cs_inactive 0
 #define cs_retry_timeout 1
-
 #define cs_connecting 2
 #define cs_ssl_connecting 3
 #define cs_accepting 4
 #define cs_closing 5
-
 #define cs_active 6
 
 	uint64_t last_retry; //last connection retry
 
-	//all routes the peer is aware of.
+	int ping; //cached ping
+
+	//all routes the peer reported
 	map<hwaddr, int> remote_routes;
 
 	explicit inline connection (int ID) {
@@ -56,8 +57,6 @@ public:
 	}
 
 	connection (); //this is supposed to fail, always use c(ID)
-
-	int ping;
 
 	/*
 	 * packet handling/sending functions. Those handle the endianiness.
@@ -83,9 +82,12 @@ public:
 
 	void try_read();
 	void try_write();
+
 	void try_accept();
 	void try_connect();
 	void try_close();
+
+	void start_connect();
 
 	/*
 	 * direct poll interface
