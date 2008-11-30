@@ -447,6 +447,10 @@ void connection::poll_write()
 {
 }
 
+void connection::periodic_update()
+{
+}
+
 /*
  * connection object must always be created with ID; if not, warn.
  */
@@ -579,15 +583,32 @@ int comm_init()
 
 int comm_shutdown()
 {
-	if (ssl_destroy() )
-		Log_warn ("SSL shutdown failed!");
-
 	if (comm_listeners_close() )
 		Log_warn ("closing of some listening sockets failed!");
 
 	if (comm_connections_close() )
 		Log_warn ("closing of some connections failed!");
 
+	if (ssl_destroy() )
+		Log_warn ("SSL shutdown failed!");
+
 	return 0;
+}
+
+void comm_periodic_update()
+{
+	map<int, connection>::iterator i;
+	list<int> to_delete;
+
+	for (i = connections.begin();i != connections.end();++i) {
+		i->second.periodic_update();
+		if (i->second.state == cs_inactive)
+			to_delete.push_back (i->first);
+	}
+
+	while (to_delete.size() ) {
+		connections.erase (to_delete.front() );
+		to_delete.pop_front();
+	}
 }
 

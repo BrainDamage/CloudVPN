@@ -97,6 +97,12 @@ public:
 	void poll_write();
 
 	/*
+	 * update the stuff
+	 */
+
+	void periodic_update();
+
+	/*
 	 * address that we should try to reconnect
 	 */
 
@@ -107,6 +113,8 @@ void comm_listener_poll (int fd);
 
 int comm_init();
 int comm_shutdown();
+
+void comm_periodic_update();
 
 map<int, int>& comm_connection_index();
 map<int, connection>& comm_connections();
