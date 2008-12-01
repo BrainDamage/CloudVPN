@@ -89,6 +89,9 @@ public:
 
 	void start_connect();
 
+	void disconnect();
+	void reset(); //hard socket disconnect.
+
 	/*
 	 * direct poll interface
 	 */

@@ -4,6 +4,7 @@
 #include "conf.h"
 #include "log.h"
 #include "poll.h"
+#include "timestamp.h"
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -439,6 +440,14 @@ void connection::start_connect()
 {
 }
 
+void connection::disconnect()
+{
+}
+
+void connection::reset()
+{
+}
+
 void connection::poll_read()
 {
 }
@@ -543,10 +552,42 @@ static int comm_connections_init()
 static int comm_connections_close()
 {
 	/*
-	 * TODO: wait (with some timeout) for all connections to close.
-	 * This involves calling disconnect() on every active connection,
-	 * do some poll cycle, and periodically clean inactive connections.
+	 * Close all connection, wait for closing.
 	 */
+
+	int timeout_usec;
+	if (!config_get_int ("comm_close_timeout", timeout_usec) )
+		timeout_usec = 1000000; //10 sec
+	Log_info ("waiting %gsec for connections to close...",
+	          0.000001*timeout_usec);
+
+	map<int, connection>::iterator i;
+
+	timestamp_update();
+
+	uint64_t cutout_time = timestamp() + timeout_usec;
+
+	//start ssl disconnection
+	for (i = connections.begin();i != connections.end();++i)
+		i->second.disconnect();
+
+	while ( (timestamp() < cutout_time) && (connections.size() ) ) {
+		poll_wait_for_event (1000);
+		timestamp_update();
+		comm_periodic_update();
+	}
+
+	if (connections.size() ) {
+		Log_info ("resetting remaining %u connections",
+		          connections.size() );
+		//close remaining connections hard.
+		for (i = connections.begin();i != connections.end();++i)
+			i->second.reset();
+	} else Log_info ("all connections closed gracefully");
+
+	comm_periodic_update(); //delete remains
+
+	return 0;
 }
 
 /*
