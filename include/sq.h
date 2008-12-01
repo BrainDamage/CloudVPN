@@ -52,8 +52,7 @@ public:
 	static int max_len;
 };
 
-int sq_init();
-int sq_shutdown();
+void sq_init();
 
 #endif
 

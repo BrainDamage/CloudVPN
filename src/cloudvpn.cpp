@@ -1,14 +1,15 @@
 
 #include "cloudvpn.h"
 
+#include "sq.h"
 #include "log.h"
 #include "comm.h"
 #include "conf.h"
 #include "poll.h"
 #include "iface.h"
+#include "route.h"
 #include "utils.h"
 #include "timestamp.h"
-#include "sq.h"
 
 #include <unistd.h>
 
@@ -40,11 +41,8 @@ int run_cloudvpn (int argc, char**argv)
 
 	timestamp_update(); //get initial timestamp
 
-	if (sq_init() ) {
-		Log_fatal ("sq setup failed");
-		ret = 2;
-		goto failed_sq;
-	}
+	sq_init();
+	route_init();
 
 	if (poll_init() ) {
 		Log_fatal ("poll initialization failed");
@@ -110,10 +108,6 @@ failed_iface:
 		Log_warn ("poll_deinit somehow failed!");
 
 failed_poll:
-
-	sq_shutdown();
-
-failed_sq:
 failed_config:
 	if (!ret) Log_info ("cloudvpn: exiting gracefully");
 	else Log_error ("cloudvpn: exiting with code %d", ret);

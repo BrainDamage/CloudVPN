@@ -2,6 +2,7 @@
 #include "route.h"
 #include "comm.h"
 #include "timestamp.h"
+#include "log.h"
 
 /*
  * utils
@@ -43,8 +44,8 @@ static size_t queue_max_size = 1024;
 static void queue_init()
 {
 	int t;
-	if (!config_get_int ("br_id_cache_size", t) )
-		t = 1024;
+	if (!config_get_int ("br_id_cache_size", t) ) t = 1024;
+	Log_info ("broadcast ID cache size is %d", t);
 
 	queue_max_size = t;
 }
@@ -171,6 +172,4 @@ map<hwaddr, route_info>& route_get ()
 {
 	return route;
 }
-
-
 
