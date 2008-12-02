@@ -224,10 +224,10 @@ int iface_retrieve_hwaddr (uint8_t*hwaddr)
 
 int iface_destroy()
 {
-	Log_info ("destroying local interface");
-
 	if (tun < 0) return 0; //already closed
 	int ret;
+
+	Log_info ("destroying local interface");
 
 	if (ret = close (tun) ) {
 		Log_error ("iface_destroy: close(%d) failed with %d (%s). this may cause trouble elsewhere.", tun, errno, strerror (errno) );

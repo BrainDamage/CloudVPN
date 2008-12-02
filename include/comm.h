@@ -110,6 +110,13 @@ public:
 	 */
 
 	string address;
+
+	/*
+	 * operation timings
+	 */
+	static int timeout;
+	static int keepalive;
+
 };
 
 void comm_listener_poll (int fd);

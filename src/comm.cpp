@@ -250,7 +250,7 @@ static int tcp_close_socket (int sock)
 }
 
 /*
- * connection creation helper
+ * connection creation helpers
  */
 
 static int max_connections = 1024;
@@ -358,6 +358,9 @@ static int connect_connection (const string&addr)
  * class connection stuff
  */
 
+int connection::timeout = 60000000; //60 sec
+int connection::keepalive = 5000000; //5 sec
+
 void connection::index()
 {
 	conn_index[fd] = id;
@@ -367,6 +370,10 @@ void connection::deindex()
 {
 	conn_index.erase (fd);
 }
+
+/*
+ * handlers
+ */
 
 void connection::handle_packet (void*buf, int len)
 {
@@ -392,6 +399,10 @@ void connection::handle_pong (uint32_t id)
 {
 }
 
+/*
+ * senders
+ */
+
 void connection::write_packet (void*buf, int len)
 {
 }
@@ -416,6 +427,10 @@ void connection::write_pong (uint32_t id)
 {
 }
 
+/*
+ * actions
+ */
+
 void connection::try_read()
 {
 }
@@ -436,6 +451,10 @@ void connection::try_close()
 {
 }
 
+/*
+ * forced state changes
+ */
+
 void connection::start_connect()
 {
 }
@@ -446,7 +465,13 @@ void connection::disconnect()
 
 void connection::reset()
 {
+	tcp_close_socket (fd);
+	fd = -1;
 }
+
+/*
+ * polls
+ */
 
 void connection::poll_read()
 {
@@ -599,10 +624,23 @@ int comm_init()
 	int t;
 
 	if (!config_get_int ("max_connections", t) ) max_connections = 1024;
+	else max_connections = t;
 	Log_info ("max connections count is %d", max_connections);
 
 	if (!config_get_int ("listen_backlog", t) ) listen_backlog_size = 32;
+	else listen_backlog_size = t;
 	Log_info ("listen backlog size is %d", listen_backlog_size);
+
+	if (!config_get_int ("conn_timeout", t) )
+		connection::timeout = 60000000; //60s is okay
+	else	connection::timeout = t;
+	Log_info ("connection timeout is %gsec", 0.000001*connection::timeout);
+
+	if (!config_get_int ("conn_keepalive", t) )
+		connection::keepalive = 60000000; //60s is okay
+	else	connection::keepalive = t;
+	Log_info ("connection keepalive is %gsec",
+	          0.000001*connection::keepalive);
 
 	if (ssl_initialize() ) {
 		Log_fatal ("SSL initialization failed");

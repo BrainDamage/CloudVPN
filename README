@@ -149,15 +149,26 @@ gid nobody
 
 br_id_cache_size 1024 --broadcast ID cache size, in ID entries.
 	--If rotating broadcasts kill your network, increase this.
+
 max_send_queue_size 262144 --maximum size of output queue, in bytes.
 	--When you have too much communication problems in peaks, increase this.
+
 heartbeat 10000 -- core update heartbeat in usec. Smaller values improve
 	--overall responsiveness, especially neighbor-info spreading speed, at
 	--a cost of slight overhead (global update is done once per period.)
 	--Higher values dont harm much, but greater networks with frequent
 	--topology changes may suffer.
+
 listen_backlog 32 --parameter to listen(), maximum number of accept-pendings.
+
 max_connections 1024 -- overall maximum number of communication channels.
+
+conn_timeout 60000000 -- connection inactivity timeout.
+
+conn_keepalive 5000000 -- ping interval
+
+comm_close_timeout 10000000 -- how long to wait for connections to close
+			-- valid only when shutting down
 
 	*** INTERNALS ***
 
