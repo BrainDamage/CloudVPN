@@ -43,7 +43,7 @@ set<int>& comm_listeners()
 }
 
 /*
- * SSL stuff
+ * global SSL stuff
  */
 
 static SSL_CTX* ssl_ctx;
@@ -89,6 +89,7 @@ static int ssl_initialize()
 	meth = SSLv23_method();
 	ssl_ctx = SSL_CTX_new (meth);
 	SSL_CTX_set_options (ssl_ctx, SSL_OP_NO_SSLv2);
+	SSL_CTX_set_options (ssl_ctx, SSL_MODE_ENABLE_PARTIAL_WRITE);
 
 	SSL_CTX_set_default_passwd_cb (ssl_ctx, ssl_password_callback);
 
@@ -286,7 +287,7 @@ static int connection_alloc()
 
 //add at tail
 do_alloc:
-	connections[i] = connection (i);
+	connections.insert (pair<int, connection> (i, connection (i) ) );
 	return i;
 }
 
@@ -331,7 +332,7 @@ static int try_accept_connection (int sock)
 	c.set_fd (s);
 	c.state = cs_accepting;
 
-	c.try_accept(); //bump the thing
+	c.start_accept(); //bump the thing
 
 	return 0;
 }
@@ -360,6 +361,7 @@ static int connect_connection (const string&addr)
 
 int connection::timeout = 60000000; //60 sec
 int connection::keepalive = 5000000; //5 sec
+int connection::retry = 10000000; //10 sec
 
 void connection::index()
 {
@@ -439,16 +441,92 @@ void connection::try_write()
 {
 }
 
+void connection::try_data()
+{
+	//TODO only if something's in the queue, try write.
+	try_read();
+}
+
 void connection::try_accept()
 {
+	int r = SSL_accept (ssl);
+	if (r > 0) {
+		Log_info ("socket %d accepted SSL connection", fd);
+
+		state = cs_active;
+		send_ping();
+	} else if (handle_ssl_error (r) ) {
+		Log_error ("accepting fd %d lost", fd);
+		reset();
+		return;
+	}
+	if ( (timestamp() - last_ping) > timeout) {
+		Log_error ("accepting fd %d timeout", fd);
+		reset();
+		return;
+	}
 }
 
 void connection::try_connect()
 {
+	int e, t;
+	socklen_t e_len = sizeof (e);
+
+	t = getsockopt (fd, SOL_SOCKET, SO_ERROR,
+	                &e, &e_len);
+
+	if (t) {
+		Log_error ("getsockopt(%d) failed with errno %d", fd, errno);
+		reset();
+		return;
+	}
+
+	if (e == EINPROGRESS) {
+		if ( (timestamp() - last_ping) > timeout) {
+			Log_error ("timeout connecting %d", fd);
+			reset();
+			return;
+		} else return;
+	}
+	if (e == 0) {
+		poll_set_remove_write (fd);
+		poll_set_add_read (fd); //always needed
+		state = cs_ssl_connecting;
+		try_ssl_connect();
+		return;
+	}
+
+	Log_error ("connecting %d failed with %d", fd, e);
+	reset();
+}
+
+void connection::try_ssl_connect()
+{
+	int r = SSL_connect (ssl);
+	if (r > 0) {
+		Log_info ("socket %d established SSL connection", fd);
+		state = cs_active;
+		send_ping();
+	} else if (handle_ssl_error (r) ) {
+		Log_error ("SSL connecting on %d failed", fd);
+		reset();
+		return;
+	}
+
 }
 
 void connection::try_close()
 {
+	int r = SSL_shutdown (ssl);
+	if (r < 0) {
+		Log_warn ("SSL connection on %d not terminated properly", fd);
+		reset();
+	} else if (r != 0) reset(); //closed OK
+	else if ( (timestamp() - last_ping) > timeout) {
+		Log_warn ("%d timeouted disconnecting SSL", fd);
+		reset();
+	}
+	//else just wait for another poll
 }
 
 /*
@@ -457,32 +535,177 @@ void connection::try_close()
 
 void connection::start_connect()
 {
+	last_retry = timestamp();
+
+	int t = tcp_connect_socket (address);
+	if (t < 0) {
+		Log_error ("failed connecting in connection id %d", id);
+		return;
+	}
+
+	set_fd (t);
+
+	if (alloc_ssl() ) {
+		reset();
+		return;
+	}
+
+	state = cs_connecting;
+	last_ping = timestamp();
+	poll_set_add_write (fd); //wait for connect() to be done
+	try_connect();
+}
+
+void connection::start_accept()
+{
+	if (alloc_ssl() ) {
+		reset();
+		return;
+	}
+
+	last_ping = timestamp(); //abuse the variable...
+
+	poll_set_add_read (fd); //always needed
+	try_accept();
+}
+
+void connection::send_ping()
+{
+	last_ping = timestamp();
+	//TODO...
 }
 
 void connection::disconnect()
 {
+	if ( (state == cs_inactive)
+	        || (state == cs_retry_timeout)
+	        || (state == cs_closing) ) return;
+
+	last_ping = timestamp();
+	state = cs_closing;
+	try_close();
 }
 
 void connection::reset()
 {
+	dealloc_ssl();
+
+	poll_set_remove_write (fd);
+	poll_set_remove_read (fd);
+
 	tcp_close_socket (fd);
-	fd = -1;
+	unset_fd();
+
+	if (address.length() ) {
+		state = cs_retry_timeout;
+	} else state = cs_inactive;
+}
+
+int connection::handle_ssl_error (int ret)
+{
+	int e = SSL_get_error (ssl, ret);
+
+	switch (e) {
+	case SSL_ERROR_WANT_READ:
+		poll_set_remove_write (fd);
+		break;
+	case SSL_ERROR_WANT_WRITE:
+		poll_set_add_write (fd);
+		break;
+	case SSL_ERROR_ZERO_RETURN:
+		return 1; //SSL closed correctly.
+	default:
+		Log_error ("Get SSL error %d, ret=%d!", e, ret);
+		return e;
+	}
+
+	return 0;
 }
 
 /*
  * polls
  */
 
+void connection::poll_simple()
+{
+	switch (state) {
+	case cs_accepting:
+		try_accept();
+		break;
+	case cs_connecting:
+		try_connect();
+		break;
+	case cs_ssl_connecting:
+		try_ssl_connect();
+		break;
+	case cs_closing:
+		try_close();
+		break;
+	case cs_active:
+		try_data();
+		break;
+	default:
+		Log_warn ("unexpected poll to connection id %d", id);
+	}
+}
+
 void connection::poll_read()
 {
+	poll_simple();
 }
 
 void connection::poll_write()
 {
+	poll_simple();
 }
 
 void connection::periodic_update()
 {
+	switch (state) {
+	case cs_closing:
+		try_close();
+		break;
+	case cs_retry_timeout:
+		if ( (timestamp() - last_retry) > retry) start_connect();
+		break;
+	}
+}
+
+/*
+ * SSL alloc/dealloc
+ */
+
+int connection::alloc_ssl()
+{
+	dealloc_ssl();
+
+	bio = BIO_new_socket (fd, BIO_NOCLOSE);
+	if (!bio) {
+		Log_fatal ("creating SSL/BIO object failed, something's gonna die.");
+		return 1;
+	}
+
+	ssl = SSL_new (ssl_ctx);
+	SSL_set_bio (ssl, bio, bio);
+
+	if (!ssl) {
+		Log_fatal ("creating SSL object failed! something is gonna die.");
+		dealloc_ssl(); //at least free the BIO
+		return 1;
+	}
+
+	return 0;
+}
+
+void connection::dealloc_ssl()
+{
+	if (ssl) {
+		SSL_free (ssl);
+		ssl = 0;
+	} else if (bio) {
+		BIO_free (bio);
+		bio = 0;
+	}
 }
 
 /*
@@ -494,6 +717,16 @@ connection::connection()
 	Log_fatal ("connection at %p instantiated without ID", this);
 	Log_fatal ("... That should never happen. Not terminating,");
 	Log_fatal ("... but expect weird behavior and/or segfault.");
+
+	/* =TRICKY=
+	 * This is mostly usuable in enterprise situations, when
+	 * a simple restart is better than slow painful death.
+	 */
+
+#ifdef CVPN_SEGV_ON_HARD_FAULT
+	Log_fatal ("in fact, doing a segfault now is nothing bad. weeee!");
+	* ( (int*) 0) = 0xDEAD;
+#endif
 }
 
 /*
@@ -593,8 +826,10 @@ static int comm_connections_close()
 	uint64_t cutout_time = timestamp() + timeout_usec;
 
 	//start ssl disconnection
-	for (i = connections.begin();i != connections.end();++i)
+	for (i = connections.begin();i != connections.end();++i) {
 		i->second.disconnect();
+		i->second.address.clear();
+	}
 
 	while ( (timestamp() < cutout_time) && (connections.size() ) ) {
 		poll_wait_for_event (1000);
@@ -631,13 +866,18 @@ int comm_init()
 	else listen_backlog_size = t;
 	Log_info ("listen backlog size is %d", listen_backlog_size);
 
+	if (!config_get_int ("conn_retry", t) )
+		connection::retry = 10000000; //10s is okay
+	else	connection::retry = t;
+	Log_info ("connection retry is %gsec", 0.000001*connection::retry);
+
 	if (!config_get_int ("conn_timeout", t) )
 		connection::timeout = 60000000; //60s is okay
 	else	connection::timeout = t;
 	Log_info ("connection timeout is %gsec", 0.000001*connection::timeout);
 
 	if (!config_get_int ("conn_keepalive", t) )
-		connection::keepalive = 60000000; //60s is okay
+		connection::keepalive = 5000000; //5s is okay
 	else	connection::keepalive = t;
 	Log_info ("connection keepalive is %gsec",
 	          0.000001*connection::keepalive);
@@ -676,6 +916,11 @@ int comm_shutdown()
 
 void comm_periodic_update()
 {
+	/*
+	 * delete inactive connections,
+	 * push those who shall connect to connect
+	 */
+
 	map<int, connection>::iterator i;
 	list<int> to_delete;
 

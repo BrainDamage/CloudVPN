@@ -7,6 +7,8 @@
 
 #include <stdint.h>
 
+#include <openssl/ssl.h>
+
 #include <map>
 #include <set>
 #include <string>
@@ -16,7 +18,6 @@ class connection
 {
 public:
 	int id; //not meant to be modified.
-
 	int fd; //set to -1 if there's no socket
 
 	void index();
@@ -47,6 +48,9 @@ public:
 	uint64_t last_retry; //last connection retry
 
 	int ping; //cached ping
+	uint32_t sent_ping_id;
+	uint64_t sent_ping_time;
+	//ping is on the way, if sent_ping_time==last_ping
 
 	//all routes the peer reported
 	map<hwaddr, int> remote_routes;
@@ -54,6 +58,9 @@ public:
 	explicit inline connection (int ID) {
 		id = ID;
 		ping = 1; //measure the distance at least
+		ssl = 0; //point at nothing.
+		bio = 0;
+		last_ping = 0;
 	}
 
 	connection (); //this is supposed to fail, always use c(ID)
@@ -81,21 +88,29 @@ public:
 	 */
 
 	void try_read();
-	void try_write();
+	void try_write(); //both called by try_data(); dont use directly
+
+	void try_data();
 
 	void try_accept();
 	void try_connect();
+	void try_ssl_connect();
 	void try_close();
 
 	void start_connect();
+	void start_accept();
+	void send_ping();
 
 	void disconnect();
 	void reset(); //hard socket disconnect.
+
+	int handle_ssl_error (int);
 
 	/*
 	 * direct poll interface
 	 */
 
+	void poll_simple();
 	void poll_read();
 	void poll_write();
 
@@ -114,9 +129,21 @@ public:
 	/*
 	 * operation timings
 	 */
+
 	static int timeout;
 	static int keepalive;
+	static int retry;
+	uint64_t last_ping;
 
+	/*
+	 * SSL data
+	 */
+
+	SSL*ssl; //should be 0 when not used
+	BIO*bio;
+
+	int alloc_ssl();
+	void dealloc_ssl();
 };
 
 void comm_listener_poll (int fd);
