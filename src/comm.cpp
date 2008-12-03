@@ -4,7 +4,9 @@
 #include "conf.h"
 #include "log.h"
 #include "poll.h"
+#include "route.h"
 #include "timestamp.h"
+#include "sq.h"
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -84,7 +86,7 @@ static int ssl_initialize()
 
 	SSL_load_error_strings();
 
-//TODO, maybe signal(sigpipe) here? no idea why.
+	//maybe signal(sigpipe) belons here, no idea why.
 
 	meth = SSLv23_method();
 	ssl_ctx = SSL_CTX_new (meth);
@@ -403,15 +405,53 @@ void connection::deindex()
 }
 
 /*
+ * protocol headers
+ */
+
+#define pt_route_set 1
+#define pt_route_diff 2
+#define pt_eth_frame 3
+#define pt_broadcast 4
+#define pt_echo_request 5
+#define pt_echo_reply 6
+#define p_head_size 4
+
+static void add_packet_header (pbuffer&b, uint8_t type,
+                               uint8_t special, uint16_t size)
+{
+	b.b.reserve (p_head_size);
+	b.push<uint8_t> (type);
+	b.push<uint8_t> (special);
+	b.push<uint16_t> (htons (size) );
+}
+
+static bool parse_packet_header (squeue&q, uint8_t&type,
+                                 uint8_t&special, uint16_t&size)
+{
+	if (q.len() < p_head_size) return false;
+	uint8_t t;
+	q.pop<uint8_t> (t);
+	type = t;
+	q.pop<uint8_t> (t);
+	special = t;
+	uint16_t t2;
+	q.pop<uint16_t> (t2);
+	size = ntohs (t2);
+	return true;
+}
+
+/*
  * handlers
  */
 
 void connection::handle_packet (void*buf, int len)
 {
+	route_packet (buf, len, id);
 }
 
-void connection::handle_broadcast_packet (uint32_t id, void*buf, int len)
+void connection::handle_broadcast_packet (uint32_t ID, void*buf, int len)
 {
+	route_broadcast_packet (ID, buf, len, id);
 }
 
 void connection::handle_route_set()
@@ -422,12 +462,20 @@ void connection::handle_route_diff()
 {
 }
 
-void connection::handle_ping (uint32_t id)
+void connection::handle_ping (uint8_t ID)
 {
+	write_pong (ID);
 }
 
-void connection::handle_pong (uint32_t id)
+void connection::handle_pong (uint8_t ID)
 {
+	last_ping = timestamp();
+	if (ID != sent_ping_id) {
+		Log_info ("connection %d received some very old ping", id);
+		return;
+	}
+	ping = timestamp() - sent_ping_time;
+	Log_info ("connection %d has ping %g", id, 0.000001*ping);
 }
 
 /*
@@ -436,10 +484,19 @@ void connection::handle_pong (uint32_t id)
 
 void connection::write_packet (void*buf, int len)
 {
+	pbuffer b;
+	add_packet_header (b, pt_eth_frame, 0, len);
+	write_data (b, true);
+	write_data ( (uint8_t*) buf, len);
 }
 
-void connection::write_broadcast_packet (uint32_t id, void*buf, int len)
+void connection::write_broadcast_packet (uint32_t ID, void*buf, int len)
 {
+	pbuffer b;
+	add_packet_header (b, pt_broadcast, 0, len);
+	b.push<uint32_t> (htonl (ID) );
+	write_data (b, true);
+	write_data ( (uint8_t*) buf, len);
 }
 
 void connection::write_route_set()
@@ -450,29 +507,143 @@ void connection::write_route_diff()
 {
 }
 
-void connection::write_ping (uint32_t id)
+void connection::write_ping (uint8_t ID)
 {
+	pbuffer b;
+	add_packet_header (b, pt_echo_request, ID, 0);
+	write_data (b);
 }
 
-void connection::write_pong (uint32_t id)
+void connection::write_pong (uint8_t ID)
 {
+	pbuffer b;
+	add_packet_header (b, pt_echo_reply, ID, 0);
+	write_data (b);
 }
 
 /*
  * actions
  */
 
+void connection::try_parse_input()
+{
+	if (cached_header.type == 0)
+		if (recv_q.len() >= p_head_size)
+			parse_packet_header (recv_q,
+			                     cached_header.type,
+			                     cached_header.special,
+			                     cached_header.size);
+	switch (cached_header.type) {
+	case 0:
+		break;
+	case pt_route_set:
+	case pt_route_diff:
+		Log_warn ("%d not supported on %d yet", cached_header.type, id);
+		break;
+
+	case pt_eth_frame:
+		if (recv_q.len() >= cached_header.size) {
+			uint8_t buf[cached_header.size];
+			recv_q.pop (buf, cached_header.size);
+			handle_packet (buf, cached_header.size);
+		}
+		break;
+
+	case pt_broadcast:
+		if (recv_q.len() >= cached_header.size + 4) {
+			uint32_t t;
+			recv_q.pop<uint32_t> (t);
+			t = ntohl (t);
+			uint8_t buf[cached_header.size];
+			recv_q.pop (buf, cached_header.size);
+			handle_broadcast_packet (t, buf, cached_header.size);
+		}
+		break;
+
+	case pt_echo_request:
+		handle_ping (cached_header.special);
+		cached_header.type = 0;
+		break;
+
+	case pt_echo_reply:
+		handle_pong (cached_header.special);
+		cached_header.type = 0;
+		break;
+
+	default:
+		Log_error ("invalid packet header received. disconnecting.");
+		disconnect();
+	}
+}
+
 void connection::try_read()
 {
+	uint8_t buf[4096];
+	int r;
+	while (1) {
+		r = SSL_read (ssl, buf, 4096);
+		if (r == 0) {
+			Log_info ("connection id %d closed by peer", id);
+			disconnect();
+			return;
+		} else if (r < 0) {
+			if (handle_ssl_error (r) ) {
+				Log_info ("connection id %d read error", id);
+				reset();
+			}
+			return;
+		} else {
+			recv_q.push (buf, r);
+			try_parse_input();
+		}
+	}
+}
+
+void connection::write_data (pbuffer&b, bool write_wait)
+{
+	if (state != cs_active) return;
+	send_q.push (b);
+	if (write_wait) return;
+	try_write();
+}
+
+void connection::write_data (uint8_t*b, int len, bool write_wait)
+{
+	if (state != cs_active) return;
+	send_q.push (b, len);
+	if (write_wait) return;
+	try_write();
 }
 
 void connection::try_write()
 {
+	uint8_t buf[4096];
+	int n, r;
+	while (send_q.len() ) {
+		n = send_q.peek (buf, 4096);
+
+		r = SSL_write (ssl, buf, n);
+
+		if (r == 0) {
+			Log_info ("connection id %d closed by peer", id);
+			disconnect();
+			return;
+		} else if (r < 0) {
+			if (handle_ssl_error (r) ) {
+				Log_error ("connection id %d write error", id);
+				reset();
+				return;
+			}
+		} else {
+			send_q.pop (0, r);
+		}
+	}
+	poll_set_remove_write (fd);
 }
 
 void connection::try_data()
 {
-	//TODO only if something's in the queue, try write.
+	if (send_q.len() ) try_write();
 	try_read();
 }
 
@@ -599,8 +770,9 @@ void connection::start_accept()
 
 void connection::send_ping()
 {
-	last_ping = timestamp();
-	//TODO...
+	sent_ping_time = timestamp();
+	sent_ping_id += 1;
+	write_ping (sent_ping_id);
 }
 
 void connection::disconnect()
@@ -621,6 +793,10 @@ void connection::disconnect()
 
 void connection::reset()
 {
+	send_q.clear();
+	recv_q.clear();
+	cached_header.type = 0;
+
 	dealloc_ssl();
 
 	poll_set_remove_write (fd);
@@ -713,6 +889,10 @@ void connection::periodic_update()
 	case cs_retry_timeout:
 		if ( (timestamp() - last_retry) > retry) start_connect();
 		break;
+	case cs_active:
+		if ( (timestamp() - last_ping) > timeout) disconnect();
+		else if ( (timestamp() - sent_ping_time) > keepalive) send_ping();
+		try_read();
 	}
 }
 
@@ -824,7 +1004,6 @@ static int comm_listeners_close()
 void comm_listener_poll (int fd)
 {
 	try_accept_connection (fd);
-	//TODO maybe do something if this fails
 }
 
 /*

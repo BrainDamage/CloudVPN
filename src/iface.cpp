@@ -3,6 +3,7 @@
 
 #include "utils.h"
 #include "conf.h"
+#include "poll.h"
 #include "log.h"
 
 #include <errno.h>
@@ -21,7 +22,6 @@
 #define CLEAR(x) memset(&(x),0,sizeof(x))
 
 #define hwaddr_digits (2*hwaddr_size)
-
 
 static uint8_t cached_hwaddr[hwaddr_size];
 
@@ -150,6 +150,8 @@ int iface_create()
 
 	iface_retrieve_hwaddr (0); //cache the mac
 
+	poll_set_add_read (tun);
+
 	return 0;
 }
 
@@ -235,6 +237,7 @@ int iface_destroy()
 	}
 
 	tun = -1;
+
 	return 0;
 }
 
@@ -245,8 +248,8 @@ int iface_write (void*buf, size_t len)
 	if (res < 0) {
 		if (errno == EAGAIN) return 0;
 		else {
-			Log_error ("iface: write failure %d (%s)",
-			           errno, strerror (errno) );
+			Log_warn ("iface: write failure %d (%s)",
+			          errno, strerror (errno) );
 			return -1;
 		}
 	}
@@ -299,6 +302,9 @@ void iface_poll_read()
 
 void iface_poll_write()
 {
+	/*
+	 * not used yet
+	 */
 }
 
 int iface_get_sockfd()

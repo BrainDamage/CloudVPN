@@ -16,15 +16,6 @@ void sq_init()
  * pbuffer
  */
 
-template <class T> void pbuffer::push (const T& o)
-{
-	uint8_t*data = (uint8_t*) & o;
-
-	b.reserve (b.size() + sizeof (o) );
-
-	for (int i = 0;i < sizeof (o);++i) b.push_back (data[i]);
-}
-
 void pbuffer::push (const uint8_t*d, int size)
 {
 	b.reserve (b.size() + size);
@@ -65,10 +56,13 @@ int squeue::pop (uint8_t*d, int size)
 	deque<uint8_t>::iterator k;
 	int i;
 
-	for (i = 0, k = q.begin();i < ret;++i, ++k) {
-		d[i] = *k;
-	}
+	if (d) for (i = 0, k = q.begin();i < ret;++i, ++k) {
+			d[i] = *k;
+		}
+	else k = q.begin() + ret;
+
 	q.erase (q.begin(), k);
+
 	return ret;
 }
 
@@ -84,7 +78,41 @@ int squeue::pop (pbuffer&buf)
 	for (i = 0, k = q.begin();i < ret;++i, ++k) {
 		buf.b.push_back (*k);
 	}
+
 	q.erase (q.begin(), k);
+
+	return 0;
+}
+
+int squeue::peek (uint8_t*d, int size)
+{
+	int ret = size;
+	if (ret > q.size() ) ret = q.size();
+	if (!ret) return ret;
+
+	deque<uint8_t>::iterator k;
+	int i;
+
+	for (i = 0, k = q.begin();i < ret;++i, ++k) {
+		d[i] = *k;
+	}
+
+	return ret;
+}
+
+int squeue::peek (pbuffer&buf)
+{
+	int ret = q.size();
+	if (!ret) return ret;
+
+	deque<uint8_t>::iterator k;
+	buf.b.reserve (buf.b.size() + ret);
+	int i;
+
+	for (i = 0, k = q.begin();i < ret;++i, ++k) {
+		buf.b.push_back (*k);
+	}
+
 	return 0;
 }
 

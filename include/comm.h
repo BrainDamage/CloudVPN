@@ -4,6 +4,7 @@
 
 #include "iface.h"
 #include "utils.h"
+#include "sq.h"
 
 #include <stdint.h>
 
@@ -48,7 +49,7 @@ public:
 	uint64_t last_retry; //last connection retry
 
 	int ping; //cached ping
-	uint32_t sent_ping_id;
+	uint8_t sent_ping_id;
 	uint64_t sent_ping_time;
 	//ping is on the way, if sent_ping_time==last_ping
 
@@ -62,6 +63,7 @@ public:
 		ssl = 0; //point at nothing.
 		bio = 0;
 		last_ping = 0;
+		cached_header.type = 0;
 	}
 
 	connection (); //this is supposed to fail, always use c(ID)
@@ -74,19 +76,31 @@ public:
 	void handle_broadcast_packet (uint32_t id, void*buf, int len);
 	void handle_route_set();
 	void handle_route_diff();
-	void handle_ping (uint32_t id);
-	void handle_pong (uint32_t id);
+	void handle_ping (uint8_t id);
+	void handle_pong (uint8_t id);
 
 	void write_packet (void*buf, int len);
 	void write_broadcast_packet (uint32_t id, void*buf, int len);
 	void write_route_set();
 	void write_route_diff();
-	void write_ping (uint32_t id);
-	void write_pong (uint32_t id);
+	void write_ping (uint8_t id);
+	void write_pong (uint8_t id);
 
 	/*
 	 * those functions are called by polling interface to do specific stuff
 	 */
+
+	squeue send_q, recv_q;
+
+	struct {
+		uint8_t type;
+		uint8_t special;
+		uint16_t size;
+	} cached_header;
+
+	void try_parse_input();
+	void write_data (pbuffer&, bool wait = false);
+	void write_data (uint8_t*, int, bool wait = false);
 
 	void try_read();
 	void try_write(); //both called by try_data(); dont use directly
