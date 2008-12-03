@@ -57,6 +57,7 @@ public:
 
 	explicit inline connection (int ID) {
 		id = ID;
+		fd = -1;
 		ping = 1; //measure the distance at least
 		ssl = 0; //point at nothing.
 		bio = 0;

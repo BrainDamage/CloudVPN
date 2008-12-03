@@ -1,0 +1,13 @@
+#!/bin/bash
+
+[[ "$REQ" ]] || echo "please supply env REQ"
+[[ "$OUT" ]] || echo "please supply env OUT"
+
+DAYS=${DAYS:-3650}
+
+[[ "$REQ" && "$OUT" ]] || exit 1
+
+openssl ca -config ssl.cnf -out $OUT -outdir ./ \
+	-days $DAYS -batch -keyfile ca.key \
+	-infiles $REQ
+

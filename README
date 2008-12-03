@@ -40,8 +40,8 @@ All nodes can
 	   packets.
 
 All nodes must
-	a] act as switches in a graph network. (NO tree, we allow circles)
-	   -remember where which MAC address is
+	a] act as switches in a mesh network. (NO tree, we allow circles)
+	   -remember where which MAC address sits
 	   -send packets which arent for our MAC to the other guys.
 	   -do NOT duplicate data packets, unless they are marked as broadcasts.
 	b] provide and update reasonable info about "what MACs I can send to"
@@ -185,6 +185,27 @@ cloudvpn - the thing that reads the config and runs all of it
 main.c - neatly separated main()
 poll - waiting for events. epoll is default, select will be provided.
 timestamp - usec timer
+squeue - packet buffer and socket data queue.
 
 Please format the code using $ astyle --style=linux -pdt
+
+
+	*** KEY GENERATOR, the openssl helper ***
+
+For simplicity, I provide some basic openssl scripts which generate keys good
+enough for the purpose of cloudvpning. Basic usage looks like this:
+
+cd keygen
+mkdir my_keys
+cd my_keys
+../gen-dh
+../gen-ca
+../ca-selfsign   (or send the request to verisign, lol.)
+KEY=ssl.key REQ=ssl.req ../gen-key
+REQ_ssl.req OUT=ssl.crt ../ca-sign
+
+Please remember to supply different common names for all keys, otherwise index
+will get mad. If anything goes wrong, don't hesitate to use similar and more
+sophisticated packages, like easy-rsa from openvpn, but remember to use correct
+nsCertType purpose, for both client and server things.
 

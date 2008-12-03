@@ -149,6 +149,14 @@ static int ssl_initialize()
 		return 8;
 	}
 
+	if(!SSL_CTX_check_private_key(ssl_ctx)) {
+		Log_error("supplied private key does not match the certificate!");
+		return 9;
+	}
+
+	SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_PEER |
+		SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
+
 	Log_info ("SSL initialized OK");
 	return 0;
 }
@@ -271,7 +279,7 @@ static int connection_alloc()
 
 	i = 0;
 	ci = connections.begin();
-	while ( (i < max_connections) && ci != connections.end() ) {
+	while ( (i < max_connections) && (ci != connections.end() )) {
 		if (ci->first == i) {
 			++ci;
 			++i;
@@ -315,6 +323,7 @@ static int try_accept_connection (int sock)
 
 	if (!sock_nonblock (s) ) {
 		Log_error ("could not put accepted socket %d in nonblocking mode", s);
+		close(s);
 		return 2;
 	}
 
@@ -345,6 +354,9 @@ static int connect_connection (const string&addr)
 		Log_info ("consider increasing the limit");
 		return 1;
 	}
+
+	Log_info("connection %d created for connecting to %s",
+		cid,addr.c_str());
 
 	connection&c = connections[cid];
 
@@ -577,6 +589,11 @@ void connection::send_ping()
 
 void connection::disconnect()
 {
+	if((state==cs_retry_timeout)&&(!(address.length()))) {
+		state=cs_inactive;
+		return;
+	}
+
 	if ( (state == cs_inactive)
 	        || (state == cs_retry_timeout)
 	        || (state == cs_closing) ) return;
@@ -595,10 +612,10 @@ void connection::reset()
 
 	tcp_close_socket (fd);
 	unset_fd();
-
-	if (address.length() ) {
+	
+	if (address.length() )
 		state = cs_retry_timeout;
-	} else state = cs_inactive;
+	else state = cs_inactive;
 }
 
 int connection::handle_ssl_error (int ret)
@@ -616,6 +633,15 @@ int connection::handle_ssl_error (int ret)
 		return 1; //SSL closed correctly.
 	default:
 		Log_error ("Get SSL error %d, ret=%d!", e, ret);
+		{
+			int err;
+			while(err=ERR_get_error()) Log_error
+				("on conn %d SSL_ERR %d: %s; func %s; reason %s",
+				 id,err,
+				 ERR_lib_error_string(err),
+				 ERR_func_error_string(err),
+				 ERR_reason_error_string(err));
+		}
 		return e;
 	}
 
@@ -827,14 +853,15 @@ static int comm_connections_close()
 
 	//start ssl disconnection
 	for (i = connections.begin();i != connections.end();++i) {
-		i->second.disconnect();
+		Log_info("disconnecting connection id %d",i->first);
 		i->second.address.clear();
+		i->second.disconnect();
 	}
 
 	while ( (timestamp() < cutout_time) && (connections.size() ) ) {
 		poll_wait_for_event (1000);
-		timestamp_update();
 		comm_periodic_update();
+		timestamp_update();
 	}
 
 	if (connections.size() ) {
@@ -931,6 +958,7 @@ void comm_periodic_update()
 	}
 
 	while (to_delete.size() ) {
+		Log_info("removing commection id %d",to_delete.front());
 		connections.erase (to_delete.front() );
 		to_delete.pop_front();
 	}
