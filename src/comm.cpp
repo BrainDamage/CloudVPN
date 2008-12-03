@@ -262,6 +262,19 @@ static int tcp_close_socket (int sock)
 	return 0;
 }
 
+#include <sys/select.h>
+
+static int tcp_socket_writeable (int sock)
+{
+	fd_set s;
+	struct timeval t = {0, 0};
+	FD_ZERO (&s);
+	FD_SET (sock, &s);
+	select (sock + 1, 0, &s, 0, &t);
+	if (FD_ISSET (sock, &s) ) return 1;
+	return 0;
+}
+
 /*
  * connection creation helpers
  */
@@ -485,11 +498,10 @@ void connection::try_accept()
 
 void connection::try_connect()
 {
-	int e, t;
+	int e = -1, t;
 	socklen_t e_len = sizeof (e);
 
-	t = getsockopt (fd, SOL_SOCKET, SO_ERROR,
-	                &e, &e_len);
+	t = getsockopt (fd, SOL_SOCKET, SO_ERROR, &e, &e_len);
 
 	if (t) {
 		Log_error ("getsockopt(%d) failed with errno %d", fd, errno);
@@ -504,11 +516,16 @@ void connection::try_connect()
 			return;
 		} else return;
 	}
+
 	if (e == 0) {
+		//test if the socket is writeable, otherwise still in progress
+		if (!tcp_socket_writeable (fd) ) return;
+
 		poll_set_remove_write (fd);
 		poll_set_add_read (fd); //always needed
 		state = cs_ssl_connecting;
-		try_ssl_connect();
+		if (alloc_ssl() ) reset();
+		else try_ssl_connect();
 		return;
 	}
 
@@ -560,11 +577,6 @@ void connection::start_connect()
 	}
 
 	set_fd (t);
-
-	if (alloc_ssl() ) {
-		reset();
-		return;
-	}
 
 	state = cs_connecting;
 	last_ping = timestamp();
@@ -692,6 +704,9 @@ void connection::poll_write()
 void connection::periodic_update()
 {
 	switch (state) {
+	case cs_connecting:
+		try_connect();
+		break;
 	case cs_closing:
 		try_close();
 		break;
@@ -732,6 +747,7 @@ void connection::dealloc_ssl()
 	if (ssl) {
 		SSL_free (ssl);
 		ssl = 0;
+		bio = 0;
 	} else if (bio) {
 		BIO_free (bio);
 		bio = 0;
@@ -962,7 +978,7 @@ void comm_periodic_update()
 	}
 
 	while (to_delete.size() ) {
-		Log_info ("removing commection id %d", to_delete.front() );
+		Log_info ("removing connection id %d", to_delete.front() );
 		connections.erase (to_delete.front() );
 		to_delete.pop_front();
 	}
