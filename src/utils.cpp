@@ -35,22 +35,23 @@ static int hwaddr_cmp (const uint8_t*a, const uint8_t*b)
 
 		return (int) a[i] - (int) b[i];
 	}
+	return 0;
 }
 
 
 bool hwaddr::operator< (const hwaddr&a) const
 {
-	return hwaddr_cmp (addr, a.addr) < 0 ? true : false;
+	return (hwaddr_cmp (addr, a.addr) < 0) ? true : false;
 }
 
 bool hwaddr::operator== (const hwaddr&a) const
 {
-	return hwaddr_cmp (addr, a.addr) == 0 ? true : false;
+	return (hwaddr_cmp (addr, a.addr) == 0) ? true : false;
 }
 
 bool hwaddr::operator== (const uint8_t* a) const
 {
-	return hwaddr_cmp (addr, a) == 0 ? true : false;
+	return (hwaddr_cmp (addr, a) == 0) ? true : false;
 }
 
 void hwaddr::set (const uint8_t*c)

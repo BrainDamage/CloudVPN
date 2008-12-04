@@ -470,6 +470,8 @@ void connection::handle_route_set (uint8_t*data, int n)
 
 void connection::handle_route_diff (uint8_t*data, int n)
 {
+	if (!n) return;
+
 	uint32_t remote_ping;
 	for (int i = 0;i < n;++i, data += route_entry_size) {
 		remote_ping = ntohl (* ( (uint32_t*) (data + hwaddr_size) ) );
@@ -494,8 +496,6 @@ void connection::handle_pong (uint8_t ID)
 		return;
 	}
 	ping = timestamp() - sent_ping_time;
-	Log_info ("connection %d has ping %g", id, 0.000001*ping);
-
 	route_set_dirty();
 }
 
@@ -557,14 +557,11 @@ void connection::write_pong (uint8_t ID)
 void connection::try_parse_input()
 {
 	if (cached_header.type == 0)
-		if (recv_q.len() >= p_head_size) {
+		if (recv_q.len() >= p_head_size)
 			parse_packet_header (recv_q,
 			                     cached_header.type,
 			                     cached_header.special,
 			                     cached_header.size);
-			Log_info ("received header %d from %d",
-			          cached_header.type, id);
-		}
 	switch (cached_header.type) {
 	case 0:
 		break;
@@ -843,12 +840,14 @@ void connection::disconnect()
 
 	last_ping = timestamp();
 	state = cs_closing;
+	remote_routes.clear();
 	route_set_dirty();
 	try_close();
 }
 
 void connection::reset()
 {
+	remote_routes.clear();
 	route_set_dirty();
 
 	send_q.clear();
@@ -1215,7 +1214,6 @@ void comm_periodic_update()
 	}
 
 	while (to_delete.size() ) {
-		Log_info ("removing connection id %d", to_delete.front() );
 		connections.erase (to_delete.front() );
 		to_delete.pop_front();
 	}
@@ -1223,7 +1221,6 @@ void comm_periodic_update()
 
 void comm_broadcast_route_update (uint8_t*data, int n)
 {
-	Log_info ("broadcasting route update, size %d", n);
 	map<int, connection>::iterator i;
 	for (i = connections.begin();i != connections.end();++i)
 		if (i->second.state == cs_active)

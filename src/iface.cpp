@@ -307,7 +307,6 @@ void iface_poll_read()
 			continue;
 		}
 
-		Log_info ("from local got packet len %d", ret);
 		route_packet (buffer, ret);
 	}
 }

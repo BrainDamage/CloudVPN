@@ -97,22 +97,12 @@ void route_init()
 void route_shutdown()
 {
 	route.clear();
+	reported_route.clear();
 }
 
 void route_set_dirty()
 {
 	++route_dirty;
-}
-
-static void print_route()
-{
-	map<hwaddr, route_info>::iterator i;
-	for (i = route.begin();i != route.end();++i)
-		Log_info ("route to %02x:%02x:%02x:%02x:%02x:%02x via conn %d ping %d",
-		          i->first.addr[0], i->first.addr[1],
-		          i->first.addr[2], i->first.addr[3],
-		          i->first.addr[4], i->first.addr[5],
-		          i->second.id, i->second.ping);
 }
 
 void route_update()
@@ -126,14 +116,20 @@ void route_update()
 	map<hwaddr, int>::iterator j;
 
 	route.clear();
+
 	/*
+	 * Following code just fills the route with stuff from connections
+	 *
+	 * hints:
 	 * i->first = connection ID
 	 * i->second = connection
 	 * j->first = hwaddr
 	 * j->second = ping
+	 *
+	 * Note that ping can't have ping 0 cuz it would get deleted.
 	 */
 
-	route[hwaddr (iface_cached_hwaddr() ) ] = route_info (0, -1);
+	route[hwaddr (iface_cached_hwaddr() ) ] = route_info (1, -1);
 
 	for (i = cons.begin();i != cons.end();++i) {
 		if (i->second.state != cs_active)
@@ -143,16 +139,16 @@ void route_update()
 		        j != i->second.remote_routes.end();
 		        ++j ) {
 			if (route.count (j->first) )
-				if (route[j->first].ping <
+				if (route[j->first].ping <=
 				        (j->second + i->second.ping) )
 					continue;
 
-			route[j->first] = route_info (j->second, i->first);
+			route[j->first] = route_info
+			                  (j->second + i->second.ping, i->first);
 		}
 	}
 
 	report_route();
-	print_route();
 }
 
 void route_packet (void*buf, size_t len, int conn)
@@ -164,14 +160,12 @@ void route_packet (void*buf, size_t len, int conn)
 	hwaddr a (buf); //destination
 
 	if (is_addr_broadcast (a) ) {
-		Log_info ("sending a packet as broadcast");
 		route_broadcast_packet (new_packet_uid(), buf, len, conn);
 		return;
 	}
 
 	if (! (route.count (a) ) ) {
 		//if the destination is unknown, broadcast it
-		Log_info ("sending unknown destination as broadcast");
 		route_broadcast_packet (new_packet_uid(), buf, len, conn);
 		return;
 	}
@@ -192,13 +186,11 @@ void route_broadcast_packet (uint32_t id, void*buf, size_t len, int conn)
 	hwaddr a (buf); //destination
 
 	if (route[a].id == -1) {
-		Log_info ("broadcast only for us");
 		if (conn >= 0) iface_write (buf, len);
 		return; //it was only for us.
 	}
 
 	if (is_addr_broadcast (a) ) {
-		Log_info ("broadcast also for us");
 		if (conn >= 0) iface_write (buf, len); //it was also for us
 	}
 
@@ -212,7 +204,6 @@ void route_broadcast_packet (uint32_t id, void*buf, size_t len, int conn)
 		 * HAHAHAHA here comment here
 		 */
 		if (i->first == conn) continue; //dont send back
-		Log_info ("sending broadcast to %d", i->first);
 		i->second.write_broadcast_packet (id, buf, len);
 	}
 }
@@ -226,17 +217,12 @@ void route_report_to_connection (connection&c)
 {
 	route_update();
 
-	/*
-	 * maybe we should report "reported route" instead,
-	 * but as long as the route gets correctly updated right after
-	 * topology changes, there's no harm, only added percision.
-	 */
-
-	int n = route.size(), i;
+	int n = reported_route.size(), i;
 	uint8_t data[n* (hwaddr_size+4) ];
 	uint8_t *datap = data;
 	map<hwaddr, route_info>::iterator r;
-	for (i = 0, r = route.begin(); (i < n) && (r != route.end() );++i, ++r) {
+	for (i = 0, r = reported_route.begin();
+	        (i < n) && (r != reported_route.end() );++i, ++r) {
 		r->first.get (datap);
 		* (uint32_t*) (datap + hwaddr_size) =
 		    htonl ( (uint32_t) (r->second.ping) );
@@ -282,6 +268,8 @@ static void report_route()
 	/*
 	 * now create the data to report, and apply the changes into rep. r.
 	 */
+
+	if (!report.size() ) return;
 
 	uint8_t data[report.size() * (hwaddr_size+4) ];
 	uint8_t*datap = data;
