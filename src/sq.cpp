@@ -3,12 +3,12 @@
 #include "log.h"
 #include "conf.h"
 
-int squeue::max_len = (32 * 1024);
+int squeue::max_len = (512 * 1024);
 
 void sq_init()
 {
 	if (!config_get_int ("squeue_limit", squeue::max_len) )
-		squeue::max_len = 32 * 1024;
+		squeue::max_len = 512 * 1024;
 	Log_info ("squeue size limit is %d", squeue::max_len);
 }
 

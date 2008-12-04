@@ -33,7 +33,7 @@ static int hwaddr_cmp (const uint8_t*a, const uint8_t*b)
 	for (int i = 0;i < hwaddr_size;++i) {
 		if (a[i] == b[i]) continue;
 
-		return a[i] - b[i];
+		return (int) a[i] - (int) b[i];
 	}
 }
 

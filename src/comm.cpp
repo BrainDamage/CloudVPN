@@ -495,6 +495,8 @@ void connection::handle_pong (uint8_t ID)
 	}
 	ping = timestamp() - sent_ping_time;
 	Log_info ("connection %d has ping %g", id, 0.000001*ping);
+
+	route_set_dirty();
 }
 
 /*
@@ -555,11 +557,14 @@ void connection::write_pong (uint8_t ID)
 void connection::try_parse_input()
 {
 	if (cached_header.type == 0)
-		if (recv_q.len() >= p_head_size)
+		if (recv_q.len() >= p_head_size) {
 			parse_packet_header (recv_q,
 			                     cached_header.type,
 			                     cached_header.special,
 			                     cached_header.size);
+			Log_info ("received header %d from %d",
+			          cached_header.type, id);
+		}
 	switch (cached_header.type) {
 	case 0:
 		break;
@@ -821,6 +826,7 @@ void connection::activate()
 {
 	state = cs_active;
 	send_ping();
+	route_set_dirty();
 	route_report_to_connection (*this);
 }
 
@@ -837,11 +843,14 @@ void connection::disconnect()
 
 	last_ping = timestamp();
 	state = cs_closing;
+	route_set_dirty();
 	try_close();
 }
 
 void connection::reset()
 {
+	route_set_dirty();
+
 	send_q.clear();
 	recv_q.clear();
 	cached_header.type = 0;
