@@ -414,7 +414,9 @@ void connection::deindex()
 #define pt_broadcast 4
 #define pt_echo_request 5
 #define pt_echo_reply 6
+
 #define p_head_size 4
+#define route_entry_size 10
 
 static void add_packet_header (pbuffer&b, uint8_t type,
                                uint8_t special, uint16_t size)
@@ -454,12 +456,29 @@ void connection::handle_broadcast_packet (uint32_t ID, void*buf, int len)
 	route_broadcast_packet (ID, buf, len, id);
 }
 
-void connection::handle_route_set()
+void connection::handle_route_set (uint8_t*data, int n)
 {
+	remote_routes.clear();
+	uint32_t remote_ping;
+	for (int i = 0;i < n;++i, data += route_entry_size) {
+		remote_ping = ntohl (* ( (uint32_t*) (data + hwaddr_size) ) );
+		remote_routes.insert
+		(pair<hwaddr, int> (hwaddr (data), remote_ping) );
+	}
+	route_set_dirty();
 }
 
-void connection::handle_route_diff()
+void connection::handle_route_diff (uint8_t*data, int n)
 {
+	uint32_t remote_ping;
+	for (int i = 0;i < n;++i, data += route_entry_size) {
+		remote_ping = ntohl (* ( (uint32_t*) (data + hwaddr_size) ) );
+		if (ping)
+			remote_routes.insert
+			(pair<hwaddr, int> (hwaddr (data), remote_ping) );
+		else remote_routes.erase (hwaddr (data) );
+	}
+	route_set_dirty();
 }
 
 void connection::handle_ping (uint8_t ID)
@@ -499,12 +518,20 @@ void connection::write_broadcast_packet (uint32_t ID, void*buf, int len)
 	write_data ( (uint8_t*) buf, len);
 }
 
-void connection::write_route_set()
+void connection::write_route_set (uint8_t*data, int n)
 {
+	pbuffer b;
+	add_packet_header (b, pt_route_set, 0, n);
+	write_data (b, true);
+	write_data (data, n*route_entry_size);
 }
 
-void connection::write_route_diff()
+void connection::write_route_diff (uint8_t*data, int n)
 {
+	pbuffer b;
+	add_packet_header (b, pt_route_diff, 0, n);
+	write_data (b, true);
+	write_data (data, n*route_entry_size);
 }
 
 void connection::write_ping (uint8_t ID)
@@ -653,8 +680,8 @@ void connection::try_accept()
 	if (r > 0) {
 		Log_info ("socket %d accepted SSL connection", fd);
 
-		state = cs_active;
-		send_ping();
+		activate();
+
 	} else if (handle_ssl_error (r) ) {
 		Log_error ("accepting fd %d lost", fd);
 		reset();
@@ -709,8 +736,9 @@ void connection::try_ssl_connect()
 	int r = SSL_connect (ssl);
 	if (r > 0) {
 		Log_info ("socket %d established SSL connection", fd);
-		state = cs_active;
-		send_ping();
+
+		activate();
+
 	} else if (handle_ssl_error (r) ) {
 		Log_error ("SSL connecting on %d failed", fd);
 		reset();
@@ -773,6 +801,13 @@ void connection::send_ping()
 	sent_ping_time = timestamp();
 	sent_ping_id += 1;
 	write_ping (sent_ping_id);
+}
+
+void connection::activate()
+{
+	state = cs_active;
+	send_ping();
+	route_report_to_connection (*this);
 }
 
 void connection::disconnect()
@@ -1161,5 +1196,14 @@ void comm_periodic_update()
 		connections.erase (to_delete.front() );
 		to_delete.pop_front();
 	}
+}
+
+void comm_broadcast_route_update (uint8_t*data, int n)
+{
+	Log_info ("broadcasting route update, size %d", n);
+	map<int, connection>::iterator i;
+	for (i = connections.begin();i != connections.end();++i)
+		if (i->second.state == cs_active)
+			i->second.write_route_diff (data, n);
 }
 

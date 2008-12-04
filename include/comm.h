@@ -74,15 +74,15 @@ public:
 
 	void handle_packet (void*buf, int len);
 	void handle_broadcast_packet (uint32_t id, void*buf, int len);
-	void handle_route_set();
-	void handle_route_diff();
+	void handle_route_set (uint8_t*data, int n);
+	void handle_route_diff (uint8_t*data, int n);
 	void handle_ping (uint8_t id);
 	void handle_pong (uint8_t id);
 
 	void write_packet (void*buf, int len);
 	void write_broadcast_packet (uint32_t id, void*buf, int len);
-	void write_route_set();
-	void write_route_diff();
+	void write_route_set (uint8_t*data, int n);
+	void write_route_diff (uint8_t*data, int n);
 	void write_ping (uint8_t id);
 	void write_pong (uint8_t id);
 
@@ -116,6 +116,7 @@ public:
 	void start_accept();
 	void send_ping();
 
+	void activate();
 	void disconnect();
 	void reset(); //hard socket disconnect.
 
@@ -167,6 +168,8 @@ int comm_init();
 int comm_shutdown();
 
 void comm_periodic_update();
+
+void comm_broadcast_route_update (uint8_t*data, int n);
 
 map<int, int>& comm_connection_index();
 map<int, connection>& comm_connections();

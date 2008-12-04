@@ -1,6 +1,7 @@
 
 #include "iface.h"
 
+#include "route.h"
 #include "utils.h"
 #include "conf.h"
 #include "poll.h"
@@ -151,6 +152,8 @@ int iface_create()
 	iface_retrieve_hwaddr (0); //cache the mac
 
 	poll_set_add_read (tun);
+
+	route_set_dirty();
 
 	return 0;
 }

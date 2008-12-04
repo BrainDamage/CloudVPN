@@ -53,12 +53,12 @@ bool hwaddr::operator== (const uint8_t* a) const
 	return hwaddr_cmp (addr, a) == 0 ? true : false;
 }
 
-void hwaddr::set (uint8_t*c)
+void hwaddr::set (const uint8_t*c)
 {
 	memcpy (addr, c, hwaddr_size);
 }
 
-void hwaddr::get (uint8_t*c)
+void hwaddr::get (uint8_t*c) const
 {
 	memcpy (c, addr, hwaddr_size);
 }

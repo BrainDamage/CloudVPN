@@ -16,10 +16,10 @@ class hwaddr
 public:
 	uint8_t addr[hwaddr_size];
 
-	void set (uint8_t*);
-	void get (uint8_t*);
+	void set (const uint8_t*);
+	void get (uint8_t*) const;
 
-	inline hwaddr (uint8_t* data) {
+	inline hwaddr (const uint8_t* data) {
 		set (data);
 	}
 

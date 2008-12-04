@@ -83,6 +83,7 @@ All clients must note, that
 	*** PACKET FORMAT ***
 
 Connection and authentication is done through SSL
+Multibyte integers are in network byte order.
 
 struct NEIGHBOR --- (10B)
 6B mac_addr
