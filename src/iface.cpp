@@ -206,7 +206,9 @@ int iface_retrieve_hwaddr (uint8_t*hwaddr)
 	CLEAR (ifr);
 
 	strncpy (ifr.ifr_name, iface_name, IFNAMSIZ);
-	int ret = ioctl (ctl, SIOCSIFHWADDR, &ifr);
+	int ret = ioctl (ctl, SIOCGIFHWADDR, &ifr);
+	close (ctl);
+
 
 	if (ret < 0) {
 		Log_error ("iface_retrieve_hwaddr: ioctl failed with %d (%s)", errno, strerror (errno) );
@@ -214,10 +216,16 @@ int iface_retrieve_hwaddr (uint8_t*hwaddr)
 		return 2;
 	}
 
-	close (ctl);
-
 	for (int i = 0;i < hwaddr_size;++i)
 		cached_hwaddr[i] = ifr.ifr_hwaddr.sa_data[i];
+
+	Log_info ("iface has mac address %02x:%02x:%02x:%02x:%02x:%02x",
+	          cached_hwaddr[0],
+	          cached_hwaddr[1],
+	          cached_hwaddr[2],
+	          cached_hwaddr[3],
+	          cached_hwaddr[4],
+	          cached_hwaddr[5]);
 
 	if (!hwaddr) return 0;
 

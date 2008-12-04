@@ -171,6 +171,9 @@ conn_keepalive 5000000 -- ping interval
 comm_close_timeout 10000000 -- how long to wait for connections to close
 			-- valid only when shutting down
 
+report_ping_changes_above 5000 -- usuable when route information updates fills
+	too much network bandwidth.
+
 	*** INTERNALS ***
 
 modules are:

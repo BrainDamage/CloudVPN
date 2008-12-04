@@ -265,7 +265,7 @@ static void report_route()
 	 */
 
 	uint8_t data[report.size() * (hwaddr_size+4) ];
-	uint8_t*datap;
+	uint8_t*datap = data;
 	list<pair<hwaddr, int> >::iterator rep;
 	for (rep = report.begin();rep != report.end();++rep) {
 		if (rep->second) reported_route[rep->first] = route[rep->first];
