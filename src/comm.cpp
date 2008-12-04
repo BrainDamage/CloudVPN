@@ -564,8 +564,20 @@ void connection::try_parse_input()
 	case 0:
 		break;
 	case pt_route_set:
+		if (recv_q.len() >= cached_header.size*route_entry_size) {
+			uint8_t buf[cached_header.size*route_entry_size];
+			recv_q.pop (buf, cached_header.size*route_entry_size);
+			handle_route_set (buf, cached_header.size);
+		}
+		cached_header.type = 0;
+		break;
 	case pt_route_diff:
-		Log_warn ("%d not supported on %d yet", cached_header.type, id);
+		if (recv_q.len() >= cached_header.size*route_entry_size) {
+			uint8_t buf[cached_header.size*route_entry_size];
+			recv_q.pop (buf, cached_header.size*route_entry_size);
+			handle_route_diff (buf, cached_header.size);
+		}
+		cached_header.type = 0;
 		break;
 
 	case pt_eth_frame:
@@ -574,6 +586,7 @@ void connection::try_parse_input()
 			recv_q.pop (buf, cached_header.size);
 			handle_packet (buf, cached_header.size);
 		}
+		cached_header.type = 0;
 		break;
 
 	case pt_broadcast:
@@ -585,6 +598,7 @@ void connection::try_parse_input()
 			recv_q.pop (buf, cached_header.size);
 			handle_broadcast_packet (t, buf, cached_header.size);
 		}
+		cached_header.type = 0;
 		break;
 
 	case pt_echo_request:
