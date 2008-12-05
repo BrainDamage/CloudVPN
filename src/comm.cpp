@@ -320,6 +320,8 @@ do_alloc:
 
 void connection_delete (int id)
 {
+	route_set_dirty();
+
 	map<int, connection>::iterator i = connections.find (id);
 	if (i == connections.end() ) return;
 	i->second.unset_fd();
@@ -495,7 +497,7 @@ void connection::handle_pong (uint8_t ID)
 		Log_info ("connection %d received some very old ping", id);
 		return;
 	}
-	ping = timestamp() - sent_ping_time;
+	ping = 2 + timestamp() - sent_ping_time;
 	route_set_dirty();
 }
 
@@ -686,8 +688,8 @@ void connection::try_write()
 
 void connection::try_data()
 {
-	if (send_q.len() ) try_write();
 	try_read();
+	if (send_q.len() ) try_write();
 }
 
 void connection::try_accept()
@@ -823,7 +825,6 @@ void connection::activate()
 {
 	state = cs_active;
 	send_ping();
-	route_set_dirty();
 	route_report_to_connection (*this);
 }
 
@@ -931,6 +932,7 @@ void connection::poll_read()
 
 void connection::poll_write()
 {
+	if (state == cs_active) try_write();
 	poll_simple();
 }
 
@@ -1000,6 +1002,7 @@ connection::connection()
 	Log_fatal ("connection at %p instantiated without ID", this);
 	Log_fatal ("... That should never happen. Not terminating,");
 	Log_fatal ("... but expect weird behavior and/or segfault.");
+	state = cs_inactive; //at least delete it asap.
 
 	/* =TRICKY=
 	 * This is mostly usuable in enterprise situations, when

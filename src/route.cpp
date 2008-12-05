@@ -108,8 +108,9 @@ void route_set_dirty()
 void route_update()
 {
 	if (!route_dirty) return;
-
 	route_dirty = 0;
+
+	Log_info ("route update");
 
 	map<int, connection>& cons = comm_connections();
 	map<int, connection>::iterator i;
@@ -127,9 +128,13 @@ void route_update()
 	 * j->second = ping
 	 *
 	 * Note that ping can't have ping 0 cuz it would get deleted.
+	 *
+	 * Number 2 over there is filtering zero routes out,
+	 * so that local route doesn't get overpwned by some other.
 	 */
 
-	route[hwaddr (iface_cached_hwaddr() ) ] = route_info (1, -1);
+	if (iface_get_sockfd() > 0)
+		route[hwaddr (iface_cached_hwaddr() ) ] = route_info (1, -1);
 
 	for (i = cons.begin();i != cons.end();++i) {
 		if (i->second.state != cs_active)
@@ -140,11 +145,11 @@ void route_update()
 		        ++j ) {
 			if (route.count (j->first) )
 				if (route[j->first].ping <=
-				        (j->second + i->second.ping) )
+				        (2 + j->second + i->second.ping) )
 					continue;
 
 			route[j->first] = route_info
-			                  (j->second + i->second.ping, i->first);
+			                  (2 + j->second + i->second.ping, i->first);
 		}
 	}
 
@@ -164,14 +169,22 @@ void route_packet (void*buf, size_t len, int conn)
 		return;
 	}
 
-	if (! (route.count (a) ) ) {
+	map<hwaddr, route_info>::iterator r = route.find (a);
+
+	if (r == route.end() ) {
 		//if the destination is unknown, broadcast it
 		route_broadcast_packet (new_packet_uid(), buf, len, conn);
 		return;
 	}
 
-	if (route[a].id == -1) iface_write (buf, len);
-	else comm_connections() [route[a].id].write_packet (buf, len);
+	if (r->second.id == -1) iface_write (buf, len);
+	else {
+		map<int, connection>::iterator i;
+		i = comm_connections().find (r->second.id);
+		if (i != comm_connections().end() )
+			i->second.write_packet (buf, len);
+		else Log_warn ("dangling route %d", r->second.id);
+	}
 }
 
 void route_broadcast_packet (uint32_t id, void*buf, size_t len, int conn)
@@ -185,7 +198,7 @@ void route_broadcast_packet (uint32_t id, void*buf, size_t len, int conn)
 
 	hwaddr a (buf); //destination
 
-	if (route[a].id == -1) {
+	if (a == iface_cached_hwaddr() ) {
 		if (conn >= 0) iface_write (buf, len);
 		return; //it was only for us.
 	}
@@ -215,7 +228,9 @@ map<hwaddr, route_info>& route_get ()
 
 void route_report_to_connection (connection&c)
 {
-	route_update();
+	/*
+	 * note that route_update is NOT wanted here!
+	 */
 
 	int n = reported_route.size(), i;
 	uint8_t data[n* (hwaddr_size+4) ];
@@ -275,7 +290,8 @@ static void report_route()
 	uint8_t*datap = data;
 	list<pair<hwaddr, int> >::iterator rep;
 	for (rep = report.begin();rep != report.end();++rep) {
-		if (rep->second) reported_route[rep->first] = route[rep->first];
+		if (rep->second) reported_route[rep->first] =
+			    route_info (rep->second, 0);
 		else reported_route.erase (rep->first);
 
 		rep->first.get (datap);

@@ -84,6 +84,7 @@ int run_cloudvpn (int argc, char**argv)
 
 		last_beat = timestamp();
 
+		route_update();
 		comm_periodic_update();
 
 		//this is now subject to deletion.

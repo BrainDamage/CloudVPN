@@ -254,6 +254,7 @@ int iface_destroy()
 
 int iface_write (void*buf, size_t len)
 {
+	if (tun < 0) return 0;
 	int res = write (tun, buf, len);
 
 	if (res < 0) {
