@@ -34,17 +34,14 @@ uint32_t new_packet_uid()
 
 #include "conf.h"
 
-#include <set>
+#include <map>
 #include <queue>
 using namespace std;
 
-static set<uint32_t> queue_items;
+static map<uint32_t, int> queue_items;
 static queue<uint32_t> queue_age;
 static size_t queue_max_size = 1024;
 
-static int route_dirty = 0;
-
-static int route_report_ping_diff = 5000;
 /*
  * when a ping differs 5ms from the reported one, report it
  */
@@ -55,20 +52,19 @@ static void queue_init()
 	if (!config_get_int ("br_id_cache_size", t) ) t = 1024;
 	Log_info ("broadcast ID cache size is %d", t);
 	queue_max_size = t;
-
-	if (!config_get_int ("report_ping_changes_above", t) ) t = 5000;
-	Log_info ("only ping changes above %gmsec will be reported to peers",
-	          0.001*t);
-	route_report_ping_diff = t;
 }
 
 static void queue_add_id (uint32_t id)
 {
 	while (queue_age.size() >= queue_max_size) {
-		queue_items.erase (queue_age.front() );
+		--queue_items[queue_age.front() ];
+		if (!queue_items[queue_age.front() ])
+			queue_items.erase (queue_age.front() );
 		queue_age.pop();
 	}
-	queue_items.insert (id);
+
+	if (queue_items.count (id) ) ++queue_items[id];
+	else queue_items[id] = 1;
 	queue_age.push (id);
 }
 
@@ -82,6 +78,8 @@ static bool queue_already_broadcasted (uint32_t id)
  * route
  */
 
+static int route_dirty = 0;
+static int route_report_ping_diff = 5000;
 static map<hwaddr, route_info> route, reported_route;
 
 static void report_route();
@@ -92,6 +90,13 @@ void route_init()
 	route.clear();
 	reported_route.clear();
 	route_dirty = 0;
+
+	int t;
+
+	if (!config_get_int ("report_ping_changes_above", t) ) t = 5000;
+	Log_info ("only ping changes above %gmsec will be reported to peers",
+	          0.001*t);
+	route_report_ping_diff = t;
 }
 
 void route_shutdown()
@@ -110,7 +115,7 @@ void route_update()
 	if (!route_dirty) return;
 	route_dirty = 0;
 
-	Log_info ("route update");
+	Log_debug ("route update");
 
 	map<int, connection>& cons = comm_connections();
 	map<int, connection>::iterator i;
@@ -213,10 +218,8 @@ void route_broadcast_packet (uint32_t id, void*buf, size_t len, int conn)
 	    e = comm_connections().end();
 
 	for (;i != e;++i) {
-		/*
-		 * HAHAHAHA here comment here
-		 */
 		if (i->first == conn) continue; //dont send back
+		if (i->second.state != cs_active) continue; //ready only
 		i->second.write_broadcast_packet (id, buf, len);
 	}
 }

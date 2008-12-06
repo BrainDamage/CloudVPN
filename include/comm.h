@@ -12,6 +12,7 @@
 
 #include <map>
 #include <set>
+#include <queue>
 #include <string>
 using namespace std;
 
@@ -91,6 +92,7 @@ public:
 	 */
 
 	squeue send_q, recv_q;
+	queue<pbuffer> proto_q, data_q;
 
 	struct {
 		uint8_t type;
@@ -99,11 +101,13 @@ public:
 	} cached_header;
 
 	void try_parse_input();
-	void write_data (pbuffer&, bool wait = false);
-	void write_data (uint8_t*, int, bool wait = false);
 
-	void try_read();
-	void try_write(); //both called by try_data(); dont use directly
+	void fill_send_q();
+	void write_proto (const pbuffer&);
+	void write_data (const pbuffer&);
+
+	bool try_read();
+	bool try_write(); //both called by try_data(); dont use directly
 
 	void try_data();
 
@@ -160,6 +164,13 @@ public:
 
 	int alloc_ssl();
 	void dealloc_ssl();
+
+	/*
+	 * queue management
+	 */
+	static int max_send_queue_size;
+	static int max_waiting_data_packets;
+	static int max_waiting_proto_packets;
 };
 
 void comm_listener_poll (int fd);

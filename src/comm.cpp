@@ -509,8 +509,8 @@ void connection::write_packet (void*buf, int len)
 {
 	pbuffer b;
 	add_packet_header (b, pt_eth_frame, 0, len);
-	write_data (b, true);
-	write_data ( (uint8_t*) buf, len);
+	b.push ( (uint8_t*) buf, len);
+	write_data (b);
 }
 
 void connection::write_broadcast_packet (uint32_t ID, void*buf, int len)
@@ -518,38 +518,38 @@ void connection::write_broadcast_packet (uint32_t ID, void*buf, int len)
 	pbuffer b;
 	add_packet_header (b, pt_broadcast, 0, len);
 	b.push<uint32_t> (htonl (ID) );
-	write_data (b, true);
-	write_data ( (uint8_t*) buf, len);
+	b.push ( (uint8_t*) buf, len);
+	write_data (b);
 }
 
 void connection::write_route_set (uint8_t*data, int n)
 {
 	pbuffer b;
 	add_packet_header (b, pt_route_set, 0, n);
-	write_data (b, true);
-	write_data (data, n*route_entry_size);
+	b.push (data, n* (4 + hwaddr_size) );
+	write_proto (b);
 }
 
 void connection::write_route_diff (uint8_t*data, int n)
 {
 	pbuffer b;
 	add_packet_header (b, pt_route_diff, 0, n);
-	write_data (b, true);
-	write_data (data, n*route_entry_size);
+	b.push (data, n* (4 + hwaddr_size) );
+	write_proto (b);
 }
 
 void connection::write_ping (uint8_t ID)
 {
 	pbuffer b;
 	add_packet_header (b, pt_echo_request, ID, 0);
-	write_data (b);
+	write_proto (b);
 }
 
 void connection::write_pong (uint8_t ID)
 {
 	pbuffer b;
 	add_packet_header (b, pt_echo_reply, ID, 0);
-	write_data (b);
+	write_proto (b);
 }
 
 /*
@@ -558,6 +558,9 @@ void connection::write_pong (uint8_t ID)
 
 void connection::try_parse_input()
 {
+try_more:
+	if (state != cs_active) return; //safety.
+
 	if (cached_header.type == 0)
 		if (recv_q.len() >= p_head_size)
 			parse_packet_header (recv_q,
@@ -572,16 +575,18 @@ void connection::try_parse_input()
 			uint8_t buf[cached_header.size*route_entry_size];
 			recv_q.pop (buf, cached_header.size*route_entry_size);
 			handle_route_set (buf, cached_header.size);
+			cached_header.type = 0;
+			goto try_more;
 		}
-		cached_header.type = 0;
 		break;
 	case pt_route_diff:
 		if (recv_q.len() >= cached_header.size*route_entry_size) {
 			uint8_t buf[cached_header.size*route_entry_size];
 			recv_q.pop (buf, cached_header.size*route_entry_size);
 			handle_route_diff (buf, cached_header.size);
+			cached_header.type = 0;
+			goto try_more;
 		}
-		cached_header.type = 0;
 		break;
 
 	case pt_eth_frame:
@@ -589,8 +594,9 @@ void connection::try_parse_input()
 			uint8_t buf[cached_header.size];
 			recv_q.pop (buf, cached_header.size);
 			handle_packet (buf, cached_header.size);
+			cached_header.type = 0;
+			goto try_more;
 		}
-		cached_header.type = 0;
 		break;
 
 	case pt_broadcast:
@@ -601,19 +607,20 @@ void connection::try_parse_input()
 			uint8_t buf[cached_header.size];
 			recv_q.pop (buf, cached_header.size);
 			handle_broadcast_packet (t, buf, cached_header.size);
+			cached_header.type = 0;
+			goto try_more;
 		}
-		cached_header.type = 0;
 		break;
 
 	case pt_echo_request:
 		handle_ping (cached_header.special);
 		cached_header.type = 0;
-		break;
+		goto try_more;
 
 	case pt_echo_reply:
 		handle_pong (cached_header.special);
 		cached_header.type = 0;
-		break;
+		goto try_more;
 
 	default:
 		Log_error ("invalid packet header received. disconnecting.");
@@ -621,7 +628,7 @@ void connection::try_parse_input()
 	}
 }
 
-void connection::try_read()
+bool connection::try_read()
 {
 	uint8_t buf[4096];
 	int r;
@@ -630,41 +637,68 @@ void connection::try_read()
 		if (r == 0) {
 			Log_info ("connection id %d closed by peer", id);
 			disconnect();
-			return;
+			return false;
 		} else if (r < 0) {
 			if (handle_ssl_error (r) ) {
 				Log_info ("connection id %d read error", id);
 				reset();
+				return false;
 			}
-			return;
+			return true;
 		} else {
 			recv_q.push (buf, r);
 			try_parse_input();
 		}
 	}
+	return true;
 }
 
-void connection::write_data (pbuffer&b, bool write_wait)
+void connection::write_data (const pbuffer&b)
 {
 	if (state != cs_active) return;
-	send_q.push (b);
-	if (write_wait) return;
+	if (b.len() > max_send_queue_size) return; //MTU
+	if (data_q.size() >= max_waiting_data_packets) return; //drop
+	data_q.push (b);
 	try_write();
 }
 
-void connection::write_data (uint8_t*b, int len, bool write_wait)
+void connection::write_proto (const pbuffer&b)
 {
 	if (state != cs_active) return;
-	send_q.push (b, len);
-	if (write_wait) return;
+	if (b.len() > max_send_queue_size) return; //MTU
+	if (proto_q.size() >= max_waiting_data_packets) return; //drop
+	proto_q.push (b);
 	try_write();
 }
 
-void connection::try_write()
+void connection::fill_send_q()
+{
+	/*
+	 * we want to prioritize proto packets
+	 */
+
+	while (proto_q.size() )
+		if (send_q.len() + proto_q.front().len() > max_send_queue_size)
+			return;
+		else {
+			send_q.push (proto_q.front() );
+			proto_q.pop();
+		}
+
+	while (data_q.size() )
+		if (send_q.len() + data_q.front().len() > max_send_queue_size)
+			return;
+		else {
+			send_q.push (data_q.front() );
+			data_q.pop();
+		}
+}
+
+bool connection::try_write()
 {
 	uint8_t buf[4096];
 	int n, r;
-	while (send_q.len() ) {
+	while (fill_send_q(), send_q.len() ) {
 		n = send_q.peek (buf, 4096);
 
 		r = SSL_write (ssl, buf, n);
@@ -672,24 +706,33 @@ void connection::try_write()
 		if (r == 0) {
 			Log_info ("connection id %d closed by peer", id);
 			disconnect();
-			return;
+			return false;
 		} else if (r < 0) {
 			if (handle_ssl_error (r) ) {
 				Log_error ("connection id %d write error", id);
 				reset();
-				return;
+				return false;
 			}
+			return true;
 		} else {
 			send_q.pop (0, r);
 		}
 	}
-	poll_set_remove_write (fd);
+	poll_set_remove_write (fd); //don't need any more write
+	return true;
 }
 
 void connection::try_data()
 {
-	try_read();
-	if (send_q.len() ) try_write();
+	/*
+	 * try write should be always called first,
+	 * because it usually resets the write poll flag, which
+	 * should then be restored by try_read.
+	 *
+	 * Also, no more operations if try_write was forced to reset a conn.
+	 */
+	if (try_write() )
+		try_read();
 }
 
 void connection::try_accept()
@@ -874,7 +917,7 @@ int connection::handle_ssl_error (int ret)
 
 	switch (e) {
 	case SSL_ERROR_WANT_READ:
-		poll_set_remove_write (fd);
+		//not much to do, read flag is always prepared.
 		break;
 	case SSL_ERROR_WANT_WRITE:
 		poll_set_add_write (fd);
@@ -932,7 +975,6 @@ void connection::poll_read()
 
 void connection::poll_write()
 {
-	if (state == cs_active) try_write();
 	poll_simple();
 }
 
@@ -949,9 +991,12 @@ void connection::periodic_update()
 		if ( (timestamp() - last_retry) > retry) start_connect();
 		break;
 	case cs_active:
-		if ( (timestamp() - last_ping) > timeout) disconnect();
-		else if ( (timestamp() - sent_ping_time) > keepalive) send_ping();
+		if ( (timestamp() - last_ping) > timeout) {
+			Log_info ("Connection %d ping timeout", id);
+			disconnect();
+		} else if ( (timestamp() - sent_ping_time) > keepalive) send_ping();
 		try_read();
+		break;
 	}
 }
 
@@ -1140,6 +1185,10 @@ static int comm_connections_close()
  * base comm_ stuff
  */
 
+int connection::max_send_queue_size = 8192;
+int connection::max_waiting_data_packets = 512;
+int connection::max_waiting_proto_packets = 64;
+
 int comm_init()
 {
 	int t;
@@ -1151,6 +1200,24 @@ int comm_init()
 	if (!config_get_int ("listen_backlog", t) ) listen_backlog_size = 32;
 	else listen_backlog_size = t;
 	Log_info ("listen backlog size is %d", listen_backlog_size);
+
+	if (!config_get_int ("connection::max_send_queue_size", t) )
+		connection::max_send_queue_size = 8192;
+	else 	connection::max_send_queue_size = t;
+	Log_info ("send queue maximal size is %d",
+	          connection::max_send_queue_size);
+
+	if (!config_get_int ("connection::max_waiting_data_packets", t) )
+		connection::max_waiting_data_packets = 512;
+	else connection::max_waiting_data_packets = t;
+	Log_info ("max %d pending data packets",
+	          connection::max_waiting_data_packets);
+
+	if (!config_get_int ("connection::max_waiting_proto_packets", t) )
+		connection::max_waiting_proto_packets = 64;
+	else connection::max_waiting_proto_packets = t;
+	Log_info ("max %d pending proto packets",
+	          connection::max_waiting_proto_packets);
 
 	if (!config_get_int ("conn_retry", t) )
 		connection::retry = 10000000; //10s is okay
@@ -1204,7 +1271,7 @@ void comm_periodic_update()
 {
 	/*
 	 * delete inactive connections,
-	 * push those who shall connect to connect
+	 * push the other.
 	 */
 
 	map<int, connection>::iterator i;

@@ -1,7 +1,6 @@
 
 #include "cloudvpn.h"
 
-#include "sq.h"
 #include "log.h"
 #include "comm.h"
 #include "conf.h"
@@ -41,7 +40,6 @@ int run_cloudvpn (int argc, char**argv)
 
 	timestamp_update(); //get initial timestamp
 
-	sq_init();
 	route_init();
 
 	if (poll_init() ) {

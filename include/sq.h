@@ -57,11 +57,7 @@ public:
 	inline int len() const {
 		return q.size();
 	}
-
-	static int max_len;
 };
-
-void sq_init();
 
 #endif
 
