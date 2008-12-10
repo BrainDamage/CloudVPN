@@ -203,13 +203,13 @@ void route_broadcast_packet (uint32_t id, void*buf, size_t len, int conn)
 
 	hwaddr a (buf); //destination
 
-	if (a == iface_cached_hwaddr() ) {
-		if (conn >= 0) iface_write (buf, len);
+	if (a == iface_cached_hwaddr() && (conn >= 0) ) {
+		iface_write (buf, len);
 		return; //it was only for us.
 	}
 
-	if (is_addr_broadcast (a) ) {
-		if (conn >= 0) iface_write (buf, len); //it was also for us
+	if (is_addr_broadcast (a) && (conn >= 0) ) {
+		iface_write (buf, len); //it was also for us
 	}
 
 	//now broadcast the thing.

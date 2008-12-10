@@ -86,14 +86,14 @@ static int ssl_initialize()
 
 	//maybe signal(sigpipe) belons here, no idea why.
 
-	t="";
-	config_get("ssl_method",t);
-	if(t=="tls") {
-		Log_info("using TLSv1 protocol");
-		ssl_ctx=SSL_CTX_new(TLSv1_method());
+	t = "";
+	config_get ("ssl_method", t);
+	if (t == "tls") {
+		Log_info ("using TLSv1 protocol");
+		ssl_ctx = SSL_CTX_new (TLSv1_method() );
 	} else {
-		Log_info("using SSLv3 protocol");
-		ssl_ctx = SSL_CTX_new (SSLv23_method());
+		Log_info ("using SSLv3 protocol");
+		ssl_ctx = SSL_CTX_new (SSLv23_method() );
 		SSL_CTX_set_options (ssl_ctx, SSL_OP_NO_SSLv2);
 		//dont want SSLv2, cuz it's deprecated.
 	}
@@ -714,7 +714,7 @@ bool connection::try_write()
 	uint8_t buf[max_send_queue_size];
 	int n, r;
 	//do not change the write buffer until necessary
-	while (({if(!send_q.len())fill_send_q();}), send_q.len() ) {
+	while ( ( {if (!send_q.len() ) fill_send_q();}), send_q.len() ) {
 
 		n = send_q.peek (buf, max_send_queue_size);
 
@@ -890,7 +890,7 @@ void connection::activate()
 
 void connection::disconnect()
 {
-	poll_set_remove_write(fd);
+	poll_set_remove_write (fd);
 
 	if ( (state == cs_retry_timeout) && (! (address.length() ) ) ) {
 		state = cs_inactive;
@@ -939,17 +939,17 @@ int connection::handle_ssl_error (int ret)
 
 	switch (e) {
 	case SSL_ERROR_WANT_READ:
-		if(state!=cs_active)poll_set_remove_write(fd);
+		if (state != cs_active) poll_set_remove_write (fd);
 		//not much to do, read flag is always prepared.
 		break;
 	case SSL_ERROR_WANT_WRITE:
 		poll_set_add_write (fd);
 		break;
 	default:
-		int ret=0;
+		int ret = 0;
 		Log_error ("Get SSL error %d, ret=%d!", e, ret);
 		{
-			int err=0;
+			int err = 0;
 
 			/*
 			 * If we got a "bad write retry" error, let's just don't
@@ -958,19 +958,19 @@ int connection::handle_ssl_error (int ret)
 			 * doesn't get terminated.
 			 */
 
-			while (err = ERR_get_error() ){
-				if(ERR_GET_REASON(err)==SSL_R_BAD_WRITE_RETRY)
+			while (err = ERR_get_error() ) {
+				if (ERR_GET_REASON (err) == SSL_R_BAD_WRITE_RETRY)
 					continue;
-				err=1;
+				err = 1;
 				Log_error (
-				"on conn %d SSL_ERR %d: %s; func %s; reason %s",
-				id, err,
-				ERR_lib_error_string (err),
-				ERR_func_error_string (err),
-				ERR_reason_error_string (err) );
+				    "on conn %d SSL_ERR %d: %s; func %s; reason %s",
+				    id, err,
+				    ERR_lib_error_string (err),
+				    ERR_func_error_string (err),
+				    ERR_reason_error_string (err) );
 			}
 		}
-		return ret?e:0;
+		return ret ? e : 0;
 	}
 
 	return 0;
