@@ -152,10 +152,10 @@ br_id_cache_size 1024 --broadcast ID cache size, in ID entries.
 	--If rotating broadcasts kill your network, increase this.
 
 max_send_queue_size 8192 --maximum size of output queue, in bytes. MTU.
-max_waiting_proto_packets -- just tunable.
-max_waiting_data_packets -- increase to stabilize TCP throughput.
+max_waiting_proto_packets 64 -- just tunable.
+max_waiting_data_packets 4096 -- increase to stabilize TCP throughput.
 
-heartbeat 10000 -- core update heartbeat in usec. Smaller values improve
+heartbeat 50000 -- core update heartbeat in usec. Smaller values improve
 	--overall responsiveness, especially neighbor-info spreading speed, at
 	--a cost of slight overhead (global update is done once per period.)
 	--Higher values dont harm much, but greater networks with frequent
