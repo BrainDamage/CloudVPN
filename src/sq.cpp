@@ -24,14 +24,13 @@ void pbuffer::push (const uint8_t*d, int size)
 
 bool squeue::push (const pbuffer& b)
 {
-	for (vector<uint8_t>::const_iterator i = b.b.begin();i < b.b.end();++i)
-		q.push_back (*i);
+	q.insert(q.end(),b.b.begin(),b.b.end());
 	return true;
 }
 
 bool squeue::push (const uint8_t*d, int size)
 {
-	for (int i = 0;i < size;++i) q.push_back (d[i]);
+	q.insert(q.end(),d,d+size);
 	return true;
 }
 

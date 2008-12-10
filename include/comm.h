@@ -92,7 +92,7 @@ public:
 	 */
 
 	squeue send_q, recv_q;
-	queue<pbuffer> proto_q, data_q;
+	deque<pbuffer> proto_q, data_q;
 
 	struct {
 		uint8_t type;

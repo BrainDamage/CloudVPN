@@ -65,9 +65,7 @@ static int ssl_password_callback (char*buffer, int num, int rwflag, void*udata)
 
 static int ssl_initialize()
 {
-	SSL_METHOD* meth;
-
-	string keypath, certpath, capath;
+	string keypath, certpath, capath, t;
 
 	if ( (!config_get ("key", keypath) ) ||
 	        (!config_get ("cert", certpath) ) ||
@@ -88,11 +86,26 @@ static int ssl_initialize()
 
 	//maybe signal(sigpipe) belons here, no idea why.
 
-	meth = SSLv23_method();
-	ssl_ctx = SSL_CTX_new (meth);
-	SSL_CTX_set_options (ssl_ctx, SSL_OP_NO_SSLv2);
-	SSL_CTX_set_options (ssl_ctx, SSL_MODE_ENABLE_PARTIAL_WRITE);
+	t="";
+	config_get("ssl_method",t);
+	if(t=="tls") {
+		Log_info("using TLSv1 protocol");
+		ssl_ctx=SSL_CTX_new(TLSv1_method());
+	} else {
+		Log_info("using SSLv3 protocol");
+		ssl_ctx = SSL_CTX_new (SSLv23_method());
+		SSL_CTX_set_options (ssl_ctx, SSL_OP_NO_SSLv2);
+		//dont want SSLv2, cuz it's deprecated.
+	}
 
+	//force regenerating DH params
+	SSL_CTX_set_options (ssl_ctx, SSL_OP_SINGLE_DH_USE);
+
+	//we need those two, because of 'sliding' send queue
+	SSL_CTX_set_options (ssl_ctx, SSL_MODE_ENABLE_PARTIAL_WRITE);
+	SSL_CTX_set_options (ssl_ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+
+	//certificate/key chain loading
 	SSL_CTX_set_default_passwd_cb (ssl_ctx, ssl_password_callback);
 
 	if (!SSL_CTX_use_certificate_chain_file (ssl_ctx, certpath.c_str() ) ) {
@@ -151,11 +164,13 @@ static int ssl_initialize()
 		return 8;
 	}
 
+	//better to die immediately.
 	if (!SSL_CTX_check_private_key (ssl_ctx) ) {
 		Log_error ("supplied private key does not match the certificate!");
 		return 9;
 	}
 
+	//policy - verify peer's signature, and refuse peers without certificate
 	SSL_CTX_set_verify (ssl_ctx, SSL_VERIFY_PEER |
 	                    SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
 
@@ -658,7 +673,7 @@ void connection::write_data (const pbuffer&b)
 	if (state != cs_active) return;
 	if (b.len() > max_send_queue_size) return; //MTU
 	if (data_q.size() >= max_waiting_data_packets) return; //drop
-	data_q.push (b);
+	data_q.push_back (b);
 	try_write();
 }
 
@@ -667,7 +682,7 @@ void connection::write_proto (const pbuffer&b)
 	if (state != cs_active) return;
 	if (b.len() > max_send_queue_size) return; //MTU
 	if (proto_q.size() >= max_waiting_data_packets) return; //drop
-	proto_q.push (b);
+	proto_q.push_back (b);
 	try_write();
 }
 
@@ -679,33 +694,35 @@ void connection::fill_send_q()
 
 	while (proto_q.size() )
 		if (send_q.len() + proto_q.front().len() > max_send_queue_size)
-			return;
+			break;
 		else {
 			send_q.push (proto_q.front() );
-			proto_q.pop();
+			proto_q.pop_front();
 		}
 
 	while (data_q.size() )
 		if (send_q.len() + data_q.front().len() > max_send_queue_size)
-			return;
+			break;
 		else {
 			send_q.push (data_q.front() );
-			data_q.pop();
+			data_q.pop_front();
 		}
 }
 
 bool connection::try_write()
 {
-	uint8_t buf[4096];
+	uint8_t buf[max_send_queue_size];
 	int n, r;
-	while (fill_send_q(), send_q.len() ) {
-		n = send_q.peek (buf, 4096);
+	//do not change the write buffer until necessary
+	while (({if(!send_q.len())fill_send_q();}), send_q.len() ) {
+
+		n = send_q.peek (buf, max_send_queue_size);
 
 		r = SSL_write (ssl, buf, n);
 
 		if (r == 0) {
 			Log_info ("connection id %d closed by peer", id);
-			disconnect();
+			reset();
 			return false;
 		} else if (r < 0) {
 			if (handle_ssl_error (r) ) {
@@ -873,6 +890,8 @@ void connection::activate()
 
 void connection::disconnect()
 {
+	poll_set_remove_write(fd);
+
 	if ( (state == cs_retry_timeout) && (! (address.length() ) ) ) {
 		state = cs_inactive;
 		return;
@@ -891,17 +910,20 @@ void connection::disconnect()
 
 void connection::reset()
 {
+	poll_set_remove_write (fd);
+	poll_set_remove_read (fd);
+
 	remote_routes.clear();
 	route_set_dirty();
 
 	send_q.clear();
 	recv_q.clear();
+	proto_q.clear();
+	data_q.clear();
+
 	cached_header.type = 0;
 
 	dealloc_ssl();
-
-	poll_set_remove_write (fd);
-	poll_set_remove_read (fd);
 
 	tcp_close_socket (fd);
 	unset_fd();
@@ -917,25 +939,38 @@ int connection::handle_ssl_error (int ret)
 
 	switch (e) {
 	case SSL_ERROR_WANT_READ:
+		if(state!=cs_active)poll_set_remove_write(fd);
 		//not much to do, read flag is always prepared.
 		break;
 	case SSL_ERROR_WANT_WRITE:
 		poll_set_add_write (fd);
 		break;
-	case SSL_ERROR_ZERO_RETURN:
-		return 1; //SSL closed correctly.
 	default:
+		int ret=0;
 		Log_error ("Get SSL error %d, ret=%d!", e, ret);
 		{
-			int err;
-			while (err = ERR_get_error() ) Log_error
-				("on conn %d SSL_ERR %d: %s; func %s; reason %s",
-				 id, err,
-				 ERR_lib_error_string (err),
-				 ERR_func_error_string (err),
-				 ERR_reason_error_string (err) );
+			int err=0;
+
+			/*
+			 * If we got a "bad write retry" error, let's just don't
+			 * worry about it - we just fucked up the SSL_read
+			 * and SSL_write order a little. SSL connection
+			 * doesn't get terminated.
+			 */
+
+			while (err = ERR_get_error() ){
+				if(ERR_GET_REASON(err)==SSL_R_BAD_WRITE_RETRY)
+					continue;
+				err=1;
+				Log_error (
+				"on conn %d SSL_ERR %d: %s; func %s; reason %s",
+				id, err,
+				ERR_lib_error_string (err),
+				ERR_func_error_string (err),
+				ERR_reason_error_string (err) );
+			}
 		}
-		return e;
+		return ret?e:0;
 	}
 
 	return 0;
@@ -995,7 +1030,6 @@ void connection::periodic_update()
 			Log_info ("Connection %d ping timeout", id);
 			disconnect();
 		} else if ( (timestamp() - sent_ping_time) > keepalive) send_ping();
-		try_read();
 		break;
 	}
 }

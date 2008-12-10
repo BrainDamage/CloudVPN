@@ -175,6 +175,8 @@ comm_close_timeout 10000000 -- how long to wait for connections to close
 report_ping_changes_above 5000 -- usuable when route information updates fills
 	too much network bandwidth.
 
+ssl_method ssl -- default ssl method to use. 'tls' is the second option
+
 	*** INTERNALS ***
 
 modules are:
