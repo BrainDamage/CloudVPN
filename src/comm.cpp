@@ -101,8 +101,7 @@ static int ssl_initialize()
 	//force regenerating DH params
 	SSL_CTX_set_options (ssl_ctx, SSL_OP_SINGLE_DH_USE);
 
-	//we need those two, because of 'sliding' send queue
-	SSL_CTX_set_options (ssl_ctx, SSL_MODE_ENABLE_PARTIAL_WRITE);
+	//we need those two, because vectors can move
 	SSL_CTX_set_options (ssl_ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
 
 	//certificate/key chain loading
@@ -522,49 +521,51 @@ void connection::handle_pong (uint8_t ID)
 
 void connection::write_packet (void*buf, int len)
 {
-	pbuffer b;
+	if (len > mtu) return;
+	pbuffer& b = new_data();
 	add_packet_header (b, pt_eth_frame, 0, len);
 	b.push ( (uint8_t*) buf, len);
-	write_data (b);
+	try_write();
 }
 
 void connection::write_broadcast_packet (uint32_t ID, void*buf, int len)
 {
-	pbuffer b;
+	if (len > mtu) return;
+	pbuffer& b = new_data();
 	add_packet_header (b, pt_broadcast, 0, len);
 	b.push<uint32_t> (htonl (ID) );
 	b.push ( (uint8_t*) buf, len);
-	write_data (b);
+	try_write();
 }
 
 void connection::write_route_set (uint8_t*data, int n)
 {
-	pbuffer b;
+	pbuffer&b = new_proto();
 	add_packet_header (b, pt_route_set, 0, n);
 	b.push (data, n* (4 + hwaddr_size) );
-	write_proto (b);
+	try_write();
 }
 
 void connection::write_route_diff (uint8_t*data, int n)
 {
-	pbuffer b;
+	pbuffer&b = new_proto();
 	add_packet_header (b, pt_route_diff, 0, n);
 	b.push (data, n* (4 + hwaddr_size) );
-	write_proto (b);
+	try_write();
 }
 
 void connection::write_ping (uint8_t ID)
 {
-	pbuffer b;
+	pbuffer&b = new_proto();
 	add_packet_header (b, pt_echo_request, ID, 0);
-	write_proto (b);
+	try_write();
 }
 
 void connection::write_pong (uint8_t ID)
 {
-	pbuffer b;
+	pbuffer&b = new_proto();
 	add_packet_header (b, pt_echo_reply, ID, 0);
-	write_proto (b);
+	try_write();
 }
 
 /*
@@ -668,55 +669,45 @@ bool connection::try_read()
 	return true;
 }
 
-void connection::write_data (const pbuffer&b)
+pbuffer& connection::new_data ()
 {
-	if (state != cs_active) return;
-	if (b.len() > max_send_queue_size) return; //MTU
-	if (data_q.size() >= max_waiting_data_packets) return; //drop
-	data_q.push_back (b);
-	try_write();
+	data_q.push_back (pbuffer() );
+	return data_q.back();
 }
 
-void connection::write_proto (const pbuffer&b)
+pbuffer& connection::new_proto ()
 {
-	if (state != cs_active) return;
-	if (b.len() > max_send_queue_size) return; //MTU
-	if (proto_q.size() >= max_waiting_data_packets) return; //drop
-	proto_q.push_back (b);
-	try_write();
-}
-
-void connection::fill_send_q()
-{
-	/*
-	 * we want to prioritize proto packets
-	 */
-
-	while (proto_q.size() )
-		if (send_q.len() + proto_q.front().len() > max_send_queue_size)
-			break;
-		else {
-			send_q.push (proto_q.front() );
-			proto_q.pop_front();
-		}
-
-	while (data_q.size() )
-		if (send_q.len() + data_q.front().len() > max_send_queue_size)
-			break;
-		else {
-			send_q.push (data_q.front() );
-			data_q.pop_front();
-		}
+	proto_q.push_back (pbuffer() );
+	return proto_q.back();
 }
 
 bool connection::try_write()
 {
-	uint8_t buf[max_send_queue_size];
+	const uint8_t *buf;
 	int n, r;
 	//do not change the write buffer until necessary
-	while ( ( {if (!send_q.len() ) fill_send_q();}), send_q.len() ) {
+	while (proto_q.size() || data_q.size() ) {
 
-		n = send_q.peek (buf, max_send_queue_size);
+		if (sending_from_data_q) {
+			if (!data_q.size() ) {
+				sending_from_data_q = false;
+				continue;
+			} else {
+				buf = data_q.front().b.begin().base();
+				n = data_q.front().b.size();
+			}
+		}
+
+		if (!sending_from_data_q) {
+			if (proto_q.size() ) {
+				buf = proto_q.front().b.begin().base();
+				n = proto_q.front().b.size();
+			} else { //we can be pretty sure there's something.
+				sending_from_data_q = true;
+				buf = data_q.front().b.begin().base();
+				n = data_q.front().b.size();
+			}
+		}
 
 		r = SSL_write (ssl, buf, n);
 
@@ -732,7 +723,10 @@ bool connection::try_write()
 			}
 			return true;
 		} else {
-			send_q.pop (0, r);
+			if (sending_from_data_q) {
+				data_q.pop_front();
+				sending_from_data_q = false;
+			} else proto_q.pop_front();
 		}
 	}
 	poll_set_remove_write (fd); //don't need any more write
@@ -884,6 +878,7 @@ void connection::send_ping()
 void connection::activate()
 {
 	state = cs_active;
+	sending_from_data_q = false;
 	send_ping();
 	route_report_to_connection (*this);
 }
@@ -916,7 +911,7 @@ void connection::reset()
 	remote_routes.clear();
 	route_set_dirty();
 
-	send_q.clear();
+	sending_from_data_q = false;
 	recv_q.clear();
 	proto_q.clear();
 	data_q.clear();
@@ -1219,7 +1214,7 @@ static int comm_connections_close()
  * base comm_ stuff
  */
 
-int connection::max_send_queue_size = 8192;
+int connection::mtu = 8192;
 int connection::max_waiting_data_packets = 512;
 int connection::max_waiting_proto_packets = 64;
 
@@ -1235,11 +1230,11 @@ int comm_init()
 	else listen_backlog_size = t;
 	Log_info ("listen backlog size is %d", listen_backlog_size);
 
-	if (!config_get_int ("connection::max_send_queue_size", t) )
-		connection::max_send_queue_size = 8192;
-	else 	connection::max_send_queue_size = t;
-	Log_info ("send queue maximal size is %d",
-	          connection::max_send_queue_size);
+	if (!config_get_int ("conn-mtu", t) )
+		connection::mtu = 8192;
+	else 	connection::mtu = t;
+	Log_info ("maximal size of internal packets is %d",
+	          connection::mtu);
 
 	if (!config_get_int ("connection::max_waiting_data_packets", t) )
 		connection::max_waiting_data_packets = 512;

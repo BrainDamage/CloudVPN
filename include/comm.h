@@ -65,6 +65,7 @@ public:
 		bio = 0;
 		last_ping = 0;
 		cached_header.type = 0;
+		sending_from_data_q = false;
 	}
 
 	connection (); //this is supposed to fail, always use c(ID)
@@ -91,8 +92,9 @@ public:
 	 * those functions are called by polling interface to do specific stuff
 	 */
 
-	squeue send_q, recv_q;
+	squeue recv_q;
 	deque<pbuffer> proto_q, data_q;
+	bool sending_from_data_q;
 
 	struct {
 		uint8_t type;
@@ -102,9 +104,8 @@ public:
 
 	void try_parse_input();
 
-	void fill_send_q();
-	void write_proto (const pbuffer&);
-	void write_data (const pbuffer&);
+	pbuffer& new_proto ();
+	pbuffer& new_data ();
 
 	bool try_read();
 	bool try_write(); //both called by try_data(); dont use directly
@@ -168,7 +169,7 @@ public:
 	/*
 	 * queue management
 	 */
-	static int max_send_queue_size;
+	static int mtu;
 	static int max_waiting_data_packets;
 	static int max_waiting_proto_packets;
 };
