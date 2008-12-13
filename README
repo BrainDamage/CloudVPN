@@ -150,6 +150,9 @@ gid nobody
 
 br_id_cache_size 1024 --broadcast ID cache size, in ID entries.
 	--If rotating broadcasts kill your network, increase this.
+route_max_dist 64 -- maximal distance of remote peers. Allows the network
+	--to forget about the disappeared node. Increase as needed, decreasing
+	--for unstable networks improves speed and decreases bandwidth.
 
 max_send_queue_size 8192 --maximum size of output queue, in bytes. MTU.
 max_waiting_proto_packets 64 -- just tunable.

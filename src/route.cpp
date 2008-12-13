@@ -80,6 +80,7 @@ static bool queue_already_broadcasted (uint32_t id)
 
 static int route_dirty = 0;
 static int route_report_ping_diff = 5000;
+static int route_max_dist = 64;
 static map<hwaddr, route_info> route, reported_route;
 
 static void report_route();
@@ -97,6 +98,9 @@ void route_init()
 	Log_info ("only ping changes above %gmsec will be reported to peers",
 	          0.001*t);
 	route_report_ping_diff = t;
+	if (!config_get_int ("route_max_dist", t)) t=64;
+	Log_info ("maximal node distance is %d", t);
+	route_max_dist = t;
 }
 
 void route_shutdown()
@@ -148,6 +152,7 @@ void route_update()
 		for ( j = i->second.remote_routes.begin();
 		        j != i->second.remote_routes.end();
 		        ++j ) {
+			if (1 + j->second.dist > route_max_dist) continue;
 			if (route.count (j->first) )
 				if (route[j->first].ping <=
 				        (2 + j->second.ping + i->second.ping) )
