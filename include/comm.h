@@ -55,7 +55,16 @@ public:
 	//ping is on the way, if sent_ping_time==last_ping
 
 	//all routes the peer reported
-	map<hwaddr, int> remote_routes;
+	class remote_route
+	{
+	public:
+		int ping, dist;
+		remote_route (int p, int d) {
+			ping = p;
+			dist = d;
+		}
+	};
+	map<hwaddr, remote_route> remote_routes;
 
 	explicit inline connection (int ID) {
 		id = ID;

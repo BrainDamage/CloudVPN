@@ -119,7 +119,7 @@ void route_update()
 
 	map<int, connection>& cons = comm_connections();
 	map<int, connection>::iterator i;
-	map<hwaddr, int>::iterator j;
+	map<hwaddr, connection::remote_route>::iterator j;
 
 	route.clear();
 
@@ -139,7 +139,7 @@ void route_update()
 	 */
 
 	if (iface_get_sockfd() > 0)
-		route[hwaddr (iface_cached_hwaddr() ) ] = route_info (1, -1);
+		route[hwaddr (iface_cached_hwaddr() ) ] = route_info (1, 0, -1);
 
 	for (i = cons.begin();i != cons.end();++i) {
 		if (i->second.state != cs_active)
@@ -150,11 +150,13 @@ void route_update()
 		        ++j ) {
 			if (route.count (j->first) )
 				if (route[j->first].ping <=
-				        (2 + j->second + i->second.ping) )
+				        (2 + j->second.ping + i->second.ping) )
 					continue;
 
 			route[j->first] = route_info
-			                  (2 + j->second + i->second.ping, i->first);
+			                  (2 + j->second.ping + i->second.ping,
+			                   1 + j->second.dist,
+			                   i->first);
 		}
 	}
 
@@ -242,7 +244,9 @@ void route_report_to_connection (connection&c)
 	for (i = 0, r = reported_route.begin();
 	        (i < n) && (r != reported_route.end() );++i, ++r) {
 		r->first.get (datap);
-		* (uint32_t*) (datap + hwaddr_size) =
+		* (uint16_t*) (datap + hwaddr_size) =
+		    htons ( (uint16_t) (r->second.dist) );
+		* (uint32_t*) (datap + hwaddr_size + 2) =
 		    htonl ( (uint32_t) (r->second.ping) );
 		datap += hwaddr_size + 4;
 	}
@@ -256,30 +260,34 @@ static void report_route()
 	 * determines which route information needs updating,
 	 * and sends the diff info to remote connections
 	 */
+
 	map<hwaddr, route_info>::iterator r, oldr;
-	list<pair<hwaddr, int> > report;
+	list<pair<hwaddr, route_info> > report;
+
 	for (r = route.begin(), oldr = reported_route.begin();
 	        (r != route.end() ) && (oldr != reported_route.end() );) {
-		if (r->first == oldr->first) { // hwaddresses match, check ping
-			if (abs ( (r->second.ping) - (oldr->second.ping) )
-			        >= route_report_ping_diff)
-				report.push_back (pair<hwaddr, int> (r->first, r->second.ping) );
+
+		if (r->first == oldr->first) { // hwaddresses match, check ping and distance
+			if ( (abs ( (r->second.ping) - (oldr->second.ping) )
+			        >= route_report_ping_diff) ||
+			        (r->second.dist != oldr->second.dist) )
+				report.push_back (pair<hwaddr, route_info> (r->first, r->second) );
 			++r;
 			++oldr;
 		} else if (r->first < oldr->first) { //not in old route
-			report.push_back (pair<hwaddr, int> (r->first, r->second.ping) );
+			report.push_back (pair<hwaddr, route_info> (r->first, r->second) );
 			++r;
 		} else { //not in new route
-			report.push_back (pair<hwaddr, int> (oldr->first, 0) );
+			report.push_back (pair<hwaddr, route_info> (oldr->first, route_info (0, 0, 0) ) );
 			++oldr;
 		}
 	}
 	while (r != route.end() ) { //rest of new routes
-		report.push_back (pair<hwaddr, int> (r->first, r->second.ping) );
+		report.push_back (pair<hwaddr, route_info> (r->first, r->second) );
 		++r;
 	}
 	while (oldr != reported_route.end() ) {
-		report.push_back (pair<hwaddr, int> (oldr->first, 0) );
+		report.push_back (pair<hwaddr, route_info> (oldr->first, route_info (0, 0, 0) ) );
 		++oldr;
 	}
 
@@ -291,15 +299,16 @@ static void report_route()
 
 	uint8_t data[report.size() * (hwaddr_size+4) ];
 	uint8_t*datap = data;
-	list<pair<hwaddr, int> >::iterator rep;
+	list<pair<hwaddr, route_info> >::iterator rep;
 	for (rep = report.begin();rep != report.end();++rep) {
-		if (rep->second) reported_route[rep->first] =
-			    route_info (rep->second, 0);
+		if (rep->second.ping) reported_route[rep->first] = rep->second;
 		else reported_route.erase (rep->first);
 
 		rep->first.get (datap);
-		* (uint32_t*) (datap + hwaddr_size) =
-		    htonl ( (uint32_t) (rep->second) );
+		* (uint16_t*) (datap + hwaddr_size) =
+		    htonl ( (uint16_t) (rep->second.dist) );
+		* (uint32_t*) (datap + hwaddr_size + 2) =
+		    htonl ( (uint32_t) (rep->second.ping) );
 		datap += hwaddr_size + 4;
 	}
 

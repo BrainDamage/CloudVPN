@@ -25,16 +25,20 @@ class route_info
 {
 public:
 	int ping;
+	int dist;
 	int id;
-	inline route_info (int p, int i) {
+
+	inline route_info (int p, int d, int i) {
 		ping = p;
 		id = i;
+		dist = d;
 	}
 
 	inline route_info() {
-		//this shall never be called
+		//this shall never be called.
 		ping = 0;
 		id = -2; //-2==error, -1==iface, 0+ == other connections
+		dist = 0;
 	}
 };
 

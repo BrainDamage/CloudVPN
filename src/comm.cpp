@@ -432,7 +432,7 @@ void connection::deindex()
 #define pt_echo_reply 6
 
 #define p_head_size 4
-#define route_entry_size 10
+#define route_entry_size 12
 
 static void add_packet_header (pbuffer&b, uint8_t type,
                                uint8_t special, uint16_t size)
@@ -476,10 +476,13 @@ void connection::handle_route_set (uint8_t*data, int n)
 {
 	remote_routes.clear();
 	uint32_t remote_ping;
+	uint16_t remote_dist;
 	for (int i = 0;i < n;++i, data += route_entry_size) {
-		remote_ping = ntohl (* ( (uint32_t*) (data + hwaddr_size) ) );
+		remote_dist = ntohs (* ( (uint16_t*) (data + hwaddr_size) ) );
+		remote_ping = ntohl (* ( (uint32_t*) (data + hwaddr_size + 2) ) );
 		remote_routes.insert
-		(pair<hwaddr, int> (hwaddr (data), remote_ping) );
+		(pair<hwaddr, remote_route> (hwaddr (data),
+		                             remote_route (remote_ping, remote_dist) ) );
 	}
 	route_set_dirty();
 }
@@ -489,11 +492,14 @@ void connection::handle_route_diff (uint8_t*data, int n)
 	if (!n) return;
 
 	uint32_t remote_ping;
+	uint16_t remote_dist;
 	for (int i = 0;i < n;++i, data += route_entry_size) {
-		remote_ping = ntohl (* ( (uint32_t*) (data + hwaddr_size) ) );
+		remote_dist = ntohs (* ( (uint16_t*) (data + hwaddr_size) ) );
+		remote_ping = ntohl (* ( (uint32_t*) (data + hwaddr_size + 2) ) );
 		if (ping)
 			remote_routes.insert
-			(pair<hwaddr, int> (hwaddr (data), remote_ping) );
+			(pair<hwaddr, remote_route> (hwaddr (data),
+			                             remote_route (remote_ping, remote_dist) ) );
 		else remote_routes.erase (hwaddr (data) );
 	}
 	route_set_dirty();
@@ -542,7 +548,7 @@ void connection::write_route_set (uint8_t*data, int n)
 {
 	pbuffer&b = new_proto();
 	add_packet_header (b, pt_route_set, 0, n);
-	b.push (data, n* (4 + hwaddr_size) );
+	b.push (data, n* route_entry_size );
 	try_write();
 }
 
@@ -550,7 +556,7 @@ void connection::write_route_diff (uint8_t*data, int n)
 {
 	pbuffer&b = new_proto();
 	add_packet_header (b, pt_route_diff, 0, n);
-	b.push (data, n* (4 + hwaddr_size) );
+	b.push (data, n* route_entry_size );
 	try_write();
 }
 

@@ -49,7 +49,7 @@ All nodes must
 	   possibility to select a best route for a packet.
 	d] (maybe later) provide some possibility to choke given connection. If
 	   a connection is choked, route packets elsewhere (NOT back). As the
-	   ping packets are in the same queue as the normal packets, this will
+	   ping packets are in the same stream as the normal packets, this will
 	   probably not be needed to solve.
 	e] if a connection to a node is lost, send the update info to
 	   neighbors. Connection send queue gets discarded.
@@ -85,10 +85,10 @@ All clients must note, that
 Connection and authentication is done through SSL
 Multibyte integers are in network byte order.
 
-struct NEIGHBOR --- (10B)
+struct NEIGHBOR --- (12B)
 6B mac_addr
-4B distance --distance is in relative units. Let it be the "ping"
-	--in diff, the most significant bit is 0 to remove or 1 to add.
+2B dist --real graph distance.
+4B ping --distance in some measured units. Let it be the "ping"
 
 struct packet_header --- (4B)
 1B packet_type
