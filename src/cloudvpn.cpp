@@ -9,6 +9,7 @@
 #include "route.h"
 #include "utils.h"
 #include "timestamp.h"
+#include "userswitch.h"
 
 #include <unistd.h>
 
@@ -60,6 +61,12 @@ int run_cloudvpn (int argc, char**argv)
 		goto failed_comm;
 	}
 
+	if(do_switch_user() ) {
+		Log_fatal ("changing process owner failed");
+		ret = 5;
+		goto failed_user;
+	}
+
 	/*
 	 * main loop
 	 */
@@ -95,6 +102,8 @@ int run_cloudvpn (int argc, char**argv)
 
 	Log_info ("shutting down");
 
+failed_user:
+
 	comm_shutdown();
 
 failed_comm:
@@ -118,7 +127,4 @@ void kill_cloudvpn (int signum)
 	Log_info ("cloudvpn: killed by signal %d, will terminate", signum);
 	g_terminate = 1;
 }
-
-#include <string>
-using namespace std;
 
