@@ -13,11 +13,17 @@
  *
  * Available backends:
  *
- * epoll device
- * select()
+ * epoll device on Linuxes
+ * kqueue on BSD
  *
- * epoll is "default", to use select() please define CVPN_POLL_USE_SELECT
+ * If we cannot select automatically, we fallback to:
+ * poll (if defined(HAVE_POLL))
+ * select()
  */
+
+#ifndef HAVE_POLL //by default, assume yes.
+#define HAVE_POLL 1
+#endif
 
 /*
  * poll_handle_event()
@@ -83,120 +89,7 @@ static void poll_handle_event (int fd, int what)
  * now the polling engines
  */
 
-#ifdef CVPN_POLL_USE_SELECT
-
-/*
- * select() polling engine
- */
-
-#include <errno.h>
-#include <sys/select.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <unistd.h>
-
-#include <set>
-using namespace std;
-static set<int> fds_read, fds_write;
-
-int poll_init()
-{
-	//not much
-	return 0;
-}
-
-int poll_deinit()
-{
-	//also not much
-	return 0;
-}
-
-int poll_set_add_read (int fd)
-{
-	fds_read.insert (fd);
-	return 0;
-}
-
-int poll_set_remove_read (int fd)
-{
-	fds_read.erase (fd);
-	return 0;
-}
-
-int poll_set_add_write (int fd)
-{
-	fds_write.insert (fd);
-	return 0;
-}
-
-int poll_set_remove_write (int fd)
-{
-	fds_write.erase (fd);
-	return 0;
-}
-
-int poll_set_clear (int fd)
-{
-	fds_read.clear();
-	fds_write.clear();
-	return 0;
-}
-
-int poll_wait_for_event (int timeout)
-{
-	fd_set read, write, except;
-	set<int>::iterator i;
-
-	FD_ZERO (&read);
-	FD_ZERO (&write);
-	FD_ZERO (&except);
-
-	int n = 1;
-	for (i = fds_read.begin();i != fds_read.end();++i) {
-		FD_SET (*i, &read);
-		FD_SET (*i, &except);
-		++n;
-	}
-	for (i = fds_write.begin();i != fds_write.end();++i) {
-		FD_SET (*i, &write);
-		if (!FD_ISSET (*i, &read) ) ++n; //be sure
-	}
-
-	struct timeval time = {timeout / 1000000, timeout % 1000000};
-
-	if (select (n, &read, &write, &except, &time) < 0) {
-		int e = errno;
-		if (e == EINTR) {
-			Log_info ("select() interrupted");
-			return 0;
-		}
-
-		Log_error ("select() failed with errno %d", e);
-		return 1;
-	}
-
-	timestamp_update(); //we probably waited some time here.
-
-	/*
-	 * Note that this order of write -> exception -> read
-	 * operations is intended (prevents queue limit bumps a little better)
-	 */
-
-	for (i = fds_write.begin();i != fds_write.end();++i) {
-		if (FD_ISSET (*i, &write) )
-			poll_handle_event (*i, WRITE_READY);
-	}
-	for (i = fds_read.begin();i != fds_read.end();++i) {
-		if (FD_ISSET (*i, &except) )
-			poll_handle_event (*i, EXCEPTION_READY);
-		if (FD_ISSET (*i, &read) )
-			poll_handle_event (*i, READ_READY);
-	}
-
-	return 0;
-}
-
-#else
+#if defined(__linux__)
 
 /*
  * epoll engine
@@ -354,5 +247,231 @@ int poll_wait_for_event (int timeout)
 	return 0;
 }
 
-#endif
+#elif BSD
 
+/*
+ * kqueue default for *BSD
+ */
+
+#elif HAVE_POLL
+
+/*
+ * poll.h poll(), fallback number one.
+ */
+
+#include <sys/poll.h>
+#include <errno.h>
+
+#include <map>
+#include <vector>
+using namespace std;
+
+static map<int, int> fdi;
+static vector<struct pollfd> fds;
+
+static struct pollfd* get_fd (int fd) {
+	if (fdi.count (fd) )
+		return & (fds[fdi[fd]]);
+
+	struct pollfd tmp;
+	fds.push_back (tmp);
+	fds.back().fd = fd;
+	fdi[fd] = fds.size() - 1;
+	return & (fds.back() );
+}
+
+static void remove_fd (int fd)
+{
+	if (!fdi.count (fd) ) return;
+	int p = fdi[fd];
+	fdi.erase (fd);
+	fds[p] = fds.back(); //overwrite by tail
+	fds.pop_back(); //remove tail
+}
+
+int poll_init()
+{
+	return 0;
+}
+
+int poll_deinit()
+{
+	return poll_set_clear();
+}
+
+int poll_set_add_read (int fd)
+{
+	get_fd (fd)->events |= POLLIN | POLLERR;
+	return 0;
+}
+
+int poll_set_add_write (int fd)
+{
+	get_fd (fd)->events |= POLLOUT;
+	return 0;
+}
+
+int poll_set_remove_read (int fd)
+{
+	struct pollfd* f = get_fd (fd);
+	f->events &= ~ (POLLIN | POLLERR);
+	if (! (f->events) ) remove_fd (fd);
+	return 0;
+}
+
+int poll_set_remove_write (int fd)
+{
+	struct pollfd* f = get_fd (fd);
+	f->events &= ~POLLOUT;
+	if (! (f->events) ) remove_fd (fd);
+	return 0;
+}
+
+int poll_set_clear()
+{
+	fds.clear();
+	fdi.clear();
+	return 0;
+}
+
+int poll_wait_for_event (int usec)
+{
+	int ret = poll (fds.begin().base(), fds.size(), usec / 1000);
+
+	timestamp_update();
+
+	if (ret < 0) {
+		if (errno == EINTR) {
+			Log_info ("poll() interrupted");
+			return 0;
+		} else {
+			Log_info ("poll() failed with errno %d", errno);
+			return 1;
+		}
+	}
+	if (!ret) return 0; //nothing important happened
+
+	vector<struct pollfd>::iterator i;
+	for (i = fds.begin();i < fds.end();++i) if (i->revents)
+			poll_handle_event (i->fd,
+			                   ( (i->revents | POLLIN) ? READ_READY : 0) |
+			                   ( (i->revents | POLLOUT) ? WRITE_READY : 0) |
+			                   ( (i->revents | POLLERR) ? EXCEPTION_READY : 0) );
+
+	return 0;
+}
+
+#else
+
+/*
+ * select() polling engine, fallback number two (last)
+ */
+
+#include <errno.h>
+#include <sys/select.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#include <set>
+using namespace std;
+static set<int> fds_read, fds_write;
+
+int poll_init()
+{
+	//not much
+	return 0;
+}
+
+int poll_deinit()
+{
+	//also not much
+	return 0;
+}
+
+int poll_set_add_read (int fd)
+{
+	fds_read.insert (fd);
+	return 0;
+}
+
+int poll_set_remove_read (int fd)
+{
+	fds_read.erase (fd);
+	return 0;
+}
+
+int poll_set_add_write (int fd)
+{
+	fds_write.insert (fd);
+	return 0;
+}
+
+int poll_set_remove_write (int fd)
+{
+	fds_write.erase (fd);
+	return 0;
+}
+
+int poll_set_clear (int fd)
+{
+	fds_read.clear();
+	fds_write.clear();
+	return 0;
+}
+
+int poll_wait_for_event (int timeout)
+{
+	fd_set read, write, except;
+	set<int>::iterator i;
+
+	FD_ZERO (&read);
+	FD_ZERO (&write);
+	FD_ZERO (&except);
+
+	int n = 1;
+	for (i = fds_read.begin();i != fds_read.end();++i) {
+		FD_SET (*i, &read);
+		FD_SET (*i, &except);
+		++n;
+	}
+	for (i = fds_write.begin();i != fds_write.end();++i) {
+		FD_SET (*i, &write);
+		if (!FD_ISSET (*i, &read) ) ++n; //be sure
+	}
+
+	struct timeval time = {timeout / 1000000, timeout % 1000000};
+
+	if (select (n, &read, &write, &except, &time) < 0) {
+		int e = errno;
+		if (e == EINTR) {
+			Log_info ("select() interrupted");
+			return 0;
+		}
+
+		Log_error ("select() failed with errno %d", e);
+		return 1;
+	}
+
+	timestamp_update(); //we probably waited some time here.
+
+	/*
+	 * Note that this order of write -> exception -> read
+	 * operations is intended (prevents queue limit bumps a little better)
+	 */
+
+	for (i = fds_write.begin();i != fds_write.end();++i) {
+		if (FD_ISSET (*i, &write) )
+			poll_handle_event (*i, WRITE_READY);
+	}
+	for (i = fds_read.begin();i != fds_read.end();++i) {
+		if (FD_ISSET (*i, &except) )
+			poll_handle_event (*i, EXCEPTION_READY);
+		if (FD_ISSET (*i, &read) )
+			poll_handle_event (*i, READ_READY);
+	}
+
+	return 0;
+}
+
+#endif
