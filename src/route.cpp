@@ -98,7 +98,7 @@ void route_init()
 	Log_info ("only ping changes above %gmsec will be reported to peers",
 	          0.001*t);
 	route_report_ping_diff = t;
-	if (!config_get_int ("route_max_dist", t)) t=64;
+	if (!config_get_int ("route_max_dist", t) ) t = 64;
 	Log_info ("maximal node distance is %d", t);
 	route_max_dist = t;
 }

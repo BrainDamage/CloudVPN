@@ -61,7 +61,7 @@ int run_cloudvpn (int argc, char**argv)
 		goto failed_comm;
 	}
 
-	if(do_switch_user() ) {
+	if (do_switch_user() ) {
 		Log_fatal ("changing process owner failed");
 		ret = 5;
 		goto failed_user;
