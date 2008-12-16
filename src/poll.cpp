@@ -251,7 +251,122 @@ int poll_wait_for_event (int timeout)
 
 /*
  * kqueue default for *BSD
+ *
+ * thanks to jmmv and his blog, I used it.
  */
+
+#include <sys/event.h>
+#include <sys/time.h>
+#include <errno.h>
+
+static int kq = -1;
+
+#include <vector>
+#include <map>
+using namespace std;
+
+map<struct kevent, int> ev;
+
+#define ev_read 1
+#define ev_read 2
+
+int poll_init()
+{
+	kq = kqueue();
+	if (kq < 0) return 1;
+	return 0;
+}
+
+int poll_deinit()
+{
+	close (kq);
+	kq = -1;
+	poll_set_clear();
+	return 0;
+}
+
+static struct timespec timespec_zero = {0, 0};
+
+#define kevent_set(kq,fd,flags,filter) \
+({struct kevent k; EV_SET(&k,(fd),(filter),(flags),0,0,&timespec_zero);\
+kevent((kq),&k,1,0,0,0);)}
+
+#define ke_filter(i) {int ke_filter_t=(i);\
+	(((ke_filter_t&ev_read)?EVFILT_READ:0)\
+	((ke_filter_t&ev_write)?EVFILT_WRITE:0))
+
+int poll_set_add_read (int fd)
+{
+	int t = ev[fd] |= ev_read;
+	return kevent_set (kq, fd, EV_ADD, EVFILT_READ) >= 0;
+}
+
+int poll_set_add_write (int fd)
+{
+	int t = ev[fd] |= ev_write;
+	return kevent_set (kq, fd, EV_ADD, EVFILT_WRITE) >= 0;
+}
+
+int poll_set_remove_read (int fd)
+{
+	int t = ev[fd] &= ~ev_read;
+	if (!t) ev.erase (fd);
+	return kevent_set (kq, fd, EV_DELETE, EVFILT_READ) >= 0;
+}
+
+int poll_set_remove_write (int fd)
+{
+	int t = ev[fd] &= ~ev_read;
+	if (!t) ev.erase (fd);
+	return kevent_set (kq, fd, EV_DELETE, EVFILT_WRITE) >= 0;
+}
+
+int poll_set_clear()
+{
+	int t;
+	while (ev.size() ) {
+		t = ev.begin()->second;
+		if (t&ev_read)
+			kevent_set (kq, ev.begin()->first, EV_DELETE, EVFILT_READ);
+		if (t&ev_write)
+			kevent_set (kq, ev.begin()->first, EV_DELETE, EVFILT_WRITE);
+		ev.erase (ev.begin()->first);
+	}
+}
+
+int poll_wait_for_event (int timeout_usec)
+{
+	vector<struct kevent> buf;
+	int size = ev.size();
+	struct timespec ts = {timeout_usec / 1000000,
+		1000* (timeout_usec % 1000000)
+	};  //it's {seconds,nanoseconds}
+
+	buf.resize (size); //alloc space
+
+	int ret = kevent (kq, 0, 0, buf.begin().base(), size, &ts);
+
+	if (!ret) return 0;
+	if (ret < 0) {
+		if (errno == EINTR) {
+			Log_info ("kevent() interrupted by a signal");
+			return 0;
+		} else {
+			Log_info ("kevent() failed with errno %d", errno);
+			return 1;
+		}
+	}
+
+	//ok now we see that some events are present.
+
+	vector<struct kevent>::iterator i = buf.begin(), e = i + ret;
+
+	for (;i < e;++i) poll_handle_event (i->ident,
+		                                    (i->filter&EVFILT_READ) ? READ_READY :
+		                                    (i->filter&EVFILT_WRITE) ? WRITE_READY : 0);
+
+	return 0;
+}
 
 #elif HAVE_POLL
 
