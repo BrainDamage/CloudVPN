@@ -8,8 +8,8 @@
 #include "iface.h"
 #include "route.h"
 #include "utils.h"
+#include "security.h"
 #include "timestamp.h"
-#include "userswitch.h"
 
 #include <unistd.h>
 
@@ -55,16 +55,22 @@ int run_cloudvpn (int argc, char**argv)
 		goto failed_iface;
 	}
 
-	if (comm_init() ) {
-		Log_fatal ("communication initialization failed");
+	if (do_memlock() ) {
+		Log_fatal ("locking process to memory failed");
 		ret = 4;
 		goto failed_comm;
 	}
 
-	if (do_switch_user() ) {
-		Log_fatal ("changing process owner failed");
+	if (comm_init() ) {
+		Log_fatal ("communication initialization failed");
 		ret = 5;
-		goto failed_user;
+		goto failed_comm;
+	}
+
+	if (do_local_security() ) {
+		Log_fatal ("local security failed");
+		ret = 6;
+		goto failed_sec;
 	}
 
 	/*
@@ -102,7 +108,7 @@ int run_cloudvpn (int argc, char**argv)
 
 	Log_info ("shutting down");
 
-failed_user:
+failed_sec:
 
 	comm_shutdown();
 

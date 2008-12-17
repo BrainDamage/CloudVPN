@@ -1,14 +1,30 @@
 
-#include "userswitch.h"
+#include "security.h"
 
 #include "conf.h"
 #include "log.h"
+
+#include <unistd.h>
+#include <errno.h>
+
+static int do_chroot()
+{
+	string dir;
+	if (!config_get ("chroot", dir) ) return 0;
+
+	if (chroot (dir.c_str() ) ) {
+		Log_error ("chroot failed with errno %d", errno);
+		return 1;
+	}
+
+	return 0;
+}
 
 #include <sys/types.h>
 #include <pwd.h>
 #include <grp.h>
 
-int do_switch_user()
+static int do_switch_user()
 {
 	struct passwd*pw;
 	struct group*gr;
@@ -48,3 +64,22 @@ int do_switch_user()
 
 	return 0;
 }
+
+#include <sys/mman.h>
+
+int do_memlock()
+{
+	if (config_is_true ("mlockall") ) if (mlockall (MCL_CURRENT | MCL_FUTURE) ) {
+			Log_error ("mlockall() failed with errno %d", errno);
+			return 1;
+		}
+	return 0;
+}
+
+int do_local_security()
+{
+	if (do_chroot() ) return 1;
+	if (do_switch_user() ) return 2;
+	return 0;
+}
+
