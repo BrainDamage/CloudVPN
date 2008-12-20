@@ -31,31 +31,52 @@ public:
 	}
 };
 
+void squeue_init();
+
 class squeue
 {
 public:
-	deque<uint8_t> q;
-
-	bool push (const pbuffer&);
-	bool push (const uint8_t*, int);
-
-	int peek (pbuffer&);
-	int peek (uint8_t*, int);
-	template<class T> inline int peek (T&a) {
-		return peek ( (uint8_t*) &a, sizeof (a) ) / sizeof (a);
-	}
-
-	int pop (uint8_t*, int);
-	int pop (pbuffer&); //note that this *appends* to the pbuffer!
-	template<class T> inline int pop (T&a) {
-		return (len() < sizeof (a) ) ? 0 : pop ( (uint8_t*) &a, sizeof (a) );
-	}
+	int front, back;
+	vector<uint8_t> d;
 
 	inline void clear() {
-		q.clear();
+		front = back = 0;
+		d.clear();
 	}
-	inline int len() const {
-		return q.size();
+
+	explicit inline squeue() {
+		clear();
+	}
+
+	inline int len() {
+		return back -front;
+	}
+
+	inline uint8_t*begin() {
+		return d.begin().base() + front;
+	}
+	inline void read (int size) {
+		front += size;
+		if (front > back) front = back;
+	}
+
+	inline uint8_t*end() {
+		return d.begin().base() + back;
+	}
+
+	uint8_t*get_buffer (int size);
+
+	inline void append (int size) {
+		back += size;
+		if (back > d.size() ) back = d.size();
+	};
+
+	void realloc (int reserve_size = 0);
+
+	template<class T> inline void pop (T&t) {
+		if (len() < sizeof (T) ) return;
+		t = * (T*) begin();
+		read (sizeof (T) );
 	}
 };
 

@@ -19,70 +19,46 @@ void pbuffer::push (const uint8_t*d, int size)
 /*
  * squeue stuff
  *
- * TODO find some kind of adaptor for deque pushing.
+ * - fill the vector buffer, provide direct access to it
+ * - pop things from the front, leave the space there
+ * - if we think that realloc is feasible (when len() is zero)
+ *   we remove the unused front.
  */
 
-bool squeue::push (const pbuffer& b)
+#define squeue_max_free_size 4096
+#define squeue_back_free_space 1024
+
+static int squeue_max_alloc = 4194304;
+
+uint8_t* squeue::get_buffer (int size)
 {
-	q.insert (q.end(), b.b.begin(), b.b.end() );
-	return true;
+	if (d.size() < back + size) realloc (size);
+	if (d.size() < back + size) return 0;
+	return end();
 }
 
-bool squeue::push (const uint8_t*d, int size)
+void squeue::realloc (int size)
 {
-	q.insert (q.end(), d, d + size);
-	return true;
+	if ( !len() ) {  //flush to begin
+		front = back = 0;
+	} else if (front > squeue_max_free_size) { //move closer to start
+		copy (d.begin() + front, d.begin() + back, d.begin() );
+		back -= front;
+		front = 0;
+	}
+
+	if (	(d.size() < back + size) || //too short
+	        (d.size() > squeue_max_free_size + back + size) ) { //too long
+
+		int t = back + size + squeue_back_free_space;
+		if (t > squeue_max_alloc) t = squeue_max_alloc;
+		d.resize (t);  //resize
+	}
 }
 
-int squeue::pop (uint8_t*d, int size)
+void squeue_init()
 {
-	int ret = size;
-	if (ret > q.size() ) ret = q.size();
-	if (!ret) return ret;
-
-	if (d) copy (q.begin(), q.begin() + ret, d);
-
-	q.erase (q.begin(), q.begin() + ret);
-
-	return ret;
-}
-
-int squeue::pop (pbuffer&buf)
-{
-	int ret = q.size();
-	if (!ret) return ret;
-
-	buf.b.reserve (buf.b.size() + ret);
-
-	copy (q.begin(), q.begin() + ret,
-	      back_insert_iterator<vector<uint8_t> > (buf.b) );
-
-	q.erase (q.begin(), q.begin() + ret);
-
-	return 0;
-}
-
-int squeue::peek (uint8_t*d, int size)
-{
-	int ret = size;
-	if (ret > q.size() ) ret = q.size();
-	if (!ret) return ret;
-
-	copy (q.begin(), q.begin() + ret, d);
-
-	return ret;
-}
-
-int squeue::peek (pbuffer&buf)
-{
-	int ret = q.size();
-	if (!ret) return ret;
-
-	buf.b.reserve (buf.b.size() + ret);
-
-	copy (q.begin(), q.begin() + ret,
-	      back_insert_iterator<vector<uint8_t> > (buf.b) );
-
-	return 0;
+	config_get_int ("max_input_queue_size", squeue_max_alloc);
+	Log_info ("maximal input queue size is %d bytes", squeue_max_alloc);
 }
 

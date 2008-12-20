@@ -1,6 +1,7 @@
 
 #include "cloudvpn.h"
 
+#include "sq.h"
 #include "log.h"
 #include "comm.h"
 #include "conf.h"
@@ -42,6 +43,8 @@ int run_cloudvpn (int argc, char**argv)
 	timestamp_update(); //get initial timestamp
 
 	route_init();
+
+	squeue_init();
 
 	if (poll_init() ) {
 		Log_fatal ("poll initialization failed");

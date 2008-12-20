@@ -102,6 +102,7 @@ int epfd = -1;
 
 int poll_init()
 {
+	Log_info ("using epoll polling");
 	epfd = epoll_create (128);
 	if (epfd < 0) return 1;
 	return 0;
@@ -253,6 +254,8 @@ int poll_wait_for_event (int timeout)
  * kqueue default for *BSD
  *
  * thanks to jmmv and his blog, I used it.
+ *
+ * This is untested an unusuable until someone wraps the iface for BSD
  */
 
 #include <sys/event.h>
@@ -406,6 +409,7 @@ static void remove_fd (int fd)
 
 int poll_init()
 {
+	Log_info ("using poll() polling");
 	return 0;
 }
 
@@ -494,7 +498,7 @@ static set<int> fds_read, fds_write;
 
 int poll_init()
 {
-	//not much
+	Log_info ("using select() polling");
 	return 0;
 }
 

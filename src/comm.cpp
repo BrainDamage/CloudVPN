@@ -584,28 +584,26 @@ try_more:
 	if (state != cs_active) return; //safety.
 
 	if (cached_header.type == 0)
-		if (recv_q.len() >= p_head_size)
-			parse_packet_header (recv_q,
-			                     cached_header.type,
-			                     cached_header.special,
-			                     cached_header.size);
+		parse_packet_header (recv_q,
+		                     cached_header.type,
+		                     cached_header.special,
+		                     cached_header.size);
+
 	switch (cached_header.type) {
 	case 0:
 		break;
 	case pt_route_set:
 		if (recv_q.len() >= cached_header.size*route_entry_size) {
-			uint8_t buf[cached_header.size*route_entry_size];
-			recv_q.pop (buf, cached_header.size*route_entry_size);
-			handle_route_set (buf, cached_header.size);
+			handle_route_set (recv_q.begin(), cached_header.size);
+			recv_q.read (cached_header.size*route_entry_size);
 			cached_header.type = 0;
 			goto try_more;
 		}
 		break;
 	case pt_route_diff:
 		if (recv_q.len() >= cached_header.size*route_entry_size) {
-			uint8_t buf[cached_header.size*route_entry_size];
-			recv_q.pop (buf, cached_header.size*route_entry_size);
-			handle_route_diff (buf, cached_header.size);
+			handle_route_diff (recv_q.begin(), cached_header.size);
+			recv_q.read (cached_header.size*route_entry_size);
 			cached_header.type = 0;
 			goto try_more;
 		}
@@ -613,9 +611,8 @@ try_more:
 
 	case pt_eth_frame:
 		if (recv_q.len() >= cached_header.size) {
-			uint8_t buf[cached_header.size];
-			recv_q.pop (buf, cached_header.size);
-			handle_packet (buf, cached_header.size);
+			handle_packet (recv_q.begin(), cached_header.size);
+			recv_q.read (cached_header.size);
 			cached_header.type = 0;
 			goto try_more;
 		}
@@ -626,9 +623,9 @@ try_more:
 			uint32_t t;
 			recv_q.pop<uint32_t> (t);
 			t = ntohl (t);
-			uint8_t buf[cached_header.size];
-			recv_q.pop (buf, cached_header.size);
-			handle_broadcast_packet (t, buf, cached_header.size);
+			handle_broadcast_packet (t, recv_q.begin(),
+			                         cached_header.size);
+			recv_q.read (cached_header.size);
 			cached_header.type = 0;
 			goto try_more;
 		}
@@ -652,13 +649,21 @@ try_more:
 
 bool connection::try_read()
 {
-	uint8_t buf[4096];
 	int r;
+	uint8_t*buf;
 	while (1) {
+		buf = recv_q.get_buffer (4096); //alloc a buffer
+
+		if (!buf) {
+			Log_error ("cannot allocate enough buffer space for connection %d");
+			disconnect();
+			return false;
+		}
+
 		r = SSL_read (ssl, buf, 4096);
 		if (r == 0) {
 			Log_info ("connection id %d closed by peer", id);
-			disconnect();
+			reset();
 			return false;
 		} else if (r < 0) {
 			if (handle_ssl_error (r) ) {
@@ -668,7 +673,7 @@ bool connection::try_read()
 			}
 			return true;
 		} else {
-			recv_q.push (buf, r);
+			recv_q.append (r); //confirm read
 			try_parse_input();
 		}
 	}
@@ -962,7 +967,7 @@ int connection::handle_ssl_error (int ret)
 			while (err = ERR_get_error() ) {
 				if (ERR_GET_REASON (err) == SSL_R_BAD_WRITE_RETRY)
 					continue;
-				err = 1;
+				ret = 1;
 				Log_error (
 				    "on conn %d SSL_ERR %d: %s; func %s; reason %s",
 				    id, err,

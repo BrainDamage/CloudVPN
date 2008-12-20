@@ -14,12 +14,10 @@ Each node works exactly like a simple mesh router.
 
 Optional goals:
 
-Don't use a single malloc(), only stack/STL allocation allowed.
+Don't use a single malloc(), only stack/STL allocation allowed. (success!)
 
-Future goals:
-
-Transparently bridge the VPN ethernet to local network.
-(which only means that the tap iface has multiple routes)
+Made by:
+[exa] <exa.exa@gmail.com>
 
 	*** IMPLEMENTATION NOTES ***
 
@@ -158,9 +156,10 @@ route_max_dist 64 -- maximal distance of remote peers. Allows the network
 	--to forget about the disappeared node. Increase as needed, decreasing
 	--for unstable networks improves speed and decreases bandwidth.
 
-max_send_queue_size 8192 --maximum size of output queue, in bytes. MTU.
-max_waiting_proto_packets 64 -- just tunable.
-max_waiting_data_packets 4096 -- increase to stabilize TCP throughput.
+-- increase these values to stabilize high route-info/TCP throughput
+max_waiting_proto_packets 64
+max_input_queue_size 4194304
+max_waiting_data_packets 4096
 
 heartbeat 50000 -- core update heartbeat in usec. Smaller values improve
 	--overall responsiveness, especially neighbor-info spreading speed, at
@@ -199,7 +198,8 @@ cloudvpn - the thing that reads the config and runs all of it
 main.c - neatly separated main()
 poll - waiting for events. epoll is default, select will be provided.
 timestamp - usec timer
-squeue - packet buffer and socket data queue.
+sq - packet buffer and socket data queue
+security - bunch of securing tools (userswitch, chroot, mlock)
 
 Please format the code using $ astyle --style=linux -pdt
 
