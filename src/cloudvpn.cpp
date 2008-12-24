@@ -1,4 +1,15 @@
 
+/* 
+ * CloudVPN
+ *
+ * This program is a free software: You can redistribute and/or modify it
+ * under the terms of GNU GPLv3 license, or any later version of the license.
+ * The program is distributed in a good hope it will be useful, but without
+ * any warranty - see the aforementioned license for more details.
+ * You should have received a copy of the license along with this program;
+ * if not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include "cloudvpn.h"
 
 #include "sq.h"
@@ -23,6 +34,9 @@ int run_cloudvpn (int argc, char**argv)
 	uint64_t last_beat = 0;
 
 	Log_info ("cloudvpn: starting");
+	Log(FATAL+1, "You are using CloudVPN, which is Free software.");
+	Log(FATAL+1, "For more information please see the GNU GPL license,");
+	Log(FATAL+1, "which you should have received along with this program.");
 
 	setup_sighandler();
 

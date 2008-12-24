@@ -19,6 +19,9 @@ Don't use a single malloc(), only stack/STL allocation allowed. (success!)
 Made by:
 [exa] <exa.exa@gmail.com>
 
+License:
+GNU GPLv3 (see LICENSE file)
+
 	*** IMPLEMENTATION NOTES ***
 
 When connecting, nodes can act as server or client, therefore use server or
