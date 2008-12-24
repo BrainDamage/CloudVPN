@@ -92,6 +92,8 @@ void route_init()
 	reported_route.clear();
 	route_dirty = 0;
 
+	init_packet_uid_gen();
+
 	int t;
 
 	if (!config_get_int ("report_ping_changes_above", t) ) t = 5000;
