@@ -1,5 +1,5 @@
 
-/* 
+/*
  * CloudVPN
  *
  * This program is a free software: You can redistribute and/or modify it

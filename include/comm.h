@@ -1,5 +1,5 @@
 
-/* 
+/*
  * CloudVPN
  *
  * This program is a free software: You can redistribute and/or modify it
@@ -69,8 +69,8 @@ public:
 	class remote_route
 	{
 	public:
-		int ping, dist;
-		remote_route (int p, int d) {
+		unsigned int ping, dist;
+		remote_route (unsigned int p, unsigned int d) {
 			ping = p;
 			dist = d;
 		}

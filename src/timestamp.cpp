@@ -1,5 +1,5 @@
 
-/* 
+/*
  * CloudVPN
  *
  * This program is a free software: You can redistribute and/or modify it
@@ -27,4 +27,10 @@ void timestamp_update()
 	gettimeofday (&tv, 0);
 	lasttime = (1000000 * tv.tv_sec) + tv.tv_usec;
 }
+
+static struct ts_initializer_t {
+	ts_initializer_t() {
+		timestamp_update();
+	}
+} ts_initializer;
 

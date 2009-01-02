@@ -1,5 +1,5 @@
 
-/* 
+/*
  * CloudVPN
  *
  * This program is a free software: You can redistribute and/or modify it
@@ -286,15 +286,15 @@ static void report_route()
 	        (r != route.end() ) && (oldr != reported_route.end() );) {
 
 		if (r->first == oldr->first) { // hwaddresses match, check ping and distance
-			if ( (abs ( (int)(r->second.ping) 
-				- (int)(oldr->second.ping) ) //note the (int)
+			if ( (abs ( (int) (r->second.ping)
+			            - (int) (oldr->second.ping) ) //note the (int)
 			        >= route_report_ping_diff) ||
 			        (r->second.dist != oldr->second.dist) )
-				report.push_back (pair<hwaddr, route_info> (r->first, r->second) );
+				report.push_back (*r);
 			++r;
 			++oldr;
 		} else if (r->first < oldr->first) { //not in old route
-			report.push_back (pair<hwaddr, route_info> (r->first, r->second) );
+			report.push_back (*r);
 			++r;
 		} else { //not in new route
 			report.push_back (pair<hwaddr, route_info> (oldr->first, route_info (0, 0, 0) ) );
@@ -302,7 +302,7 @@ static void report_route()
 		}
 	}
 	while (r != route.end() ) { //rest of new routes
-		report.push_back (pair<hwaddr, route_info> (r->first, r->second) );
+		report.push_back (*r);
 		++r;
 	}
 	while (oldr != reported_route.end() ) {
@@ -320,12 +320,12 @@ static void report_route()
 	uint8_t*datap = data;
 	list<pair<hwaddr, route_info> >::iterator rep;
 	for (rep = report.begin();rep != report.end();++rep) {
-		if (rep->second.ping) reported_route[rep->first] = rep->second;
+		if (rep->second.ping) reported_route.insert (*rep);
 		else reported_route.erase (rep->first);
 
 		rep->first.get (datap);
 		* (uint16_t*) (datap + hwaddr_size) =
-		    htonl ( (uint16_t) (rep->second.dist) );
+		    htons ( (uint16_t) (rep->second.dist) );
 		* (uint32_t*) (datap + hwaddr_size + 2) =
 		    htonl ( (uint32_t) (rep->second.ping) );
 		datap += hwaddr_size + 4;

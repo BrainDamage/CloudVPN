@@ -186,6 +186,9 @@ report_ping_changes_above 5000 -- usuable when route information updates fills
 
 ssl_method ssl -- default ssl method to use. 'tls' is the second option
 
+status-file /some/file  -- file where to print nice information exports
+status-interval 30000000 -- periodicity of the above
+
 	*** INTERNALS ***
 
 modules are:

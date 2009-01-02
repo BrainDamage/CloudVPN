@@ -1,5 +1,5 @@
 
-/* 
+/*
  * CloudVPN
  *
  * This program is a free software: You can redistribute and/or modify it
@@ -20,6 +20,7 @@
 #include "iface.h"
 #include "route.h"
 #include "utils.h"
+#include "status.h"
 #include "security.h"
 #include "timestamp.h"
 
@@ -34,9 +35,9 @@ int run_cloudvpn (int argc, char**argv)
 	uint64_t last_beat = 0;
 
 	Log_info ("cloudvpn: starting");
-	Log(FATAL+1, "You are using CloudVPN, which is Free software.");
-	Log(FATAL+1, "For more information please see the GNU GPL license,");
-	Log(FATAL+1, "which you should have received along with this program.");
+	Log (FATAL + 1, "You are using CloudVPN, which is Free software.");
+	Log (FATAL + 1, "For more information please see the GNU GPL license,");
+	Log (FATAL + 1, "which you should have received along with this program.");
 
 	setup_sighandler();
 
@@ -55,6 +56,8 @@ int run_cloudvpn (int argc, char**argv)
 	Log_info ("heartbeat is set to %d usec", heartbeat_usec);
 
 	timestamp_update(); //get initial timestamp
+
+	status_init();
 
 	route_init();
 
@@ -115,8 +118,7 @@ int run_cloudvpn (int argc, char**argv)
 		route_update();
 		comm_periodic_update();
 
-		//this is now subject to deletion.
-		Log_debug ("periodical update at %lu usec unixtime", last_beat);
+		status_try_export();
 	}
 
 	/*

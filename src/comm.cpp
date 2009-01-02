@@ -1,5 +1,5 @@
 
-/* 
+/*
  * CloudVPN
  *
  * This program is a free software: You can redistribute and/or modify it
@@ -848,11 +848,12 @@ void connection::try_close()
 		Log_warn ("SSL connection on %d not terminated properly", fd);
 		reset();
 	} else if (r != 0) reset(); //closed OK
-	else if ( (timestamp() - last_ping) > timeout) {
-		Log_warn ("%d timeouted disconnecting SSL", fd);
-		reset();
-	}
-	//else just wait for another poll
+	else if (handle_ssl_error (r) ) {
+		if ( (timestamp() - last_ping) > timeout) {
+			Log_warn ("%d timeouted disconnecting SSL", fd);
+			reset();
+		} else return; //wait for another poll
+	} else reset();
 }
 
 /*
@@ -908,6 +909,7 @@ void connection::activate()
 void connection::disconnect()
 {
 	poll_set_remove_write (fd);
+	poll_set_remove_read (fd);
 
 	if ( (state == cs_retry_timeout) && (! (address.length() ) ) ) {
 		state = cs_inactive;
@@ -963,31 +965,29 @@ int connection::handle_ssl_error (int ret)
 		poll_set_add_write (fd);
 		break;
 	default:
-		int ret = 0;
-		Log_error ("Get SSL error %d, ret=%d!", e, ret);
-		{
-			int err = 0;
+		Log_error ("on connection %d got SSL error %d, ret=%d!", id, e, ret);
+		int err = 0;
 
-			/*
-			 * If we got a "bad write retry" error, let's just don't
-			 * worry about it - we just fucked up the SSL_read
-			 * and SSL_write order a little. SSL connection
-			 * doesn't get terminated.
-			 */
+		/*
+		 * If we got a "bad write retry" error, let's just don't
+		 * worry about it - we just fucked up the SSL_read
+		 * and SSL_write order a little. SSL connection
+		 * doesn't get terminated.
+		 */
 
-			while (err = ERR_get_error() ) {
-				if (ERR_GET_REASON (err) == SSL_R_BAD_WRITE_RETRY)
-					continue;
-				ret = 1;
-				Log_error (
-				    "on conn %d SSL_ERR %d: %s; func %s; reason %s",
-				    id, err,
-				    ERR_lib_error_string (err),
-				    ERR_func_error_string (err),
-				    ERR_reason_error_string (err) );
+		while (err = ERR_get_error() ) {
+			if (ERR_GET_REASON (err) == SSL_R_BAD_WRITE_RETRY) {
+				Log_info ("cid %d got bad write retry", id);
+				continue;
 			}
+			Log_error (
+			    "on conn %d SSL_ERR %d: %s; func %s; reason %s",
+			    id, err,
+			    ERR_lib_error_string (err),
+			    ERR_func_error_string (err),
+			    ERR_reason_error_string (err) );
+			return err;
 		}
-		return ret ? e : 0;
 	}
 
 	return 0;

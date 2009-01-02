@@ -10,9 +10,11 @@
  * if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "cloudvpn.h"
+#ifndef _CVPN_STATUS_H
+#define _CVPN_STATUS_H
 
-int main (int argc, char**argv)
-{
-	return run_cloudvpn (argc, argv);
-}
+int status_init();
+int status_try_export();
+
+#endif
+
