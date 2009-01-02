@@ -60,7 +60,7 @@ public:
 
 	uint64_t last_retry; //last connection retry
 
-	int ping; //cached ping
+	unsigned int ping; //cached ping
 	uint8_t sent_ping_id;
 	uint64_t sent_ping_time;
 	//ping is on the way, if sent_ping_time==last_ping

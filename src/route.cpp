@@ -286,7 +286,8 @@ static void report_route()
 	        (r != route.end() ) && (oldr != reported_route.end() );) {
 
 		if (r->first == oldr->first) { // hwaddresses match, check ping and distance
-			if ( (abs ( (r->second.ping) - (oldr->second.ping) )
+			if ( (abs ( (int)(r->second.ping) 
+				- (int)(oldr->second.ping) ) //note the (int)
 			        >= route_report_ping_diff) ||
 			        (r->second.dist != oldr->second.dist) )
 				report.push_back (pair<hwaddr, route_info> (r->first, r->second) );

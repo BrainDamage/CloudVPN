@@ -35,8 +35,8 @@ void route_report_to_connection (connection&c);
 class route_info
 {
 public:
-	int ping;
-	int dist;
+	unsigned int ping;
+	unsigned int dist;
 	int id;
 
 	inline route_info (int p, int d, int i) {
