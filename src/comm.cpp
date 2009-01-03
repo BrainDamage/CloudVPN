@@ -1261,8 +1261,8 @@ static int comm_connections_close()
  */
 
 int connection::mtu = 8192;
-int connection::max_waiting_data_packets = 512;
-int connection::max_waiting_proto_packets = 1024;
+int connection::max_waiting_data_packets = 1024;
+int connection::max_waiting_proto_packets = 64;
 
 int comm_init()
 {
@@ -1283,7 +1283,7 @@ int comm_init()
 	          connection::mtu);
 
 	if (!config_get_int ("connection::max_waiting_data_packets", t) )
-		connection::max_waiting_data_packets = 512;
+		connection::max_waiting_data_packets = 1024;
 	else connection::max_waiting_data_packets = t;
 	Log_info ("max %d pending data packets",
 	          connection::max_waiting_data_packets);
