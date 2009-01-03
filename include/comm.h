@@ -192,6 +192,14 @@ public:
 	static int mtu;
 	static int max_waiting_data_packets;
 	static int max_waiting_proto_packets;
+
+	inline bool can_write_data() {
+		return data_q.size() < max_waiting_data_packets;
+	}
+
+	inline bool can_write_proto() {
+		return proto_q.size() < max_waiting_proto_packets;
+	}
 };
 
 void comm_listener_poll (int fd);

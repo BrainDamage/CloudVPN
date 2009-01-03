@@ -538,6 +538,10 @@ void connection::handle_pong (uint8_t ID)
 
 void connection::write_packet (void*buf, int len)
 {
+	if (!can_write_data() ) {
+		try_write();
+		return;
+	}
 	if (len > mtu) return;
 	pbuffer& b = new_data();
 	add_packet_header (b, pt_eth_frame, 0, len);
@@ -547,6 +551,10 @@ void connection::write_packet (void*buf, int len)
 
 void connection::write_broadcast_packet (uint32_t ID, void*buf, int len)
 {
+	if (!can_write_data() ) {
+		try_write();
+		return;
+	}
 	if (len > mtu) return;
 	pbuffer& b = new_data();
 	add_packet_header (b, pt_broadcast, 0, len);
@@ -557,6 +565,10 @@ void connection::write_broadcast_packet (uint32_t ID, void*buf, int len)
 
 void connection::write_route_set (uint8_t*data, int n)
 {
+	if (!can_write_proto() ) {
+		try_write();
+		return;
+	}
 	pbuffer&b = new_proto();
 	add_packet_header (b, pt_route_set, 0, n);
 	b.push (data, n* route_entry_size );
@@ -565,6 +577,10 @@ void connection::write_route_set (uint8_t*data, int n)
 
 void connection::write_route_diff (uint8_t*data, int n)
 {
+	if (!can_write_proto() ) {
+		try_write();
+		return;
+	}
 	pbuffer&b = new_proto();
 	add_packet_header (b, pt_route_diff, 0, n);
 	b.push (data, n* route_entry_size );
@@ -573,6 +589,10 @@ void connection::write_route_diff (uint8_t*data, int n)
 
 void connection::write_ping (uint8_t ID)
 {
+	if (!can_write_proto() ) {
+		try_write();
+		return;
+	}
 	pbuffer&b = new_proto();
 	add_packet_header (b, pt_echo_request, ID, 0);
 	try_write();
@@ -580,6 +600,10 @@ void connection::write_ping (uint8_t ID)
 
 void connection::write_pong (uint8_t ID)
 {
+	if (!can_write_proto() ) {
+		try_write();
+		return;
+	}
 	pbuffer&b = new_proto();
 	add_packet_header (b, pt_echo_reply, ID, 0);
 	try_write();
@@ -1238,7 +1262,7 @@ static int comm_connections_close()
 
 int connection::mtu = 8192;
 int connection::max_waiting_data_packets = 512;
-int connection::max_waiting_proto_packets = 64;
+int connection::max_waiting_proto_packets = 1024;
 
 int comm_init()
 {

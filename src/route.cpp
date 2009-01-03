@@ -14,6 +14,7 @@
 #include "comm.h"
 #include "timestamp.h"
 #include "log.h"
+#include "utils.h"
 
 /*
  * utils
@@ -256,7 +257,7 @@ void route_report_to_connection (connection&c)
 	 */
 
 	int n = reported_route.size(), i;
-	uint8_t data[n* (hwaddr_size+4) ];
+	uint8_t data[n* (hwaddr_size+6) ];
 	uint8_t *datap = data;
 	map<hwaddr, route_info>::iterator r;
 	for (i = 0, r = reported_route.begin();
@@ -266,7 +267,7 @@ void route_report_to_connection (connection&c)
 		    htons ( (uint16_t) (r->second.dist) );
 		* (uint32_t*) (datap + hwaddr_size + 2) =
 		    htonl ( (uint32_t) (r->second.ping) );
-		datap += hwaddr_size + 4;
+		datap += hwaddr_size + 6;
 	}
 	c.write_route_set (data, n);
 }
@@ -286,10 +287,13 @@ static void report_route()
 	        (r != route.end() ) && (oldr != reported_route.end() );) {
 
 		if (r->first == oldr->first) { // hwaddresses match, check ping and distance
-			if ( (abs ( (int) (r->second.ping)
-			            - (int) (oldr->second.ping) ) //note the (int)
-			        >= route_report_ping_diff) ||
-			        (r->second.dist != oldr->second.dist) )
+			if ( (route_report_ping_diff <
+
+			        ( (r->second.ping > oldr->second.ping) ?
+			          r->second.ping - oldr->second.ping :
+			          oldr->second.ping - r->second.ping) )
+
+			        || (r->second.dist != oldr->second.dist) )
 				report.push_back (*r);
 			++r;
 			++oldr;
@@ -316,11 +320,11 @@ static void report_route()
 
 	if (!report.size() ) return;
 
-	uint8_t data[report.size() * (hwaddr_size+4) ];
+	uint8_t data[report.size() * (hwaddr_size+6) ];
 	uint8_t*datap = data;
 	list<pair<hwaddr, route_info> >::iterator rep;
 	for (rep = report.begin();rep != report.end();++rep) {
-		if (rep->second.ping) reported_route.insert (*rep);
+		if (rep->second.ping) reported_route[rep->first] = rep->second;
 		else reported_route.erase (rep->first);
 
 		rep->first.get (datap);
@@ -328,7 +332,7 @@ static void report_route()
 		    htons ( (uint16_t) (rep->second.dist) );
 		* (uint32_t*) (datap + hwaddr_size + 2) =
 		    htonl ( (uint32_t) (rep->second.ping) );
-		datap += hwaddr_size + 4;
+		datap += hwaddr_size + 6;
 	}
 
 	comm_broadcast_route_update (data, report.size() );

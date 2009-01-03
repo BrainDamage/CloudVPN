@@ -120,3 +120,13 @@ bool sock_nonblock (int fd)
 {
 	return fcntl (fd, F_SETFL, O_NONBLOCK) >= 0;
 }
+
+string format_hwaddr (const hwaddr& a)
+{
+	char buf[18];
+	sprintf (buf, "%02x:%02x:%02x:%02x:%02x:%02x",
+	         a.addr[0], a.addr[1], a.addr[2],
+	         a.addr[3], a.addr[4], a.addr[5]);
+	return string (buf);
+}
+

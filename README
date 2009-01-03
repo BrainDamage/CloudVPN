@@ -162,7 +162,9 @@ route_max_dist 64 -- maximal distance of remote peers. Allows the network
 -- increase these values to stabilize high route-info/TCP throughput
 max_waiting_proto_packets 64
 max_input_queue_size 4194304
-max_waiting_data_packets 4096
+max_waiting_data_packets 1024
+
+conn-mtu 8192  -- drop data packets larger than this.
 
 heartbeat 50000 -- core update heartbeat in usec. Smaller values improve
 	--overall responsiveness, especially neighbor-info spreading speed, at

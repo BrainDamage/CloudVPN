@@ -71,5 +71,9 @@ struct sockaddr_in6 x##_6; };
 
 bool sock_nonblock (int fd);
 
+#include <string>
+using std::string;
+string format_hwaddr (const hwaddr&);
+
 #endif
 
