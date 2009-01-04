@@ -90,6 +90,12 @@ static string format_mac_addr (uint8_t*addr)
 int tun = -1;
 char iface_name[IFNAMSIZ] = "";
 
+/*
+ * initialization
+ */
+
+#if defined (__linux__)
+
 int iface_create()
 {
 	if (!config_is_true ("iface") ) {
@@ -156,11 +162,9 @@ int iface_create()
 			if (iface_set_hwaddr (hwaddr) )
 				Log_error ("iface: setting hwaddr failed, using default");
 		} else Log_warn ("iface: `%s' is not a valid mac address, using default");
-	}
+	} else iface_retrieve_hwaddr (0); //only cache the mac
 
 	Log_info ("iface: initialized OK");
-
-	iface_retrieve_hwaddr (0); //cache the mac
 
 	poll_set_add_read (tun);
 
@@ -168,6 +172,74 @@ int iface_create()
 
 	return 0;
 }
+
+#elif defined (BSD) || defined (TARGET_DARWIN)
+
+int iface_create()
+{
+	if (!config_is_true ("iface") ) {
+		Log_info ("not creating local interface");
+		return 0; //no need
+	}
+
+	string device = "/dev/tap0";
+	config_get_string ("iface_device", device);
+	Log_info ("using `%s' as interface device", device.c_str() );
+
+	if ( (tun = open (device.c_str(), O_RDWR | O_NONBLOCK) ) < 0) {
+		Log_error ("iface: cannot open tap device with %d: %s",
+		           errno, strerror (errno) );
+		return -1;
+	}
+
+	//from here it's just similar to linux.
+
+	if (config_is_set ("mac") ) { //set mac address
+		uint8_t hwaddr[hwaddr_size];
+		string mac;
+		config_get ("mac", mac);
+
+		if (read_mac_addr (mac.c_str(), hwaddr) ) {
+			Log_info ("iface: setting hwaddr %s",
+			          format_mac_addr (hwaddr).c_str() );
+
+			if (iface_set_hwaddr (hwaddr) )
+				Log_error ("iface: setting hwaddr failed, using default");
+		} else Log_warn ("iface: `%s' is not a valid mac address, using default");
+	} else iface_retrieve_hwaddr (0); //only cache the mac
+
+	Log_info ("iface: initialized OK");
+
+	poll_set_add_read (tun);
+
+	route_set_dirty();
+
+	return 0;
+}
+
+#else
+
+#warning "No tun/tap backend available for this platform."
+#warning "Compiling without support for virtual network interface!"
+
+int iface_create()
+{
+	return 0;
+}
+
+#endif
+
+/*
+ * hwaddr set/get
+ */
+
+//BSD compatibility
+#ifndef SIOCSIFHWADDR
+# define SIOCSIFHWADDR SIOCSIFLLADDR
+#endif
+#ifndef SIOCGIFHWADDR
+# define SIOCGIFHWADDR SIOCGIFLLADDR
+#endif
 
 int iface_set_hwaddr (uint8_t*hwaddr)
 {
@@ -246,6 +318,10 @@ int iface_retrieve_hwaddr (uint8_t*hwaddr)
 	return 0;
 }
 
+/*
+ * releasing the interface
+ */
+
 int iface_destroy()
 {
 	if (tun < 0) return 0; //already closed
@@ -262,6 +338,10 @@ int iface_destroy()
 
 	return 0;
 }
+
+/*
+ * I/O
+ */
 
 int iface_write (void*buf, size_t len)
 {
@@ -326,7 +406,9 @@ void iface_poll_read()
 void iface_poll_write()
 {
 	/*
-	 * not used yet
+	 * not used,
+	 * if the OS tap queue somehow overflows, discarding packet is
+	 * considered a good solution.
 	 */
 }
 
