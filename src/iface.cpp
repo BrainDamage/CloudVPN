@@ -173,7 +173,16 @@ int iface_create()
 	return 0;
 }
 
-#elif defined (BSD) || defined (TARGET_DARWIN)
+#else
+
+//probable incompatibility notice
+#if ( ! defined (BSD) ) && ( ! defined (TARGET_DARWIN) )
+# warning "Compiling with generic TAP driver usage."
+# warning "This probably won't even work."
+# warning "If you will be able to communicate via the TAP device using"
+# warning "CloudVPN, a miracle has happened and you should report it to"
+# warning "the developers, along with description of your configuration."
+#endif
 
 int iface_create()
 {
@@ -214,16 +223,6 @@ int iface_create()
 
 	route_set_dirty();
 
-	return 0;
-}
-
-#else
-
-#warning "No tun/tap backend available for this platform."
-#warning "Compiling without support for virtual network interface!"
-
-int iface_create()
-{
 	return 0;
 }
 
