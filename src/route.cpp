@@ -233,6 +233,25 @@ void route_broadcast_packet (uint32_t id, void*buf, size_t len, int conn)
 		iface_write (buf, len); //it was also for us
 	}
 
+	map<hwaddr, route_info>::iterator r;
+	if ( (!is_addr_broadcast (a) ) &&
+	        (route.end() != (r = route.find (a) ) ) ) {
+
+		/*
+		 * if the packet is broadcast only for reason of not knowing
+		 * the correct destination, let's send it the right way.
+		 * We need to keep it in "broadcast" state, so it doesn't get
+		 * duplicated by multiple hosts.
+		 */
+
+		map<int, connection>::iterator
+		i = comm_connections().find (r->second.id);
+		if (i != comm_connections().end() ) {
+			i->second.write_broadcast_packet (id, buf, len);
+			return;
+		} //if the connection didn't exist, forget about this.
+	}
+
 	//now broadcast the thing.
 	map<int, connection>::iterator
 	i = comm_connections().begin(),
