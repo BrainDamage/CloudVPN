@@ -264,7 +264,7 @@ int poll_wait_for_event (int timeout)
 	return 0;
 }
 
-#elif BSD
+#elif defined(__FreeBSD__)
 
 /*
  * kqueue default for *BSD
@@ -284,10 +284,10 @@ static int kq = -1;
 #include <map>
 using namespace std;
 
-map<struct kevent, int> ev;
+map<int, int> ev;
 
 #define ev_read 1
-#define ev_read 2
+#define ev_write 2
 
 int poll_init()
 {
@@ -308,7 +308,7 @@ static struct timespec timespec_zero = {0, 0};
 
 #define kevent_set(kq,fd,flags,filter) \
 ({struct kevent k; EV_SET(&k,(fd),(filter),(flags),0,0,&timespec_zero);\
-kevent((kq),&k,1,0,0,0);)}
+kevent((kq),&k,1,0,0,0);})
 
 #define ke_filter(i) {int ke_filter_t=(i);\
 	(((ke_filter_t&ev_read)?EVFILT_READ:0)\
@@ -330,7 +330,7 @@ int poll_set_remove_read (int fd)
 {
 	int t = ev[fd] &= ~ev_read;
 	if (!t) ev.erase (fd);
-	return kevent_set (kq, fd, EV_DELETE, EVFILT_READ) >= 0;
+	return (kevent_set (kq, fd, EV_DELETE, EVFILT_READ) >= 0);
 }
 
 int poll_set_remove_write (int fd)
@@ -349,7 +349,7 @@ int poll_set_clear()
 			kevent_set (kq, ev.begin()->first, EV_DELETE, EVFILT_READ);
 		if (t&ev_write)
 			kevent_set (kq, ev.begin()->first, EV_DELETE, EVFILT_WRITE);
-		ev.erase (ev.begin()->first);
+		ev.erase (ev.begin() );
 	}
 }
 

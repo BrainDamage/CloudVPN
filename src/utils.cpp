@@ -79,6 +79,7 @@ void hwaddr::get (uint8_t*c) const
  * ip/name -> sockaddr resolution
  */
 
+#include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netdb.h>
@@ -97,9 +98,12 @@ bool sockaddr_from_str (const char *str,
 
 	struct addrinfo hints, *res;
 	memset (&hints, 0, sizeof (struct addrinfo) );
+	hints.ai_socktype = SOCK_STREAM;
 
-	if (getaddrinfo (ip_buf, port_buf, &hints, &res) ) {
-		Log_warn ("getaddrinfo failed for entry `%s %s'", ip_buf, port_buf);
+	int ret = getaddrinfo (ip_buf, port_buf, &hints, &res);
+	if (ret) {
+		Log_error ("getaddrinfo failed for entry `%s %s'", ip_buf, port_buf);
+		Log_error ("reason was: %d: %s", ret, gai_strerror (ret) );
 		return false;
 	}
 

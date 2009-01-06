@@ -268,7 +268,7 @@ static int tcp_connect_socket (const string&addr)
 		return -3;
 	}
 
-	if (!connect (s, &sa, sa_len) ) {
+	if (connect (s, &sa, sa_len) < 0 ) {
 		int e = errno;
 		if (e != EINPROGRESS) {
 			Log_error ("connect(%d) to `%s' failed with %d",

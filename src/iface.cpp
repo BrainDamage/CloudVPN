@@ -10,6 +10,17 @@
  * if not, see <http://www.gnu.org/licenses/>.
  */
 
+//probable incompatibility notice
+#if ( ! defined (__FreeBSD__) ) &&\
+	( ! defined (TARGET_DARWIN) ) &&\
+	( ! defined (__linux__) )
+# warning "Compiling with generic TAP driver usage."
+# warning "This probably won't even work."
+# warning "If you will be able to communicate via the TAP device using"
+# warning "CloudVPN, a miracle has happened and you should report it to"
+# warning "the developers, along with description of your configuration."
+#endif
+
 #include "iface.h"
 
 #include "route.h"
@@ -21,14 +32,24 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
-#include <linux/if.h>
-#include <linux/if_tun.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
+
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/socket.h>
+
+#ifdef __linux__
+# include <linux/if.h>
+# include <linux/if_tun.h>
+#else
+# include <net/if.h>
+# include <net/if_arp.h>
+# include <net/if_tun.h>
+#endif
+
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 #define CLEAR(x) memset(&(x),0,sizeof(x))
@@ -175,15 +196,6 @@ int iface_create()
 
 #else
 
-//probable incompatibility notice
-#if ( ! defined (BSD) ) && ( ! defined (TARGET_DARWIN) )
-# warning "Compiling with generic TAP driver usage."
-# warning "This probably won't even work."
-# warning "If you will be able to communicate via the TAP device using"
-# warning "CloudVPN, a miracle has happened and you should report it to"
-# warning "the developers, along with description of your configuration."
-#endif
-
 int iface_create()
 {
 	if (!config_is_true ("iface") ) {
@@ -191,15 +203,18 @@ int iface_create()
 		return 0; //no need
 	}
 
-	string device = "/dev/tap0";
-	config_get_string ("iface_device", device);
-	Log_info ("using `%s' as interface device", device.c_str() );
+	string device = "tap0";
+	config_get ("iface_device", device);
+	Log_info ("using `%s' as interface", device.c_str() );
 
-	if ( (tun = open (device.c_str(), O_RDWR | O_NONBLOCK) ) < 0) {
+	tun = open ( ("/dev/" + device).c_str(), O_RDWR | O_NONBLOCK);
+	if (tun < 0) {
 		Log_error ("iface: cannot open tap device with %d: %s",
 		           errno, strerror (errno) );
 		return -1;
 	}
+
+	strncpy (iface_name, device.c_str(), IFNAMSIZ);
 
 	//from here it's just similar to linux.
 
@@ -232,17 +247,10 @@ int iface_create()
  * hwaddr set/get
  */
 
-//BSD compatibility
-#ifndef SIOCSIFHWADDR
-# define SIOCSIFHWADDR SIOCSIFLLADDR
-#endif
-#ifndef SIOCGIFHWADDR
-# define SIOCGIFHWADDR SIOCGIFLLADDR
-#endif
+#if defined (__linux__)
 
 int iface_set_hwaddr (uint8_t*hwaddr)
 {
-
 	struct ifreq ifr;
 
 	int ctl = socket (AF_INET, SOCK_DGRAM, 0);
@@ -316,6 +324,93 @@ int iface_retrieve_hwaddr (uint8_t*hwaddr)
 
 	return 0;
 }
+
+#else //FreeBSD or OSX
+
+#include <netinet/if_ether.h>
+
+int iface_set_hwaddr (uint8_t*addr)
+{
+	// this function might work on linux too. Try to merge.
+
+	union {
+		struct ifreq ifr;
+		struct ether_addr e;
+	};
+
+	int ctl = socket (AF_INET, SOCK_DGRAM, 0);
+
+	if (ctl < 0) {
+		Log_error ("iface_set_hwaddr: creating socket failed with %d (%s)", errno, strerror (errno) );
+		return 1;
+	}
+
+	CLEAR (ifr);
+
+	strncpy (ifr.ifr_name, iface_name, IFNAMSIZ);
+
+	ifr.ifr_addr.sa_len = ETHER_ADDR_LEN;
+	ifr.ifr_addr.sa_family = AF_LINK;
+
+	for (int i = 0;i < hwaddr_size;++i)
+		e.octet[i] = addr[i];
+
+	int ret = ioctl (ctl, SIOCSIFLLADDR, &ifr);
+
+	close (ctl);
+
+	if (ret < 0) {
+		Log_error ("iface_set_hwaddr: ioctl failed with %d (%s)", errno, strerror (errno) );
+		return 2;
+	}
+
+	iface_retrieve_hwaddr (0);
+
+	return 0;
+}
+
+#include <ifaddrs.h>
+#include <net/if_dl.h>
+
+int iface_retrieve_hwaddr (uint8_t*hwaddr)
+{
+	struct ifaddrs *ifap, *p;
+
+	if (getifaddrs (&ifap) ) {
+		Log_error ("getifaddrs() failed. expect errors");
+		return 1;
+	}
+
+	for (p = ifap;p;p = p->ifa_next)
+		if ( (p->ifa_addr->sa_family == AF_LINK) &&
+		        (!strncmp (p->ifa_name, iface_name, IFNAMSIZ) ) ) {
+
+			struct sockaddr_dl *sdp =
+						    (struct sockaddr_dl*) (p->ifa_addr);
+
+			memcpy (cached_hwaddr, sdp->sdl_data + sdp->sdl_nlen, 6);
+
+			Log_info ("iface has mac address %02x:%02x:%02x:%02x:%02x:%02x",
+			          cached_hwaddr[0],
+			          cached_hwaddr[1],
+			          cached_hwaddr[2],
+			          cached_hwaddr[3],
+			          cached_hwaddr[4],
+			          cached_hwaddr[5]);
+
+			if (hwaddr) memcpy (hwaddr,
+				                    sdp->sdl_data + sdp->sdl_nlen, 6);
+
+			freeifaddrs (ifap);
+			return 0;
+		}
+
+	freeifaddrs (ifap);
+	Log_error ("no link address found for interface. expect errors");
+	return 1;
+}
+
+#endif
 
 /*
  * releasing the interface
