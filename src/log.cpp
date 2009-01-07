@@ -14,6 +14,8 @@
 #include <stdarg.h>
 #include <time.h>
 
+#define output_file stdout
+
 /*
  * Log_info is verbose enough by default. Debug not shown.
  */
@@ -52,19 +54,19 @@ void Log (int lvl, const char*fmt, ...)
 
 	strftime (date_buf, 32, "%c ", localtime (&t) );
 
-	fprintf (stderr, date_buf);
+	fprintf (output_file, date_buf);
 
-	fprintf (stderr, loglevel_mark (lvl) );
+	fprintf (output_file, loglevel_mark (lvl) );
 
 	va_list ap;
 
 	va_start (ap, fmt);
 
-	vfprintf (stderr, fmt, ap);
+	vfprintf (output_file, fmt, ap);
 
 	va_end (ap);
 
-	fprintf (stderr, "\n");
+	fprintf (output_file, "\n");
 }
 
 void Log_full (int lvl, const char*file, int line,
@@ -78,19 +80,19 @@ void Log_full (int lvl, const char*file, int line,
 
 	strftime (date_buf, 32, "%c ", localtime (&t) );
 
-	fprintf (stderr, date_buf);
+	fprintf (output_file, date_buf);
 
-	fprintf (stderr, loglevel_mark (lvl) );
+	fprintf (output_file, loglevel_mark (lvl) );
 
-	fprintf (stderr, "in `%s' line %d:\t", file, line);
+	fprintf (output_file, "in `%s' line %d:\t", file, line);
 
 	va_list ap;
 
 	va_start (ap, fmt);
 
-	vfprintf (stderr, fmt, ap);
+	vfprintf (output_file, fmt, ap);
 
 	va_end (ap);
 
-	fprintf (stderr, "\n");
+	fprintf (output_file, "\n");
 }
