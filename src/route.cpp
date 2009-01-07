@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <arpa/inet.h> //for net/host endianiness
 
-void init_packet_uid_gen()
+void init_random()
 {
 	timestamp_update();
 	srand (timestamp() ^ (timestamp() / 1000000) );
@@ -54,10 +54,6 @@ static map<uint32_t, int> queue_items;
 static queue<uint32_t> queue_age;
 static size_t queue_max_size = 1024;
 
-/*
- * when a ping differs 5ms from the reported one, report it
- */
-
 static void queue_init()
 {
 	int t;
@@ -87,6 +83,111 @@ static bool queue_already_broadcasted (uint32_t id)
 }
 
 /*
+ * scattering multipath routing
+ *
+ * This is viable for many common situations.
+ * a] it increases bandwidth between two nodes connected by separate paths
+ * b] it can improve network security in the way that attacker has to compromise
+ *    more connections to get complete data.
+ *
+ * However, this can cause harm.
+ * a] gaming - usually we want to have the best ping, not the average one.
+ *    Also, as multipath can mess up packet order, some badly written games
+ *    may show weird behavior.
+ * b] high-performance configurations, because additional processing power
+ *    is required. (in short, enable this on 'clients', but not on 'servers'.)
+ * c] memory required for storing the whole thing can range to
+ *    O( max_number_of_routes * max_connections^2 )
+ *    which, although unlikely, can fill lots of space pretty fast.
+ *
+ * Situations where this is definitely _not_ viable:
+ * a] server in the center of the star
+ * b] long line
+ * ...or one could say 'any situation that has no real multipath'
+ *
+ * Algorithm is:
+ *
+ * 1 get all connections that can route to given destination, sort them by ping
+ * 2 take first N connections, so that their lowest ping is larger than ratio
+ *   of highest ping
+ * 3 if random number of N+1 == 0, route via random of those, else take next
+ *   N connections and continue like in 2.
+ *
+ * (notice that we don't care about network distances)
+ */
+
+static map<hwaddr, map<int, int> > multiroute;
+
+static int multi_ratio = 2;
+static bool do_multiroute = false;
+
+static int route_init_multi()
+{
+	if (config_is_true ("multipath") ) {
+		do_multiroute = true;
+		Log_info ("multipath scattering enabled");
+
+		if (!config_get_int ("multipath_ratio", multi_ratio) )
+			multi_ratio = 2;
+		if (multi_ratio < 2) multi_ratio = 2;
+		Log_info ("multipath scatter ratio is %d", multi_ratio);
+	}
+}
+
+static void route_update_multi()
+{
+	multiroute.clear();
+
+	map<int, connection>::iterator i, ie;
+	i = comm_connections().begin();
+	ie = comm_connections().end();
+
+	map<hwaddr, connection::remote_route>::iterator j, je;
+
+	if (iface_get_sockfd() >= 0)
+		multiroute[iface_cached_hwaddr() ][0] = -1;
+
+	for (;i != ie;++i) {
+		j = i->second.remote_routes.begin();
+		je = i->second.remote_routes.end();
+		for (;j != je;++j) multiroute[j->first]
+			[i->second.ping+j->second.ping+2] = i->first;
+	}
+
+}
+
+static int route_scatter (const hwaddr&a)
+{
+	map<hwaddr, map<int, int> >::iterator i;
+	map<int, int>::iterator j, je, ts;
+	int maxping, n, r;
+
+	i = multiroute.find (a);
+	if (i == multiroute.end() ) return -2; //not found, drop it.
+	j = i->second.begin();
+
+	if (j->second == -1) return -1; //it was a local route. 100% best
+
+	je = i->second.end();
+	while (j != je) {
+		ts = j;
+		n = 0;
+		maxping = multi_ratio * j->first;
+
+		for (; (j != je) && (j->first < maxping);++j, ++n);
+
+		if (j == je) r = rand() % n;
+		else r = rand() % (n + 1);  //suppose the rand is enough.
+
+		if (r != n) { //this group of connections won!
+			for (;r > 0;--r, ++ts);
+			return ts->second;
+		}
+	}
+	return -3; //no routes. wtf?! We should never get here.
+}
+
+/*
  * route
  */
 
@@ -104,7 +205,9 @@ void route_init()
 	reported_route.clear();
 	route_dirty = 0;
 
-	init_packet_uid_gen();
+	init_random();
+
+	route_init_multi();
 
 	int t;
 
@@ -133,8 +236,6 @@ void route_update()
 	if (!route_dirty) return;
 	route_dirty = 0;
 
-	Log_debug ("route update");
-
 	map<int, connection>& cons = comm_connections();
 	map<int, connection>::iterator i;
 	map<hwaddr, connection::remote_route>::iterator j;
@@ -156,7 +257,7 @@ void route_update()
 	 * so that local route doesn't get overpwned by some other.
 	 */
 
-	if (iface_get_sockfd() > 0)
+	if (iface_get_sockfd() >= 0)
 		route[hwaddr (iface_cached_hwaddr() ) ] = route_info (1, 0, -1);
 
 	for (i = cons.begin();i != cons.end();++i) {
@@ -179,6 +280,8 @@ void route_update()
 		}
 	}
 
+	route_update_multi();
+
 	report_route();
 }
 
@@ -195,21 +298,30 @@ void route_packet (void*buf, size_t len, int conn)
 		return;
 	}
 
-	map<hwaddr, route_info>::iterator r = route.find (a);
+	int res;
 
-	if (r == route.end() ) {
-		//if the destination is unknown, broadcast it
-		route_broadcast_packet (new_packet_uid(), buf, len, conn);
-		return;
+	if (do_multiroute) {
+		res = route_scatter (a);
+		if (res < -1) return;
+	} else {
+		map<hwaddr, route_info>::iterator r = route.find (a);
+
+		if (r == route.end() ) {
+			//if the destination is unknown, broadcast it
+			route_broadcast_packet (new_packet_uid(),
+			                        buf, len, conn);
+			return;
+		}
+		res = r->second.id;
 	}
 
-	if (r->second.id == -1) iface_write (buf, len);
+	if (res == -1) iface_write (buf, len);
 	else {
 		map<int, connection>::iterator i;
-		i = comm_connections().find (r->second.id);
+		i = comm_connections().find (res);
 		if (i != comm_connections().end() )
 			i->second.write_packet (buf, len);
-		else Log_warn ("dangling route %d", r->second.id);
+		else Log_warn ("dangling route %d", res);
 	}
 }
 

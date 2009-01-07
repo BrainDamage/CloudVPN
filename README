@@ -162,6 +162,13 @@ group cvpn
 chroot /some/dir --chroot things, to avoid hidden exploits
 mlockall yes  --avoid swapping out sensitive data
 
+ -- multipath scattering
+ -- This can be especially vital for some situations, and totally unusuable
+ -- for other. Be sure to read the docs in src/route.cpp line ~100
+
+multipath yes  --enable
+multi_ratio 2  --usually _should_ stay at default value
+
  -- tuning
 
 br_id_cache_size 1024 --broadcast ID cache size, in ID entries.
