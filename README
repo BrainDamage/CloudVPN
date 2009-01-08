@@ -81,6 +81,29 @@ All clients must note, that
 	   not gonna have much trouble taking over (or maybe bruteforcing
 	   similarly) the server key.
 
+	*** OPTIONAL ROUTING ***
+	 (multipath scattering)
+
+A node can select to use optional routing scheme, that allows more effective
+multipath packet sending.
+
+Not that the classical routing couldn't handle that, the big difference here is
+that new routing can use all "available" connection paths at any given time,
+therefore balance throughput. Old routing uses only the one with best ping,
+and does it for specific periods (which are usually around 5 seconds, as pings
+get measured this often by default).
+
+Please see documentation in the source (file src/route.cpp line ~100) before
+you start using this. Such routing is not suitable for whole network.
+
+Typical use of this routing is shown on the image here:
+
+      -----S-----
+     /     |     \      O's are the clients who want to communicate,
+    O------S------O     S's are some servers,
+     \     |     /      multipath is enabled only on O's
+      -----S-----
+
 	*** PACKET FORMAT ***
 
 Connection and authentication is done through SSL
