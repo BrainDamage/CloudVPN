@@ -13,6 +13,10 @@
 #ifndef _CVPN_UTILS_H
 #define _CVPN_UTILS_H
 
+#if defined(__FreeBSD__)||defined(__OpenBSD__)||defined(__NetBSD__)
+# define __BSD__
+#endif
+
 #include "iface.h"
 
 int setup_sighandler();

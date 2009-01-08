@@ -11,8 +11,9 @@
  */
 
 //probable incompatibility notice
-#if ( ! defined (__FreeBSD__) ) &&\
-	( ! defined (TARGET_DARWIN) ) &&\
+#include "utils.h"
+#if ( ! defined (__BSD__) ) &&\
+	( ! defined (__darwin__) ) &&\
 	( ! defined (__linux__) )
 # warning "Compiling with generic TAP driver usage."
 # warning "This probably won't even work."
@@ -24,7 +25,6 @@
 #include "iface.h"
 
 #include "route.h"
-#include "utils.h"
 #include "conf.h"
 #include "poll.h"
 #include "log.h"

@@ -12,7 +12,9 @@
 
 #include "poll.h"
 
+
 #include "log.h"
+#include "utils.h"
 #include "timestamp.h"
 
 /*
@@ -36,7 +38,7 @@
 #define HAVE_POLL 1
 #endif
 
-#ifdef TARGET_DARWIN //this is suggested on MACs
+#ifdef __darwin__ //this is suggested on MACs
 #undef HAVE_POLL
 #define HAVE_POLL 0
 #endif
