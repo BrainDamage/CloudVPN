@@ -86,6 +86,7 @@ public:
 		last_ping = 0;
 		cached_header.type = 0;
 		sending_from_data_q = false;
+		route_overflow = false;
 	}
 
 	connection (); //this is supposed to fail, always use c(ID)
@@ -100,6 +101,7 @@ public:
 	void handle_route_diff (uint8_t*data, int n);
 	void handle_ping (uint8_t id);
 	void handle_pong (uint8_t id);
+	void handle_route_request ();
 
 	void write_packet (void*buf, int len);
 	void write_broadcast_packet (uint32_t id, void*buf, int len);
@@ -107,6 +109,7 @@ public:
 	void write_route_diff (uint8_t*data, int n);
 	void write_ping (uint8_t id);
 	void write_pong (uint8_t id);
+	void write_route_request ();
 
 	/*
 	 * those functions are called by polling interface to do specific stuff
@@ -189,9 +192,11 @@ public:
 	/*
 	 * queue management
 	 */
+
 	static int mtu;
 	static int max_waiting_data_packets;
 	static int max_waiting_proto_packets;
+	static int max_remote_routes;
 
 	inline bool can_write_data() {
 		return data_q.size() < max_waiting_data_packets;
@@ -200,6 +205,13 @@ public:
 	inline bool can_write_proto() {
 		return proto_q.size() < max_waiting_proto_packets;
 	}
+
+	/*
+	 * route information size management
+	 */
+
+	bool route_overflow;
+	void handle_route_overflow();
 };
 
 void comm_listener_poll (int fd);

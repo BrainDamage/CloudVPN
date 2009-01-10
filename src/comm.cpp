@@ -441,6 +441,7 @@ void connection::deindex()
 #define pt_broadcast 4
 #define pt_echo_request 5
 #define pt_echo_reply 6
+#define pt_route_request 7
 
 #define p_head_size 4
 #define route_entry_size 12
@@ -495,6 +496,8 @@ void connection::handle_route_set (uint8_t*data, int n)
 		(pair<hwaddr, remote_route> (hwaddr (data),
 		                             remote_route (remote_ping, remote_dist) ) );
 	}
+
+	handle_route_overflow();
 	route_set_dirty();
 }
 
@@ -513,6 +516,8 @@ void connection::handle_route_diff (uint8_t*data, int n)
 			                             remote_route (remote_ping, remote_dist) ) );
 		else remote_routes.erase (hwaddr (data) );
 	}
+
+	handle_route_overflow();
 	route_set_dirty();
 }
 
@@ -530,6 +535,11 @@ void connection::handle_pong (uint8_t ID)
 	}
 	ping = 2 + timestamp() - sent_ping_time;
 	route_set_dirty();
+}
+
+void connection::handle_route_request ()
+{
+	route_report_to_connection (*this);
 }
 
 /*
@@ -609,6 +619,17 @@ void connection::write_pong (uint8_t ID)
 	try_write();
 }
 
+void connection::write_route_request ()
+{
+	if (!can_write_proto() ) {
+		try_write();
+		return;
+	}
+	pbuffer&b = new_proto();
+	add_packet_header (b, pt_route_request, 0, 0);
+	try_write();
+}
+
 /*
  * actions
  */
@@ -673,6 +694,11 @@ try_more:
 
 	case pt_echo_reply:
 		handle_pong (cached_header.special);
+		cached_header.type = 0;
+		goto try_more;
+
+	case pt_route_request:
+		handle_route_request ();
 		cached_header.type = 0;
 		goto try_more;
 
@@ -957,6 +983,7 @@ void connection::reset()
 	poll_set_remove_read (fd);
 
 	remote_routes.clear();
+	route_overflow = false;
 	route_set_dirty();
 
 	sending_from_data_q = false;
@@ -967,6 +994,9 @@ void connection::reset()
 	cached_header.type = 0;
 
 	dealloc_ssl();
+
+	ping = 1;
+	last_ping = 0;
 
 	tcp_close_socket (fd);
 	unset_fd();
@@ -1110,6 +1140,66 @@ void connection::dealloc_ssl()
 	} else if (bio) {
 		BIO_free (bio);
 		bio = 0;
+	}
+}
+
+/*
+ * remote route overflow handling
+ *
+ * If we decide there's too many remote routes, we align the size to maximum
+ * by dropping several most-distant connections, and remember the 'tainted'
+ * state. After things go back to normal, we request a full set of routes.
+ *
+ * route information dropping algorithm strongly depends on situation, so
+ * should be mostly random (so no one can get any adventage in this), only
+ * depending on generic route properties, like distances.
+ */
+
+#include <algorithm>
+
+void connection::handle_route_overflow()
+{
+	if (route_overflow) {
+		if (remote_routes.size() <= max_remote_routes) {
+			route_overflow = false;
+			write_route_request();
+		}
+		return;
+	}
+	if (remote_routes.size() <= max_remote_routes) return;
+	route_overflow = true;
+
+	vector<hwaddr>to_del;
+	vector<hwaddr>::iterator hi;
+	map<hwaddr, remote_route>::iterator rri, rre;
+	int max_dist, t;
+
+	while (remote_routes.size() > max_remote_routes) {
+		//select all of the largest routes
+		max_dist = 0;
+		to_del.clear();
+		for (rri = remote_routes.begin(), rre = remote_routes.end();
+		        rri != rre; ++rri) {
+			if (rri->second.dist > max_dist) {
+				to_del.clear();
+				max_dist = rri->second.dist;
+			}
+			if (rri->second.dist == max_dist)
+				to_del.push_back (rri->first);
+		}
+		if (!to_del.size() ) {
+			Log_error ("connection %d remote route handling fail!", id);
+			return;
+		}
+		//now randomize the things so no one is sure
+		random_shuffle (to_del.begin(), to_del.end() );
+		//and delete some.
+		if (to_del.size() + max_remote_routes < remote_routes.size() )
+			for (hi = to_del.begin();hi < to_del.end();++hi)
+				remote_routes.erase (*hi);
+		else for (hi = to_del.begin(),
+			          t = remote_routes.size() - max_remote_routes;
+			          t > 0;--t, ++hi) remote_routes.erase (*hi);
 	}
 }
 
@@ -1263,6 +1353,7 @@ static int comm_connections_close()
 int connection::mtu = 8192;
 int connection::max_waiting_data_packets = 1024;
 int connection::max_waiting_proto_packets = 64;
+int connection::max_remote_routes = 1024;
 
 int comm_init()
 {
@@ -1293,6 +1384,12 @@ int comm_init()
 	else connection::max_waiting_proto_packets = t;
 	Log_info ("max %d pending proto packets",
 	          connection::max_waiting_proto_packets);
+
+	if (!config_get_int ("connection::max_remote_routes", t) )
+		connection::max_remote_routes = 64;
+	else connection::max_remote_routes = t;
+	Log_info ("max %d remote routes",
+	          connection::max_remote_routes);
 
 	if (!config_get_int ("conn_retry", t) )
 		connection::retry = 10000000; //10s is okay
