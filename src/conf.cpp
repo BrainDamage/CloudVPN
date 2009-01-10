@@ -74,7 +74,7 @@ bool config_get_int (const string&name, int&val)
 		else Log_warn ("could not parse value `%s' of `%s' to integer",
 			               t.c_str(), name.c_str() );
 	}
-	Log_info ("`%s' is not set", name.c_str() );
+	Log_debug ("`%s' is not set", name.c_str() );
 	return false;
 }
 
