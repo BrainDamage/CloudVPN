@@ -127,6 +127,7 @@ PACKET TYPES are:
 4 - broadcast ethernet packet, followed by id[4], and the rest ^
 5 - echo request, special == ID
 6 - echo reply, special == ID
+7 - complete route information request
 
 NOTE that login/logout is handled by SSL
 
