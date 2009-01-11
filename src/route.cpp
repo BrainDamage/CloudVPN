@@ -15,6 +15,7 @@
 #include "timestamp.h"
 #include "log.h"
 #include "utils.h"
+#include "conf.h"
 
 /*
  * utils
@@ -41,10 +42,46 @@ uint32_t new_packet_uid()
 }
 
 /*
- * ID cache
+ * ethernet packets filter - by EtherType
  */
 
-#include "conf.h"
+#include <set>
+#include <list>
+using namespace std;
+
+static bool etherfilter_enabled = false;
+set<uint16_t> etherfilter;
+
+static int etherfilter_init ()
+{
+	list<string> c;
+	config_get_list ("broadcast_filter_allow", c);
+	if (!c.size() ) return 0;
+	etherfilter_enabled = true;
+	list<string>::iterator i;
+	uint16_t t;
+	for (i = c.begin();i != c.end();++i) {
+		if (!sscanf (i->c_str(), "%hu", &t) ) {
+			Log_error ("cannot parse hex: `%s'", i->c_str() );
+			return 1;
+		}
+		etherfilter.insert (t);
+	}
+	return 0;
+}
+
+static bool etherfilter_allowed (uint8_t*packet)
+{
+	if (etherfilter_enabled)
+		return etherfilter.find (ntohs
+		                         (* (uint16_t*) (packet + 2*hwaddr_size) ) )
+		       != etherfilter.end();
+	return true;
+}
+
+/*
+ * ID cache
+ */
 
 #include <map>
 #include <queue>
@@ -208,6 +245,7 @@ void route_init()
 	init_random();
 
 	route_init_multi();
+	etherfilter_init();
 
 	int t;
 
@@ -364,6 +402,8 @@ void route_broadcast_packet (uint32_t id, void*buf, size_t len, int conn)
 		} //if the connection didn't exist, forget about this.
 	}
 
+	if (!etherfilter_allowed ( (uint8_t*) buf) ) return;  //discard filtered
+
 	//now broadcast the thing.
 	map<int, connection>::iterator
 	i = comm_connections().begin(),
@@ -468,3 +508,4 @@ static void report_route()
 
 	comm_broadcast_route_update (data, report.size() );
 }
+
