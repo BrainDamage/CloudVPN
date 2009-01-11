@@ -1,0 +1,12 @@
+#!/bin/bash
+
+
+DAYS=${DAYS:-3650}
+
+REQ=ca.req
+OUT=ca.crt
+
+openssl ca -config ssl.cnf -out $OUT -outdir ./ \
+	-days $DAYS -batch -keyfile ca.key -selfsign \
+	-infiles $REQ
+

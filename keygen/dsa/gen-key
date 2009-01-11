@@ -1,0 +1,12 @@
+#!/bin/bash
+
+[[ "$1" ]] || echo "Usage: $0 <keyname>"
+
+[[ "$1" ]] || exit 1
+
+DAYS=${DAYS:-3650}
+SIZE=${SIZE:-2048}
+
+openssl dsaparam 2048 -out paramk.dsa
+openssl req -new -newkey dsa:paramk.dsa -keyout $1.key -out $1.req -days $DAYS -nodes
+

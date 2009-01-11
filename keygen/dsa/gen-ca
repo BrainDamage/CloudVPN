@@ -1,0 +1,15 @@
+#!/bin/bash
+
+SIZE=${SIZE:-4096}
+
+openssl dsaparam 2048 -out param.dsa
+openssl req -new -newkey dsa:param.dsa -keyout ca.key -out ca.req
+
+mkdir -p database
+touch database/index.txt
+echo 00 >database/serial
+
+sed -e 's/demoCA/database/' -e 's/\$dir\/cacert.pem/ca.crt/' </etc/ssl/openssl.cnf >ssl.cnf
+
+echo "Please dont forget to (self)sign the ca.req, and place certificate to ca.crt"
+
