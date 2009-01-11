@@ -57,16 +57,16 @@ static int etherfilter_init ()
 	list<string> c;
 	config_get_list ("broadcast_filter_allow", c);
 	if (!c.size() ) return 0;
-	etherfilter_enabled = true;
 	list<string>::iterator i;
 	uint16_t t;
 	for (i = c.begin();i != c.end();++i) {
 		if (!sscanf (i->c_str(), "%hu", &t) ) {
-			Log_error ("cannot parse hex: `%s'", i->c_str() );
+			Log_error ("cannot parse hex: `%s', filter disabled", i->c_str() );
 			return 1;
 		}
 		etherfilter.insert (t);
 	}
+	etherfilter_enabled = true;
 	return 0;
 }
 
