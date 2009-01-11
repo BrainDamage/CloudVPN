@@ -250,6 +250,9 @@ ssl_method ssl -- default ssl method to use. 'tls' is the second option
 status-file /some/file  -- file where to print nice information exports
 status-interval 30000000 -- periodicity of the above
 
+broadcast_filter_allow 0806 -- broadcast packet filter by EtherID
+	-- when not specified, every EtherID is allowed
+
 	*** INTERNALS ***
 
 modules are:
