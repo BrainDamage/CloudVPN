@@ -476,16 +476,19 @@ static bool parse_packet_header (squeue&q, uint8_t&type,
 
 void connection::handle_packet (void*buf, int len)
 {
+	stat_packet (true, len + p_head_size);
 	route_packet (buf, len, id);
 }
 
 void connection::handle_broadcast_packet (uint32_t ID, void*buf, int len)
 {
+	stat_packet (true, len + p_head_size + 4);
 	route_broadcast_packet (ID, buf, len, id);
 }
 
 void connection::handle_route_set (uint8_t*data, int n)
 {
+	stat_packet (true, n*route_entry_size + p_head_size);
 	remote_routes.clear();
 	uint32_t remote_ping;
 	uint16_t remote_dist;
@@ -503,6 +506,7 @@ void connection::handle_route_set (uint8_t*data, int n)
 
 void connection::handle_route_diff (uint8_t*data, int n)
 {
+	stat_packet (true, n*route_entry_size + p_head_size);
 	if (!n) return;
 
 	uint32_t remote_ping;
@@ -523,11 +527,13 @@ void connection::handle_route_diff (uint8_t*data, int n)
 
 void connection::handle_ping (uint8_t ID)
 {
+	stat_packet (true, p_head_size);
 	write_pong (ID);
 }
 
 void connection::handle_pong (uint8_t ID)
 {
+	stat_packet (true, p_head_size);
 	last_ping = timestamp();
 	if (ID != sent_ping_id) {
 		Log_info ("connection %d received some very old ping", id);
@@ -539,6 +545,7 @@ void connection::handle_pong (uint8_t ID)
 
 void connection::handle_route_request ()
 {
+	stat_packet (true, p_head_size);
 	route_report_to_connection (*this);
 }
 
@@ -553,6 +560,7 @@ void connection::write_packet (void*buf, int len)
 		return;
 	}
 	if (len > mtu) return;
+	stat_packet (false, p_head_size + len);
 	pbuffer& b = new_data();
 	add_packet_header (b, pt_eth_frame, 0, len);
 	b.push ( (uint8_t*) buf, len);
@@ -566,6 +574,7 @@ void connection::write_broadcast_packet (uint32_t ID, void*buf, int len)
 		return;
 	}
 	if (len > mtu) return;
+	stat_packet (false, p_head_size + len + 4);
 	pbuffer& b = new_data();
 	add_packet_header (b, pt_broadcast, 0, len);
 	b.push<uint32_t> (htonl (ID) );
@@ -579,6 +588,7 @@ void connection::write_route_set (uint8_t*data, int n)
 		try_write();
 		return;
 	}
+	stat_packet (false, n*route_entry_size + p_head_size);
 	pbuffer&b = new_proto();
 	add_packet_header (b, pt_route_set, 0, n);
 	b.push (data, n* route_entry_size );
@@ -591,6 +601,7 @@ void connection::write_route_diff (uint8_t*data, int n)
 		try_write();
 		return;
 	}
+	stat_packet (false, n*route_entry_size + p_head_size);
 	pbuffer&b = new_proto();
 	add_packet_header (b, pt_route_diff, 0, n);
 	b.push (data, n* route_entry_size );
@@ -603,6 +614,7 @@ void connection::write_ping (uint8_t ID)
 		try_write();
 		return;
 	}
+	stat_packet (false, p_head_size);
 	pbuffer&b = new_proto();
 	add_packet_header (b, pt_echo_request, ID, 0);
 	try_write();
@@ -614,6 +626,7 @@ void connection::write_pong (uint8_t ID)
 		try_write();
 		return;
 	}
+	stat_packet (false, p_head_size);
 	pbuffer&b = new_proto();
 	add_packet_header (b, pt_echo_reply, ID, 0);
 	try_write();
@@ -625,6 +638,7 @@ void connection::write_route_request ()
 		try_write();
 		return;
 	}
+	stat_packet (false, p_head_size);
 	pbuffer&b = new_proto();
 	add_packet_header (b, pt_route_request, 0, 0);
 	try_write();
@@ -1001,6 +1015,8 @@ void connection::reset()
 	tcp_close_socket (fd);
 	unset_fd();
 
+	stats_clear();
+
 	if (address.length() )
 		state = cs_retry_timeout;
 	else state = cs_inactive;
@@ -1086,6 +1102,8 @@ void connection::poll_write()
 
 void connection::periodic_update()
 {
+	stats_update();
+
 	switch (state) {
 	case cs_connecting:
 		try_connect();
@@ -1223,6 +1241,47 @@ connection::connection()
 	Log_fatal ("in fact, doing a segfault now is nothing bad. weeee!");
 	* ( (int*) 0) = 0xDEAD;
 #endif
+}
+
+/*
+ * statistics
+ * speeds are updated every 5 seconds, no idea why would someone want
+ * to change this interval.
+ */
+
+void connection::stat_packet (bool in, int size)
+{
+	if (in) {
+		in_p_total += 1;
+		in_p_now += 1;
+		in_s_total += size;
+		in_s_now += size;
+	} else {
+		out_p_total += 1;
+		out_p_now += 1;
+		out_s_total += size;
+		out_s_now += size;
+	}
+}
+
+void connection::stats_update()
+{
+	if (timestamp() < stat_update) return;
+	stat_update = timestamp() + 5000000; //5 sec
+
+	in_p_speed = in_p_now / 5;
+	out_p_speed = out_p_now / 5;
+	in_s_speed = in_s_now / 5;
+	out_s_speed = out_s_now / 5;
+	in_p_now = out_p_now = in_s_now = out_s_now = 0;
+}
+
+void connection::stats_clear()
+{
+	in_p_total = in_p_now = in_s_total = in_s_now = 0;
+	out_p_total = out_p_now = out_s_total = out_s_now = 0;
+	in_p_speed = in_s_speed = out_p_speed = out_s_speed = 0;
+	stat_update = 0;
 }
 
 /*

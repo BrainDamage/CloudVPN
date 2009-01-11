@@ -65,7 +65,7 @@ static int etherfilter_init ()
 			return 1;
 		}
 		etherfilter.insert (t);
-		Log_info("ethertype %hx allowed", t);
+		Log_info ("ethertype %hx allowed", t);
 	}
 	etherfilter_enabled = true;
 	return 0;
@@ -74,9 +74,9 @@ static int etherfilter_init ()
 static bool etherfilter_allowed (uint8_t*packet)
 {
 	if (etherfilter_enabled) {
-		if(etherfilter.find
-			(ntohs (* (uint16_t*) (packet + 2*hwaddr_size) ) )
-			!= etherfilter.end()) return true;
+		if (etherfilter.find
+		        (ntohs (* (uint16_t*) (packet + 2*hwaddr_size) ) )
+		        != etherfilter.end() ) return true;
 		else return false;
 	}
 	return true;

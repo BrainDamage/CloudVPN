@@ -29,6 +29,21 @@ static int status_interval = 30000000;
 
 #include <stdio.h>
 
+static string data_format (uint64_t a)
+{
+	char buffer[64];
+	if (a < (1 << 10) ) sprintf (buffer, "%g", (double) a);
+	else if (a < (1l << 20) )
+		sprintf (buffer, "%0.2gKi", a / (double) (1 << 10) );
+	else if (a < (1l << 30) )
+		sprintf (buffer, "%0.2gMi", a / (double) (1l << 20) );
+	else if (a < (1ll << 40) )
+		sprintf (buffer, "%0.2gGi", a / (double) (1l << 30) );
+	else sprintf (buffer, "%0.2gTi", a / (double) (1ll << 40) );
+
+	return string (buffer);
+}
+
 static int status_to_file (const char*fn)
 {
 	FILE*outfile;
@@ -63,6 +78,17 @@ static int status_to_file (const char*fn)
 		if (c->second.address.length() )
 			output (" * assigned to host `%s'\n",
 			        c->second.address.c_str() );
+		output (" >> in  %sB/s, %spkt/s; total %sB, %spkt\n",
+		        data_format (c->second.in_s_speed).c_str(),
+		        data_format (c->second.in_p_speed).c_str(),
+		        data_format (c->second.in_s_total).c_str(),
+		        data_format (c->second.in_p_total).c_str() );
+		output (" << out %sB/s, %spkt/s; total %sB, %spkt\n",
+		        data_format (c->second.out_s_speed).c_str(),
+		        data_format (c->second.out_p_speed).c_str(),
+		        data_format (c->second.out_s_total).c_str(),
+		        data_format (c->second.out_p_total).c_str() );
+
 		for (r = c->second.remote_routes.begin();
 		        r != c->second.remote_routes.end();++r)
 			output (" `--route to %s \tdist %u \tping %u\n",

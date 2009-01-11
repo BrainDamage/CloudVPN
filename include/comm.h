@@ -87,6 +87,7 @@ public:
 		cached_header.type = 0;
 		sending_from_data_q = false;
 		route_overflow = false;
+		stats_clear();
 	}
 
 	connection (); //this is supposed to fail, always use c(ID)
@@ -212,6 +213,24 @@ public:
 
 	bool route_overflow;
 	void handle_route_overflow();
+
+	/*
+	 * stats, for exporting to status file
+	 */
+
+	void stat_packet (bool in, int size);
+	void stats_update();
+	void stats_clear();
+
+	uint64_t stat_update;
+
+	uint64_t
+	in_p_total, in_p_now,
+	in_s_total, in_s_now,
+	out_p_total, out_p_now,
+	out_s_total, out_s_now,
+	in_p_speed, in_s_speed,
+	out_p_speed, out_s_speed;
 };
 
 void comm_listener_poll (int fd);
