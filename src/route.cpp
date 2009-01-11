@@ -60,11 +60,12 @@ static int etherfilter_init ()
 	list<string>::iterator i;
 	uint16_t t;
 	for (i = c.begin();i != c.end();++i) {
-		if (!sscanf (i->c_str(), "%hu", &t) ) {
+		if (!sscanf (i->c_str(), "%hx", &t) ) {
 			Log_error ("cannot parse hex: `%s', filter disabled", i->c_str() );
 			return 1;
 		}
 		etherfilter.insert (t);
+		Log_info("ethertype %hx allowed", t);
 	}
 	etherfilter_enabled = true;
 	return 0;
@@ -72,10 +73,12 @@ static int etherfilter_init ()
 
 static bool etherfilter_allowed (uint8_t*packet)
 {
-	if (etherfilter_enabled)
-		return etherfilter.find (ntohs
-		                         (* (uint16_t*) (packet + 2*hwaddr_size) ) )
-		       != etherfilter.end();
+	if (etherfilter_enabled) {
+		if(etherfilter.find
+			(ntohs (* (uint16_t*) (packet + 2*hwaddr_size) ) )
+			!= etherfilter.end()) return true;
+		else return false;
+	}
 	return true;
 }
 
