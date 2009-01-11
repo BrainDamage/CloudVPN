@@ -259,7 +259,9 @@ Please format the code using $ astyle --style=linux -pdt
 For simplicity, I provide some basic openssl scripts which generate keys good
 enough for the purpose of cloudvpning. Basic usage looks like this:
 
-cd keygen
+We have both RSA and DSA keys. Thanks to snajpa (<snajpa@snajpa.net>) for DSA.
+
+cd keygen/dsa   --or /rsa. DSA is considered to be a little more secure.
 mkdir my_keys
 cd my_keys
 ../gen-dh
