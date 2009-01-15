@@ -31,13 +31,13 @@
 #include <list>
 using namespace std;
 
-static map<int, int> conn_index;
-static map<int, connection> connections;
-static set<int> listeners;
+static map<int, int> conn_index; //indexes socket FD to connection ID
+static map<int, connection> connections;  //indexes connection ID to real object
+static set<int> listeners; //set of listening FDs
 
 /*
- * NOTICE (FUKKEN IMPORTANT)
- * because of good pollability, connections MUST be IDed by their socket fds.
+ * functions that return references to static members, so others can access
+ * the wonders.
  */
 
 map<int, int>&comm_connection_index()
@@ -61,6 +61,11 @@ set<int>& comm_listeners()
 
 static SSL_CTX* ssl_ctx;
 static string ssl_pass;
+
+/*
+ * SSL initialization
+ * mostly only key loading
+ */
 
 static int ssl_password_callback (char*buffer, int num, int rwflag, void*udata)
 {
@@ -196,6 +201,8 @@ static int ssl_destroy()
 
 /*
  * raw network stuff
+ *
+ * backends to listen/connect/accept network operations
  */
 
 static int listen_backlog_size = 32;
@@ -289,6 +296,10 @@ static int tcp_close_socket (int sock)
 	return 0;
 }
 
+/*
+ * this is needed to determine if socket is properly connected
+ */
+
 #include <sys/select.h>
 
 static int tcp_socket_writeable (int sock)
@@ -303,7 +314,7 @@ static int tcp_socket_writeable (int sock)
 }
 
 /*
- * connection creation helpers
+ * connection management (allocates/destroys the objects on ID->conn map)
  */
 
 static int max_connections = 1024;
@@ -355,7 +366,7 @@ void connection_delete (int id)
 
 /*
  * This should accept a connection, and link it into the structure.
- * Generally, only these 2 functions really create connections:
+ * Generally, only following 2 functions really create connections:
  */
 
 static int try_accept_connection (int sock)
@@ -421,6 +432,11 @@ int connection::timeout = 60000000; //60 sec
 int connection::keepalive = 5000000; //5 sec
 int connection::retry = 10000000; //10 sec
 
+/*
+ * this is needed to keep proper fd->id translation, used by
+ * set_fd() and unset_fd()
+ */
+
 void connection::index()
 {
 	conn_index[fd] = id;
@@ -432,9 +448,11 @@ void connection::deindex()
 }
 
 /*
- * protocol headers
+ * PROTOCOL
+ * for more protocol information please consider readme
  */
 
+//packet header numbers
 #define pt_route_set 1
 #define pt_route_diff 2
 #define pt_eth_frame 3
@@ -443,6 +461,7 @@ void connection::deindex()
 #define pt_echo_reply 6
 #define pt_route_request 7
 
+//sizes
 #define p_head_size 4
 #define route_entry_size 12
 
@@ -471,7 +490,7 @@ static bool parse_packet_header (squeue&q, uint8_t&type,
 }
 
 /*
- * handlers
+ * handlers of incoming information
  */
 
 void connection::handle_packet (void*buf, int len)
@@ -552,6 +571,18 @@ void connection::handle_route_request ()
 /*
  * senders
  */
+
+pbuffer& connection::new_data ()
+{
+	data_q.push_back (pbuffer() );
+	return data_q.back();
+}
+
+pbuffer& connection::new_proto ()
+{
+	proto_q.push_back (pbuffer() );
+	return proto_q.back();
+}
 
 void connection::write_packet (void*buf, int len)
 {
@@ -645,7 +676,8 @@ void connection::write_route_request ()
 }
 
 /*
- * actions
+ * try_parse_input examines the content of the incoming queue, and
+ * calls appropriate handlers, if some packet is found.
  */
 
 void connection::try_parse_input()
@@ -722,6 +754,10 @@ try_more:
 	}
 }
 
+/*
+ * read/write operations
+ */
+
 bool connection::try_read()
 {
 	int r;
@@ -753,18 +789,6 @@ bool connection::try_read()
 		}
 	}
 	return true;
-}
-
-pbuffer& connection::new_data ()
-{
-	data_q.push_back (pbuffer() );
-	return data_q.back();
-}
-
-pbuffer& connection::new_proto ()
-{
-	proto_q.push_back (pbuffer() );
-	return proto_q.back();
 }
 
 bool connection::try_write()
@@ -822,6 +846,9 @@ bool connection::try_write()
 void connection::try_data()
 {
 	/*
+	 * try_data is just combined try_read+try_write, used for polling,
+	 * because when using SSL we can't really know what to expect.
+	 *
 	 * try write should be always called first,
 	 * because it usually resets the write poll flag, which
 	 * should then be restored by try_read.
@@ -831,6 +858,12 @@ void connection::try_data()
 	if (try_write() )
 		try_read();
 }
+
+/*
+ * actions
+ * basically these functions are called by poll for some time, then they change
+ * connection state so other of these can be called
+ */
 
 void connection::try_accept()
 {
@@ -921,7 +954,8 @@ void connection::try_close()
 }
 
 /*
- * forced state changes
+ * forced state changes - use these functions to manually connect/disconnect
+ * or trigger some actions.
  */
 
 void connection::start_connect()
@@ -991,6 +1025,10 @@ void connection::disconnect()
 	try_close();
 }
 
+/*
+ * reset() clears the connection before destruction/new usage
+ */
+
 void connection::reset()
 {
 	poll_set_remove_write (fd);
@@ -1021,6 +1059,11 @@ void connection::reset()
 		state = cs_retry_timeout;
 	else state = cs_inactive;
 }
+
+/*
+ * helper for efficient error handling. When read/write is needed, triggers
+ * appropriate poll state.
+ */
 
 int connection::handle_ssl_error (int ret)
 {
@@ -1064,7 +1107,7 @@ int connection::handle_ssl_error (int ret)
 }
 
 /*
- * polls
+ * polling
  */
 
 void connection::poll_simple()
@@ -1125,6 +1168,7 @@ void connection::periodic_update()
 
 /*
  * SSL alloc/dealloc
+ * create and destroy SSL objects specific for each connection
  */
 
 int connection::alloc_ssl()
@@ -1222,7 +1266,9 @@ void connection::handle_route_overflow()
 }
 
 /*
- * connection object must always be created with ID; if not, warn.
+ * not-to-be-used constructor.
+ *
+ * connection objects must always be created with ID; if not, warn.
  */
 
 connection::connection()
@@ -1386,6 +1432,7 @@ static int comm_connections_close()
 		i->second.disconnect();
 	}
 
+	//wait for all connections to close
 	while ( (timestamp() < cutout_time) && (connections.size() ) ) {
 		poll_wait_for_event (1000);
 		comm_periodic_update();
@@ -1519,6 +1566,10 @@ void comm_periodic_update()
 		to_delete.pop_front();
 	}
 }
+
+/*
+ * used by route to report route updates to everyone
+ */
 
 void comm_broadcast_route_update (uint8_t*data, int n)
 {
