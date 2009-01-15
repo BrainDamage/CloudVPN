@@ -1089,10 +1089,6 @@ int connection::handle_ssl_error (int ret)
 		 */
 
 		while (err = ERR_get_error() ) {
-			if (ERR_GET_REASON (err) == SSL_R_BAD_WRITE_RETRY) {
-				Log_info ("cid %d got bad write retry", id);
-				continue;
-			}
 			Log_error (
 			    "on conn %d SSL_ERR %d: %s; func %s; reason %s",
 			    id, err,
@@ -1101,6 +1097,7 @@ int connection::handle_ssl_error (int ret)
 			    ERR_reason_error_string (err) );
 			return err;
 		}
+		return 1;
 	}
 
 	return 0;
