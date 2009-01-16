@@ -25,6 +25,7 @@
 #include <netinet/in.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
 #include <string.h>
 
@@ -70,11 +71,11 @@ static string ssl_pass;
 static int ssl_password_callback (char*buffer, int num, int rwflag, void*udata)
 {
 	if (num < ssl_pass.length() + 1) {
-		Log_warn ("ssl_pw_cb: supplied buffer too small");
+		Log_warn ("ssl_pw_cb: supplied buffer too small, will fail!");
 		return 0;
 	}
 
-	strcpy (buffer, ssl_pass.c_str() );
+	strncpy (buffer, ssl_pass.c_str(), num);
 
 	return ssl_pass.length();
 }
@@ -945,12 +946,11 @@ void connection::try_close()
 		Log_warn ("SSL connection on %d not terminated properly", fd);
 		reset();
 	} else if (r != 0) reset(); //closed OK
-	else if (handle_ssl_error (r) ) {
-		if ( (timestamp() - last_ping) > timeout) {
-			Log_warn ("%d timeouted disconnecting SSL", fd);
-			reset();
-		} else return; //wait for another poll
-	} else reset();
+	else if (handle_ssl_error (r) ) reset ();
+	else if ( (timestamp() - last_ping) > timeout) {
+		Log_warn ("%d timeouted disconnecting SSL", fd);
+		reset();
+	} else return; //wait for another poll
 }
 
 /*
@@ -1079,14 +1079,7 @@ int connection::handle_ssl_error (int ret)
 		break;
 	default:
 		Log_error ("on connection %d got SSL error %d, ret=%d!", id, e, ret);
-		int err = 0;
-
-		/*
-		 * If we got a "bad write retry" error, let's just don't
-		 * worry about it - we just fucked up the SSL_read
-		 * and SSL_write order a little. SSL connection
-		 * doesn't get terminated.
-		 */
+		int err;
 
 		while (err = ERR_get_error() ) {
 			Log_error (

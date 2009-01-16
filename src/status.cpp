@@ -32,14 +32,14 @@ static int status_interval = 30000000;
 static string data_format (uint64_t a)
 {
 	char buffer[64];
-	if (a < (1 << 10) ) sprintf (buffer, "%g", (double) a);
+	if (a < (1 << 10) ) snprintf (buffer, 63, "%g", (double) a);
 	else if (a < (1l << 20) )
-		sprintf (buffer, "%0.2gKi", a / (double) (1 << 10) );
+		snprintf (buffer, 63, "%0.2gKi", a / (double) (1 << 10) );
 	else if (a < (1l << 30) )
-		sprintf (buffer, "%0.2gMi", a / (double) (1l << 20) );
+		snprintf (buffer, 63, "%0.2gMi", a / (double) (1l << 20) );
 	else if (a < (1ll << 40) )
-		sprintf (buffer, "%0.2gGi", a / (double) (1l << 30) );
-	else sprintf (buffer, "%0.2gTi", a / (double) (1ll << 40) );
+		snprintf (buffer, 63, "%0.2gGi", a / (double) (1l << 30) );
+	else snprintf (buffer, 63, "%0.2gTi", a / (double) (1ll << 40) );
 
 	return string (buffer);
 }

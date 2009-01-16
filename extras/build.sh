@@ -13,5 +13,5 @@ g++ -o src/sq.o -c -O3 -Iinclude src/sq.cpp
 g++ -o src/security.o -c -O3 -Iinclude src/security.cpp
 g++ -o src/status.o -c -O3 -Iinclude src/status.cpp
 g++ -o src/utils.o -c -O3 -Iinclude src/utils.cpp
-g++ -o cloudvpn src/route.o src/cloudvpn.o src/poll.o src/iface.o src/log.o src/main.o src/comm.o src/conf.o src/timestamp.o src/sq.o src/security.o src/status.o src/utils.o -lssl
+g++ -o cloudvpn src/route.o src/cloudvpn.o src/poll.o src/iface.o src/log.o src/main.o src/comm.o src/conf.o src/timestamp.o src/sq.o src/security.o src/status.o src/utils.o -lssl -lcrypto
 EOFBUILDSH

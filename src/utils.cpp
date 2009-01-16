@@ -127,10 +127,10 @@ bool sock_nonblock (int fd)
 
 string format_hwaddr (const hwaddr& a)
 {
-	char buf[18];
-	sprintf (buf, "%02x:%02x:%02x:%02x:%02x:%02x",
-	         a.addr[0], a.addr[1], a.addr[2],
-	         a.addr[3], a.addr[4], a.addr[5]);
+	char buf[19];
+	snprintf (buf, 18, "%02x:%02x:%02x:%02x:%02x:%02x",
+	          a.addr[0], a.addr[1], a.addr[2],
+	          a.addr[3], a.addr[4], a.addr[5]);
 	return string (buf);
 }
 

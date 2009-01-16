@@ -86,24 +86,6 @@ static bool read_mac_addr (const char*b, uint8_t*addr)
 	else return false;
 }
 
-static string format_mac_addr (uint8_t*addr)
-{
-	string r;
-	int t;
-	r.reserve (hwaddr_size + hwaddr_digits - 1);
-
-	for (int i = 0;i < hwaddr_digits;++i) {
-		if (i && (! (i % 2) ) ) r.append (1, ':');
-
-		t = (addr[i/2] >> ( (i % 2) ? 4 : 0) ) & 0xF;
-
-		if (t < 10) r.append (1, '0' + t);
-		else r.append (1, 'A' + t);
-	}
-
-	return r;
-}
-
 /*
  * variables
  */
@@ -178,7 +160,7 @@ int iface_create()
 
 		if (read_mac_addr (mac.c_str(), hwaddr) ) {
 			Log_info ("iface: setting hwaddr %s",
-			          format_mac_addr (hwaddr).c_str() );
+			          format_hwaddr (hwaddr).c_str() );
 
 			if (iface_set_hwaddr (hwaddr) )
 				Log_error ("iface: setting hwaddr failed, using default");
@@ -225,7 +207,7 @@ int iface_create()
 
 		if (read_mac_addr (mac.c_str(), hwaddr) ) {
 			Log_info ("iface: setting hwaddr %s",
-			          format_mac_addr (hwaddr).c_str() );
+			          format_hwaddr (hwaddr).c_str() );
 
 			if (iface_set_hwaddr (hwaddr) )
 				Log_error ("iface: setting hwaddr failed, using default");
@@ -353,7 +335,12 @@ int iface_set_hwaddr (uint8_t*addr)
 	ifr.ifr_addr.sa_family = AF_LINK;
 
 	for (int i = 0;i < hwaddr_size;++i)
-		e.octet[i] = addr[i];
+#ifndef __OpenBSD__
+		e.octet[i]
+#else
+		e.ether_addr_octet[i]
+#endif
+		= addr[i];
 
 	int ret = ioctl (ctl, SIOCSIFLLADDR, &ifr);
 
