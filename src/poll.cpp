@@ -266,7 +266,7 @@ int poll_wait_for_event (int timeout)
 	return 0;
 }
 
-#elif defined(__FreeBSD__)
+#elif (defined(__FreeBSD__)||defined(__OpenBSD__)||defined(__NetBSD__))
 
 /*
  * kqueue default for *BSD
