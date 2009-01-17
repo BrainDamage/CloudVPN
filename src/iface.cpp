@@ -195,6 +195,15 @@ int iface_create()
 		           errno, strerror (errno) );
 		return -1;
 	}
+	
+#ifdef __OpenBSD__
+	if(0>ioctl(tun,FIONBIO)) {
+		Log_error("iface: ioctl(FIONBIO) failed with %d: %s",
+			errno, strerror(errno));
+		close(tun);
+		return -2;
+	}
+#endif
 
 	strncpy (iface_name, device.c_str(), IFNAMSIZ);
 
@@ -473,7 +482,7 @@ void iface_poll_read()
 	while (1) {
 		ret = iface_read (buffer, 4096);
 
-		if (ret <= 0) break;
+		if (ret <= 0) return;
 
 		if (ret <= 2 + (2*hwaddr_size) ) {
 			Log_debug ("iface_update: discarding packet too short for Ethernet");
