@@ -383,9 +383,9 @@ int poll_wait_for_event (int timeout_usec)
 	vector<struct kevent>::iterator i = buf.begin(), e = i + ret;
 
 	for (;i < e;++i) poll_handle_event
-		(i->ident, (i->filter&EVFILT_READ) ?
-		 READ_READY : (i->filter&EVFILT_WRITE) ?
-		 WRITE_READY : 0);
+		(i->ident,
+		 ( (i->filter&EVFILT_READ) ? READ_READY : 0) |
+		 ( (i->filter&EVFILT_WRITE) ?  WRITE_READY : 0) );
 
 	return 0;
 }

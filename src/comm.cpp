@@ -515,9 +515,9 @@ void connection::handle_route_set (uint8_t*data, int n)
 	for (int i = 0;i < n;++i, data += route_entry_size) {
 		remote_dist = ntohs (* ( (uint16_t*) (data + hwaddr_size) ) );
 		remote_ping = ntohl (* ( (uint32_t*) (data + hwaddr_size + 2) ) );
-		remote_routes.insert
-		(pair<hwaddr, remote_route> (hwaddr (data),
-		                             remote_route (remote_ping, remote_dist) ) );
+		if (remote_ping) remote_routes.insert
+			(pair<hwaddr, remote_route> (hwaddr (data),
+			                             remote_route (remote_ping, remote_dist) ) );
 	}
 
 	handle_route_overflow();
@@ -534,7 +534,7 @@ void connection::handle_route_diff (uint8_t*data, int n)
 	for (int i = 0;i < n;++i, data += route_entry_size) {
 		remote_dist = ntohs (* ( (uint16_t*) (data + hwaddr_size) ) );
 		remote_ping = ntohl (* ( (uint32_t*) (data + hwaddr_size + 2) ) );
-		if (ping)
+		if (remote_ping)
 			remote_routes.insert
 			(pair<hwaddr, remote_route> (hwaddr (data),
 			                             remote_route (remote_ping, remote_dist) ) );
@@ -1047,7 +1047,7 @@ void connection::reset()
 
 	dealloc_ssl();
 
-	ping = 1;
+	ping = timeout;
 	last_ping = 0;
 
 	tcp_close_socket (fd);
@@ -1078,6 +1078,10 @@ int connection::handle_ssl_error (int ret)
 		poll_set_add_write (fd);
 		break;
 	default:
+		if((state==cs_closing)
+			&&(e==SSL_ERROR_SYSCALL)
+			&&(ret==0)) return 1; //clear disconnect
+
 		Log_error ("on connection %d got SSL error %d, ret=%d!", id, e, ret);
 		int err;
 
