@@ -278,6 +278,7 @@ int poll_wait_for_event (int timeout)
 
 #include <sys/event.h>
 #include <sys/time.h>
+#include <unistd.h>
 #include <errno.h>
 
 static int kq = -1;
