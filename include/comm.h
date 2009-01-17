@@ -74,6 +74,9 @@ public:
 			ping = p;
 			dist = d;
 		}
+		remote_route () { //for STL-ability, shall never be called.
+			dist = ping = timeout;
+		}
 	};
 	map<hwaddr, remote_route> remote_routes;
 

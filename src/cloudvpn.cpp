@@ -118,6 +118,7 @@ int run_cloudvpn (int argc, char**argv)
 		route_update();
 		comm_periodic_update();
 
+		route_update();
 		status_try_export();
 	}
 

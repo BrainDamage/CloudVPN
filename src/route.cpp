@@ -309,10 +309,15 @@ void route_update()
 		        j != i->second.remote_routes.end();
 		        ++j ) {
 			if (1 + j->second.dist > route_max_dist) continue;
-			if (route.count (j->first) )
-				if (route[j->first].ping <=
+			if (route.count (j->first) ) {
+				if (route[j->first].ping <
 				        (2 + j->second.ping + i->second.ping) )
 					continue;
+				if ( (route[j->first].ping ==
+				        (2 + j->second.ping + i->second.ping) )
+				        && ( route[j->first].dist <
+				             (1 + j->second.dist) ) ) continue;
+			}
 
 			route[j->first] = route_info
 			                  (2 + j->second.ping + i->second.ping,
