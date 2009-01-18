@@ -793,7 +793,9 @@ bool connection::try_write()
 {
 	const uint8_t *buf;
 	int n, r;
-	//do not change the write buffer until necessary
+
+	if (bl_enabled && (!bl_available) && needs_upload() ) bl_recompute();
+
 	while (proto_q.size() || data_q.size() ) {
 
 		if (sending_from_data_q) {
@@ -817,6 +819,10 @@ bool connection::try_write()
 			}
 		}
 
+		//choke the bandwidth. Note that we dont want to really
+		//discard the packet here, because of SSL.
+		if (bl_enabled && (n > bl_available) ) break;
+		//or try to send.
 		r = SSL_write (ssl, buf, n);
 
 		if (r == 0) {
@@ -831,6 +837,9 @@ bool connection::try_write()
 			}
 			return true;
 		} else {
+
+			if (bl_enabled) bl_available -= n;
+
 			if (sending_from_data_q) {
 				data_q.pop_front();
 				sending_from_data_q = false;
@@ -1051,6 +1060,7 @@ void connection::reset()
 	unset_fd();
 
 	stats_clear();
+	bl_available = 0;
 
 	if (address.length() )
 		state = cs_retry_timeout;
@@ -1152,7 +1162,9 @@ void connection::periodic_update()
 		if ( (timestamp() - last_ping) > timeout) {
 			Log_info ("Connection %d ping timeout", id);
 			disconnect();
+			return;
 		} else if ( (timestamp() - sent_ping_time) > keepalive) send_ping();
+		try_write();
 		break;
 	}
 }
@@ -1237,7 +1249,6 @@ void connection::handle_route_overflow()
 		        rri != rre; ++rri) {
 			if (rri->second.dist > max_dist) {
 				to_del.clear();
-				max_dist = rri->second.dist;
 			}
 			if (rri->second.dist == max_dist)
 				to_del.push_back (rri->first);
@@ -1321,6 +1332,60 @@ void connection::stats_clear()
 	out_p_total = out_p_now = out_s_total = out_s_now = 0;
 	in_p_speed = in_s_speed = out_p_speed = out_s_speed = 0;
 	stat_update = 0;
+}
+
+/*
+ * bandwidth limiting
+ *
+ * as we rely on TCP, we can limit only upload, but that shouldn't be a problem.
+ */
+
+#define minimum_granularity 10000 //full recompute threshold = 10ms.
+#define initial_boost_size 2048 //free bandwidth when starting to send stuff
+
+void connection::bl_recompute()
+{
+	if (!bl_enabled) return;
+	static uint64_t last_recompute = timestamp();
+	uint64_t timediff = timestamp() - last_recompute;
+	if (timediff < minimum_granularity) {
+		/*
+		 * only push some bandwidth to the connection which desperately
+		 * needs it. Spares much time when the connections trigger
+		 * slowly.
+		 */
+		map<int, connection>::iterator i, e;
+		for (i = connections.begin(), e = connections.end(); i != e; ++i)
+			if (i->second.needs_upload() &&
+			        (!i->second.bl_available) )
+				i->second.bl_available = initial_boost_size;
+
+		return;
+	}
+	/*
+	 * normal recompute. Guess how many connections need bandwidth,
+	 * give them some, capped by maximal per-connection bandwidth.
+	 */
+	last_recompute = timestamp();
+	map<int, connection>::iterator i, e;
+	int bandwidth_to_add;
+
+	if (bl_total) {
+		bandwidth_to_add = 0;
+		for (i = connections.begin(), e = connections.end(); i != e; ++i)
+			if (i->second.needs_upload() ) ++bandwidth_to_add;
+		if (bandwidth_to_add)
+			bandwidth_to_add = timediff * bl_total
+			                   / bandwidth_to_add / 1000000;
+		if (bl_conn && (bandwidth_to_add > bl_conn) )
+			bandwidth_to_add = bl_conn;
+	} else if (bl_conn) {
+		bandwidth_to_add = timediff * bl_conn / 1000000;
+	} else return; //fuck wut! both are 0!
+
+	for (i = connections.begin(), e = connections.end(); i != e; ++i)
+		if (i->second.needs_upload() )
+			i->second.bl_available += bandwidth_to_add;
 }
 
 /*
@@ -1450,9 +1515,12 @@ static int comm_connections_close()
  */
 
 int connection::mtu = 8192;
-int connection::max_waiting_data_packets = 1024;
+int connection::max_waiting_data_packets = 256;
 int connection::max_waiting_proto_packets = 64;
 int connection::max_remote_routes = 1024;
+bool connection::bl_enabled = false;
+int connection::bl_total = 0;
+int connection::bl_conn = 0;
 
 int comm_init()
 {
@@ -1472,13 +1540,13 @@ int comm_init()
 	Log_info ("maximal size of internal packets is %d",
 	          connection::mtu);
 
-	if (!config_get_int ("connection::max_waiting_data_packets", t) )
-		connection::max_waiting_data_packets = 1024;
+	if (!config_get_int ("max_waiting_data_packets", t) )
+		connection::max_waiting_data_packets = 256;
 	else connection::max_waiting_data_packets = t;
 	Log_info ("max %d pending data packets",
 	          connection::max_waiting_data_packets);
 
-	if (!config_get_int ("connection::max_waiting_proto_packets", t) )
+	if (!config_get_int ("max_waiting_proto_packets", t) )
 		connection::max_waiting_proto_packets = 64;
 	else connection::max_waiting_proto_packets = t;
 	Log_info ("max %d pending proto packets",
@@ -1505,6 +1573,18 @@ int comm_init()
 	else	connection::keepalive = t;
 	Log_info ("connection keepalive is %gsec",
 	          0.000001*connection::keepalive);
+
+	if (config_get_int ("uplimit-conn", t) ) {
+		connection::bl_enabled = true;
+		connection::bl_conn = t;
+		Log_info ("per-connection upload limit is %dB/s", t);
+	}
+
+	if (config_get_int ("uplimit-total", t) ) {
+		connection::bl_enabled = true;
+		connection::bl_total = t;
+		Log_info ("total upload limit is %dB/s", t);
+	}
 
 	if (ssl_initialize() ) {
 		Log_fatal ("SSL initialization failed");
@@ -1558,6 +1638,8 @@ void comm_periodic_update()
 		connections.erase (to_delete.front() );
 		to_delete.pop_front();
 	}
+
+	connection::bl_recompute();
 }
 
 /*

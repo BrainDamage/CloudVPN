@@ -210,6 +210,19 @@ mlockall yes  --avoid swapping out sensitive data
 multipath yes  --enable
 multi_ratio 2  --usually _should_ stay at default value
 
+ -- bandwidth limiting
+
+--these set maximal total/per-connection upload bandwidth, in bytes per second.
+uplimit-total 123
+uplimit-conn 321
+
+--please note that the bandwidth we limit here is inner, and the thing gets
+--recalculated by SSL encryption (so it can differ in new size.)
+--if you want to limit real bandwidth, use your OS's tools.
+--Also, dont search for download limiting here - you need OS tools too.
+
+--To get smoother bandwidths, please decrease max_waiting_* queue size values.
+
  -- tuning
 
 br_id_cache_size 1024 --broadcast ID cache size, in ID entries.
@@ -220,7 +233,7 @@ route_max_dist 64 -- maximal distance of remote peers. Allows the network
 
 -- increase these values to stabilize high route-info/TCP throughput
 max_waiting_proto_packets 64
-max_waiting_data_packets 1024
+max_waiting_data_packets 256
 max_input_queue_size 4194304
 
 conn-mtu 8192  -- drop data packets larger than this.

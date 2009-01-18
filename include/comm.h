@@ -91,6 +91,7 @@ public:
 		sending_from_data_q = false;
 		route_overflow = false;
 		stats_clear();
+		bl_available = 0;
 	}
 
 	connection (); //this is supposed to fail, always use c(ID)
@@ -234,6 +235,20 @@ public:
 	out_s_total, out_s_now,
 	in_p_speed, in_s_speed,
 	out_p_speed, out_s_speed;
+
+	/*
+	 * bandwidth limiting
+	 */
+
+	static bool bl_enabled;
+	static int bl_total, bl_conn;
+	static void bl_recompute();
+
+	unsigned int bl_available;
+
+	inline bool needs_upload() {
+		return data_q.size() || proto_q.size();
+	}
 };
 
 void comm_listener_poll (int fd);
