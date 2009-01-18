@@ -195,12 +195,12 @@ int iface_create()
 		           errno, strerror (errno) );
 		return -1;
 	}
-	
+
 #ifdef __OpenBSD__
-	if(0>ioctl(tun,FIONBIO)) {
-		Log_error("iface: ioctl(FIONBIO) failed with %d: %s",
-			errno, strerror(errno));
-		close(tun);
+	if (0 > ioctl (tun, FIONBIO) ) {
+		Log_error ("iface: ioctl(FIONBIO) failed with %d: %s",
+		           errno, strerror (errno) );
+		close (tun);
 		return -2;
 	}
 #endif
