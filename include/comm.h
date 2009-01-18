@@ -91,7 +91,8 @@ public:
 		sending_from_data_q = false;
 		route_overflow = false;
 		stats_clear();
-		bl_available = 0;
+		ubl_available = 0;
+		dbl_over = 0;
 	}
 
 	connection (); //this is supposed to fail, always use c(ID)
@@ -240,14 +241,18 @@ public:
 	 * bandwidth limiting
 	 */
 
-	static bool bl_enabled;
-	static int bl_total, bl_conn;
+	static bool ubl_enabled;
+	static int ubl_total, ubl_conn, ubl_burst;
+	unsigned int ubl_available;
+
+	static bool dbl_enabled;
+	static int dbl_total, dbl_conn, dbl_burst;
+	unsigned int dbl_over;
+
 	static void bl_recompute();
 
-	unsigned int bl_available;
-
 	inline bool needs_upload() {
-		return data_q.size() || proto_q.size();
+		return data_q.size();
 	}
 };
 

@@ -212,16 +212,21 @@ multi_ratio 2  --usually _should_ stay at default value
 
  -- bandwidth limiting
 
---these set maximal total/per-connection upload bandwidth, in bytes per second.
+--these set maximal total/per-connection DATA bandwidth, in bytes per second.
+
 uplimit-total 123
 uplimit-conn 321
+uplimit-burst 2048
+downlimit-total 123
+downlimit-conn 321
+downlimit-burst 2048
 
 --please note that the bandwidth we limit here is inner, and the thing gets
 --recalculated by SSL encryption (so it can differ in new size.)
 --if you want to limit real bandwidth, use your OS's tools.
---Also, dont search for download limiting here - you need OS tools too.
+--Also, dont rely on it to be exact. For that you _need_ OS tools.
 
---To get smoother bandwidths, please decrease max_waiting_* queue size values.
+--To get smoother upload line, please decrease max_waiting_* queue size values.
 
  -- tuning
 

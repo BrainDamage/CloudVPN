@@ -496,12 +496,14 @@ static bool parse_packet_header (squeue&q, uint8_t&type,
 
 void connection::handle_packet (void*buf, int len)
 {
+	if(dbl_enabled && (dbl_over > dbl_burst)) return;
 	stat_packet (true, len + p_head_size);
 	route_packet (buf, len, id);
 }
 
 void connection::handle_broadcast_packet (uint32_t ID, void*buf, int len)
 {
+	if(dbl_enabled && (dbl_over > dbl_burst)) return;
 	stat_packet (true, len + p_head_size + 4);
 	route_broadcast_packet (ID, buf, len, id);
 }
@@ -794,7 +796,7 @@ bool connection::try_write()
 	const uint8_t *buf;
 	int n, r;
 
-	if (bl_enabled && (!bl_available) && needs_upload() ) bl_recompute();
+	if (ubl_enabled && (!ubl_available) && needs_upload() ) bl_recompute();
 
 	while (proto_q.size() || data_q.size() ) {
 
@@ -821,7 +823,9 @@ bool connection::try_write()
 
 		//choke the bandwidth. Note that we dont want to really
 		//discard the packet here, because of SSL.
-		if (bl_enabled && (n > bl_available) ) break;
+		if (sending_from_data_q && ubl_enabled &&
+			(n > ubl_available) ) break;
+
 		//or try to send.
 		r = SSL_write (ssl, buf, n);
 
@@ -837,10 +841,8 @@ bool connection::try_write()
 			}
 			return true;
 		} else {
-
-			if (bl_enabled) bl_available -= n;
-
 			if (sending_from_data_q) {
+				if (ubl_enabled) ubl_available -= n;
 				data_q.pop_front();
 				sending_from_data_q = false;
 			} else proto_q.pop_front();
@@ -1060,7 +1062,8 @@ void connection::reset()
 	unset_fd();
 
 	stats_clear();
-	bl_available = 0;
+	ubl_available = 0;
+	dbl_over = 0;
 
 	if (address.length() )
 		state = cs_retry_timeout;
@@ -1341,24 +1344,24 @@ void connection::stats_clear()
  */
 
 #define minimum_granularity 10000 //full recompute threshold = 10ms.
-#define initial_boost_size 2048 //free bandwidth when starting to send stuff
 
 void connection::bl_recompute()
 {
-	if (!bl_enabled) return;
+	if ((!ubl_enabled)&&(!dbl_enabled)) return;
+
 	static uint64_t last_recompute = timestamp();
 	uint64_t timediff = timestamp() - last_recompute;
 	if (timediff < minimum_granularity) {
 		/*
-		 * only push some bandwidth to the connection which desperately
-		 * needs it. Spares much time when the connections trigger
+		 * only push some up-bandwidth to connectins which desperately
+		 * need it. Spares much time when the connections trigger on
 		 * slowly.
 		 */
 		map<int, connection>::iterator i, e;
 		for (i = connections.begin(), e = connections.end(); i != e; ++i)
 			if (i->second.needs_upload() &&
-			        (!i->second.bl_available) )
-				i->second.bl_available = initial_boost_size;
+			        (!i->second.ubl_available) )
+				i->second.ubl_available = ubl_burst;
 
 		return;
 	}
@@ -1368,24 +1371,43 @@ void connection::bl_recompute()
 	 */
 	last_recompute = timestamp();
 	map<int, connection>::iterator i, e;
-	int bandwidth_to_add;
+	int up_bandwidth_to_add, down_bandwidth_to_add;
 
-	if (bl_total) {
-		bandwidth_to_add = 0;
-		for (i = connections.begin(), e = connections.end(); i != e; ++i)
-			if (i->second.needs_upload() ) ++bandwidth_to_add;
-		if (bandwidth_to_add)
-			bandwidth_to_add = timediff * bl_total
-			                   / bandwidth_to_add / 1000000;
-		if (bl_conn && (bandwidth_to_add > bl_conn) )
-			bandwidth_to_add = bl_conn;
-	} else if (bl_conn) {
-		bandwidth_to_add = timediff * bl_conn / 1000000;
-	} else return; //fuck wut! both are 0!
+	up_bandwidth_to_add = down_bandwidth_to_add = 0;
 
-	for (i = connections.begin(), e = connections.end(); i != e; ++i)
+	if(ubl_total || dbl_total) {
+
+		for (i = connections.begin(), e = connections.end();
+			i != e; ++i) {
+			if (i->second.needs_upload() ) ++up_bandwidth_to_add;
+			if (i->second.dbl_over>0) ++down_bandwidth_to_add;
+		}
+
+		if (up_bandwidth_to_add)
+			up_bandwidth_to_add = timediff * ubl_total
+					   / up_bandwidth_to_add / 1000000;
+		if (ubl_conn && (up_bandwidth_to_add > ubl_conn) )
+			up_bandwidth_to_add = ubl_conn;
+
+		if (down_bandwidth_to_add)
+			down_bandwidth_to_add = timediff * dbl_total
+					   / down_bandwidth_to_add / 1000000;
+		if (dbl_conn && (down_bandwidth_to_add > dbl_conn) )
+			down_bandwidth_to_add = dbl_conn;
+
+	}
+	if (!ubl_total)
+		up_bandwidth_to_add = timediff * ubl_conn / 1000000;
+
+	if (!dbl_total)
+		down_bandwidth_to_add = timediff * dbl_conn / 1000000;
+
+	for (i = connections.begin(), e = connections.end(); i != e; ++i) {
 		if (i->second.needs_upload() )
-			i->second.bl_available += bandwidth_to_add;
+			i->second.ubl_available += up_bandwidth_to_add;
+		i->second.dbl_over -= down_bandwidth_to_add;
+		if(i->second.dbl_over < 0) i->second.dbl_over = 0;
+	}
 }
 
 /*
@@ -1518,9 +1540,14 @@ int connection::mtu = 8192;
 int connection::max_waiting_data_packets = 256;
 int connection::max_waiting_proto_packets = 64;
 int connection::max_remote_routes = 1024;
-bool connection::bl_enabled = false;
-int connection::bl_total = 0;
-int connection::bl_conn = 0;
+bool connection::ubl_enabled = false;
+int connection::ubl_total = 0;
+int connection::ubl_conn = 0;
+int connection::ubl_burst = 2048;
+bool connection::dbl_enabled = false;
+int connection::dbl_total = 0;
+int connection::dbl_conn = 0;
+int connection::dbl_burst = 2048;
 
 int comm_init()
 {
@@ -1575,16 +1602,40 @@ int comm_init()
 	          0.000001*connection::keepalive);
 
 	if (config_get_int ("uplimit-conn", t) ) {
-		connection::bl_enabled = true;
-		connection::bl_conn = t;
+		connection::ubl_enabled = true;
+		connection::ubl_conn = t;
 		Log_info ("per-connection upload limit is %dB/s", t);
 	}
 
 	if (config_get_int ("uplimit-total", t) ) {
-		connection::bl_enabled = true;
-		connection::bl_total = t;
+		connection::ubl_enabled = true;
+		connection::ubl_total = t;
 		Log_info ("total upload limit is %dB/s", t);
 	}
+
+	if (config_get_int ("uplimit-burst", t) ) {
+		connection::ubl_burst = t;
+	} else connection::ubl_burst = 2048;
+	if(connection::ubl_enabled)
+		Log_info ("burst upload size is %dB", t);
+
+	if (config_get_int ("downlimit-conn", t) ) {
+		connection::dbl_enabled = true;
+		connection::dbl_conn = t;
+		Log_info ("per-connection download limit is %dB/s", t);
+	}
+
+	if (config_get_int ("downlimit-total", t) ) {
+		connection::dbl_enabled = true;
+		connection::dbl_total = t;
+		Log_info ("total download limit is %dB/s", t);
+	}
+
+	if (config_get_int ("downlimit-burst", t) ) {
+		connection::dbl_burst = t;
+	} else connection::dbl_burst = 2048;
+	if(connection::dbl_enabled)
+		Log_info ("burst download size is %dB", t);
 
 	if (ssl_initialize() ) {
 		Log_fatal ("SSL initialization failed");
