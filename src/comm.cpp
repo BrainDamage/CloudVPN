@@ -496,14 +496,20 @@ static bool parse_packet_header (squeue&q, uint8_t&type,
 
 void connection::handle_packet (void*buf, int len)
 {
-	if(dbl_enabled && (dbl_over > dbl_burst)) return;
+	if(dbl_enabled) {
+		if (dbl_over > dbl_burst) return;
+		dbl_over += len + 4;
+	}
 	stat_packet (true, len + p_head_size);
 	route_packet (buf, len, id);
 }
 
 void connection::handle_broadcast_packet (uint32_t ID, void*buf, int len)
 {
-	if(dbl_enabled && (dbl_over > dbl_burst)) return;
+	if(dbl_enabled) {
+		if (dbl_over > dbl_burst) return;
+		dbl_over += len + 8;
+	}
 	stat_packet (true, len + p_head_size + 4);
 	route_broadcast_packet (ID, buf, len, id);
 }
@@ -1347,7 +1353,7 @@ void connection::stats_clear()
 
 void connection::bl_recompute()
 {
-	if ((!ubl_enabled)&&(!dbl_enabled)) return;
+	if (!(ubl_enabled||dbl_enabled)) return;
 
 	static uint64_t last_recompute = timestamp();
 	uint64_t timediff = timestamp() - last_recompute;
@@ -1370,6 +1376,7 @@ void connection::bl_recompute()
 	 * give them some, capped by maximal per-connection bandwidth.
 	 */
 	last_recompute = timestamp();
+
 	map<int, connection>::iterator i, e;
 	int up_bandwidth_to_add, down_bandwidth_to_add;
 
@@ -1401,12 +1408,13 @@ void connection::bl_recompute()
 
 	if (!dbl_total)
 		down_bandwidth_to_add = timediff * dbl_conn / 1000000;
-
+	
 	for (i = connections.begin(), e = connections.end(); i != e; ++i) {
 		if (i->second.needs_upload() )
 			i->second.ubl_available += up_bandwidth_to_add;
-		i->second.dbl_over -= down_bandwidth_to_add;
-		if(i->second.dbl_over < 0) i->second.dbl_over = 0;
+		if(i->second.dbl_over < down_bandwidth_to_add)
+			i->second.dbl_over = 0;
+		else i->second.dbl_over -= down_bandwidth_to_add;
 	}
 }
 
@@ -1547,7 +1555,7 @@ int connection::ubl_burst = 2048;
 bool connection::dbl_enabled = false;
 int connection::dbl_total = 0;
 int connection::dbl_conn = 0;
-int connection::dbl_burst = 2048;
+int connection::dbl_burst = 20480;
 
 int comm_init()
 {
@@ -1633,7 +1641,7 @@ int comm_init()
 
 	if (config_get_int ("downlimit-burst", t) ) {
 		connection::dbl_burst = t;
-	} else connection::dbl_burst = 2048;
+	} else connection::dbl_burst = 20480;
 	if(connection::dbl_enabled)
 		Log_info ("burst download size is %dB", t);
 

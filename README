@@ -219,7 +219,7 @@ uplimit-conn 321
 uplimit-burst 2048
 downlimit-total 123
 downlimit-conn 321
-downlimit-burst 2048
+downlimit-burst 20480
 
 --please note that the bandwidth we limit here is inner, and the thing gets
 --recalculated by SSL encryption (so it can differ in new size.)
@@ -227,6 +227,9 @@ downlimit-burst 2048
 --Also, dont rely on it to be exact. For that you _need_ OS tools.
 
 --To get smoother upload line, please decrease max_waiting_* queue size values.
+
+--downlimit-burst should always be a little larger, because we don't do
+--any bandwidth queuing, but just drop things.
 
  -- tuning
 
