@@ -17,7 +17,7 @@ Optional goals:
 Don't use a single malloc(), only stack/STL allocation allowed. (success!)
 
 Made by:
-[exa] <exa.exa@gmail.com>
+[exa] exa.exa@gmail.com
 
 License:
 GNU GPLv3 (see LICENSE file)
@@ -25,7 +25,7 @@ GNU GPLv3 (see LICENSE file)
 	*** COMPILING ***
 
 Use SCons - just write scons in source directory and observe the result.
-See details at <http://www.scons.org/>
+See details at http://www.scons.org/
 
 For those who do not want to install scons, or python, or any other dependency,
 there's a build.sh script in extras, which will compile the thing for you,
@@ -297,7 +297,7 @@ Please format the code using $ astyle --style=linux -pdt
 For simplicity, I provide some basic openssl scripts which generate keys good
 enough for the purpose of cloudvpning. Basic usage looks like this:
 
-We have both RSA and DSA keys. Thanks to snajpa (<snajpa@snajpa.net>) for DSA.
+We have both RSA and DSA keys. Thanks to snajpa (snajpa@snajpa.net) for DSA.
 
 cd keygen/dsa   --or /rsa. DSA is considered to be a little more secure.
 mkdir my_keys
