@@ -34,12 +34,12 @@ static string data_format (uint64_t a)
 	char buffer[64];
 	if (a < (1 << 10) ) snprintf (buffer, 63, "%g", (double) a);
 	else if (a < (1l << 20) )
-		snprintf (buffer, 63, "%0.2gKi", a / (double) (1 << 10) );
+		snprintf (buffer, 63, "%.2fKi", a / (double) (1 << 10) );
 	else if (a < (1l << 30) )
-		snprintf (buffer, 63, "%0.2gMi", a / (double) (1l << 20) );
+		snprintf (buffer, 63, "%.2fMi", a / (double) (1l << 20) );
 	else if (a < (1ll << 40) )
-		snprintf (buffer, 63, "%0.2gGi", a / (double) (1l << 30) );
-	else snprintf (buffer, 63, "%0.2gTi", a / (double) (1ll << 40) );
+		snprintf (buffer, 63, "%.2fGi", a / (double) (1l << 30) );
+	else snprintf (buffer, 63, "%0.2fTi", a / (double) (1ll << 40) );
 
 	return string (buffer);
 }
