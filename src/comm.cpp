@@ -103,16 +103,16 @@ static int ssl_initialize()
 
 	//maybe signal(sigpipe) belons here, no idea why.
 
-	t = "";
+	t;
 	config_get ("ssl_method", t);
-	if (t == "tls") {
-		Log_info ("using TLSv1 protocol");
-		ssl_ctx = SSL_CTX_new (TLSv1_method() );
-	} else {
+	if (t == "ssl") {
 		Log_info ("using SSLv3 protocol");
 		ssl_ctx = SSL_CTX_new (SSLv23_method() );
 		SSL_CTX_set_options (ssl_ctx, SSL_OP_NO_SSLv2);
 		//dont want SSLv2, cuz it's deprecated.
+	} else {
+		Log_info ("using TLSv1 protocol");
+		ssl_ctx = SSL_CTX_new (TLSv1_method() );
 	}
 
 	//force regenerating DH params
