@@ -47,52 +47,39 @@ static const char* loglevel_mark (int level)
 void Log (int lvl, const char*fmt, ...)
 {
 	if (lvl < log_level) return;
-
 	char date_buf[33];
-
 	time_t t = time (0);
 
 	strftime (date_buf, 32, "%c ", localtime (&t) );
-
 	fprintf (output_file, date_buf);
-
 	fprintf (output_file, loglevel_mark (lvl) );
 
 	va_list ap;
-
 	va_start (ap, fmt);
-
 	vfprintf (output_file, fmt, ap);
-
 	va_end (ap);
 
 	fprintf (output_file, "\n");
+	fflush (output_file);
 }
 
 void Log_full (int lvl, const char*file, int line,
                const char*fmt, ...)
 {
 	if (lvl < log_level) return;
-
 	char date_buf[33];
-
 	time_t t = time (0);
 
 	strftime (date_buf, 32, "%c ", localtime (&t) );
-
 	fprintf (output_file, date_buf);
-
 	fprintf (output_file, loglevel_mark (lvl) );
-
 	fprintf (output_file, "in `%s' line %d:\t", file, line);
 
 	va_list ap;
-
 	va_start (ap, fmt);
-
 	vfprintf (output_file, fmt, ap);
-
 	va_end (ap);
 
 	fprintf (output_file, "\n");
+	fflush (output_file);
 }
