@@ -372,20 +372,23 @@ void connection_delete (int id)
 
 static int try_accept_connection (int sock)
 {
-	int s = accept (sock, 0, 0);
+	sockaddr_type (addr);
+	socklen_t addrsize = sockaddr_type_size;
+	int s = accept (sock, &addr, &addrsize);
 	if (s < 0) {
 		if (errno == EAGAIN) return 0;
 		Log_error ("accept(%d) failed with %d", errno);
 		return 1;
 	}
 
+	Log_info ("get connection from address %s on socket %d",
+	          sockaddr_to_str (&addr), s);
+
 	if (!sock_nonblock (s) ) {
 		Log_error ("could not put accepted socket %d in nonblocking mode", s);
 		close (s);
 		return 2;
 	}
-
-	Log_info ("get connection on socket %d", s);
 
 	int cid = connection_alloc();
 	if (cid < 0) {
@@ -496,7 +499,7 @@ static bool parse_packet_header (squeue&q, uint8_t&type,
 
 void connection::handle_packet (void*buf, int len)
 {
-	if(dbl_enabled) {
+	if (dbl_enabled) {
 		if (dbl_over > dbl_burst) return;
 		dbl_over += len + 4;
 	}
@@ -506,7 +509,7 @@ void connection::handle_packet (void*buf, int len)
 
 void connection::handle_broadcast_packet (uint32_t ID, void*buf, int len)
 {
-	if(dbl_enabled) {
+	if (dbl_enabled) {
 		if (dbl_over > dbl_burst) return;
 		dbl_over += len + 8;
 	}
@@ -830,7 +833,7 @@ bool connection::try_write()
 		//choke the bandwidth. Note that we dont want to really
 		//discard the packet here, because of SSL.
 		if (sending_from_data_q && ubl_enabled &&
-			(n > ubl_available) ) break;
+		        (n > ubl_available) ) break;
 
 		//or try to send.
 		r = SSL_write (ssl, buf, n);
@@ -884,7 +887,7 @@ void connection::try_accept()
 {
 	int r = SSL_accept (ssl);
 	if (r > 0) {
-		Log_info ("socket %d accepted SSL connection", fd);
+		Log_info ("socket %d accepted SSL connection id %d", fd, id);
 
 		activate();
 
@@ -925,11 +928,22 @@ void connection::try_connect()
 		//test if the socket is writeable, otherwise still in progress
 		if (!tcp_socket_writeable (fd) ) return;
 
+
+		//print a nice info about who are we connected to
+		sockaddr_type (addr);
+		socklen_t s = sockaddr_type_size;
+		if (getpeername (fd, (sockaddr*) &addr_4, &s) )
+			Log_info ("conn %d connected to unknown peer", id);
+		else	Log_info ("conn %d connected to address %s",
+			               id, sockaddr_to_str (&addr) );
+
 		poll_set_remove_write (fd);
 		poll_set_add_read (fd); //always needed
 		state = cs_ssl_connecting;
-		if (alloc_ssl() ) reset();
-		else try_ssl_connect();
+		if (alloc_ssl() ) {
+			Log_error ("conn %d failed to allocate SSL stuff", id);
+			reset();
+		} else try_ssl_connect();
 		return;
 	}
 
@@ -941,7 +955,7 @@ void connection::try_ssl_connect()
 {
 	int r = SSL_connect (ssl);
 	if (r > 0) {
-		Log_info ("socket %d established SSL connection", fd);
+		Log_info ("socket %d established SSL connection id %d", fd, id);
 
 		activate();
 
@@ -1353,7 +1367,7 @@ void connection::stats_clear()
 
 void connection::bl_recompute()
 {
-	if (!(ubl_enabled||dbl_enabled)) return;
+	if (! (ubl_enabled || dbl_enabled) ) return;
 
 	static uint64_t last_recompute = timestamp();
 	uint64_t timediff = timestamp() - last_recompute;
@@ -1382,23 +1396,23 @@ void connection::bl_recompute()
 
 	up_bandwidth_to_add = down_bandwidth_to_add = 0;
 
-	if(ubl_total || dbl_total) {
+	if (ubl_total || dbl_total) {
 
 		for (i = connections.begin(), e = connections.end();
-			i != e; ++i) {
+		        i != e; ++i) {
 			if (i->second.needs_upload() ) ++up_bandwidth_to_add;
-			if (i->second.dbl_over>0) ++down_bandwidth_to_add;
+			if (i->second.dbl_over > 0) ++down_bandwidth_to_add;
 		}
 
 		if (up_bandwidth_to_add)
 			up_bandwidth_to_add = timediff * ubl_total
-					   / up_bandwidth_to_add / 1000000;
+			                      / up_bandwidth_to_add / 1000000;
 		if (ubl_conn && (up_bandwidth_to_add > ubl_conn) )
 			up_bandwidth_to_add = ubl_conn;
 
 		if (down_bandwidth_to_add)
 			down_bandwidth_to_add = timediff * dbl_total
-					   / down_bandwidth_to_add / 1000000;
+			                        / down_bandwidth_to_add / 1000000;
 		if (dbl_conn && (down_bandwidth_to_add > dbl_conn) )
 			down_bandwidth_to_add = dbl_conn;
 
@@ -1408,11 +1422,11 @@ void connection::bl_recompute()
 
 	if (!dbl_total)
 		down_bandwidth_to_add = timediff * dbl_conn / 1000000;
-	
+
 	for (i = connections.begin(), e = connections.end(); i != e; ++i) {
 		if (i->second.needs_upload() )
 			i->second.ubl_available += up_bandwidth_to_add;
-		if(i->second.dbl_over < down_bandwidth_to_add)
+		if (i->second.dbl_over < down_bandwidth_to_add)
 			i->second.dbl_over = 0;
 		else i->second.dbl_over -= down_bandwidth_to_add;
 	}
@@ -1624,7 +1638,7 @@ int comm_init()
 	if (config_get_int ("uplimit-burst", t) ) {
 		connection::ubl_burst = t;
 	} else connection::ubl_burst = 2048;
-	if(connection::ubl_enabled)
+	if (connection::ubl_enabled)
 		Log_info ("burst upload size is %dB", t);
 
 	if (config_get_int ("downlimit-conn", t) ) {
@@ -1642,7 +1656,7 @@ int comm_init()
 	if (config_get_int ("downlimit-burst", t) ) {
 		connection::dbl_burst = t;
 	} else connection::dbl_burst = 20480;
-	if(connection::dbl_enabled)
+	if (connection::dbl_enabled)
 		Log_info ("burst download size is %dB", t);
 
 	if (ssl_initialize() ) {

@@ -117,6 +117,29 @@ bool sockaddr_from_str (const char *str,
 	return true;
 }
 
+const char* sockaddr_to_str (struct sockaddr*addr)
+{
+	static char buf[128];
+	const void*t;
+	int port;
+	switch (addr->sa_family) {
+	case AF_INET:
+		t = (const void*) & ( ( (sockaddr_in*) addr)->sin_addr);
+		port = ntohs ( ( (sockaddr_in*) addr)->sin_port);
+		break;
+	case AF_INET6:
+		t = (const void*) & ( ( (sockaddr_in6*) addr)->sin6_addr);
+		port = ntohs ( ( (sockaddr_in6*) addr)->sin6_port);
+		break;
+	default:
+		return 0;
+	}
+
+	if (!inet_ntop (addr->sa_family, t, buf, 127) ) return 0;
+	snprintf (buf + strlen (buf), 16, " %d", port);
+	return buf;
+}
+
 #include <fcntl.h>
 #include <unistd.h>
 
