@@ -48,6 +48,14 @@ static int status_to_file (const char*fn)
 {
 	FILE*outfile;
 
+	uint64_t //for computing totals
+	in_p_total, in_s_total,
+	out_p_total, out_s_total,
+	in_p_speed, in_s_speed,
+	out_p_speed, out_s_speed;
+	out_p_total = in_p_total = out_s_total = in_s_total = 0;
+	in_p_speed = in_s_speed = out_p_speed = out_s_speed = 0;
+
 	outfile = fopen (fn, "w");
 	if (!outfile) {
 		Log_warn ("Couldn't open status file `%s' for writing", fn);
@@ -89,12 +97,34 @@ static int status_to_file (const char*fn)
 		        data_format (c->second.out_s_total).c_str(),
 		        data_format (c->second.out_p_total).c_str() );
 
+		in_p_speed += c->second.in_p_speed;
+		in_p_total += c->second.in_p_total;
+		in_s_speed += c->second.in_s_speed;
+		in_s_total += c->second.in_s_total;
+		out_p_speed += c->second.out_p_speed;
+		out_p_total += c->second.out_p_total;
+		out_s_speed += c->second.out_s_speed;
+		out_s_total += c->second.out_s_total;
+
 		for (r = c->second.remote_routes.begin();
 		        r != c->second.remote_routes.end();++r)
 			output (" `--route to %s \tdist %u \tping %u\n",
 			        format_hwaddr (r->first).c_str(),
 			        r->second.dist, r->second.ping);
 	}
+
+	output ("---\n\n");
+
+	output (" >> total in  %sB/s, %spkt/s; total %sB, %spkt\n",
+	        data_format (in_s_speed).c_str(),
+	        data_format (in_p_speed).c_str(),
+	        data_format (in_s_total).c_str(),
+	        data_format (in_p_total).c_str() );
+	output (" << total out %sB/s, %spkt/s; total %sB, %spkt\n",
+	        data_format (out_s_speed).c_str(),
+	        data_format (out_p_speed).c_str(),
+	        data_format (out_s_total).c_str(),
+	        data_format (out_p_total).c_str() );
 
 	output ("---\n\n");
 
