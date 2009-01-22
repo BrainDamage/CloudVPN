@@ -456,6 +456,7 @@ static int try_accept_connection (int sock)
 	c.set_fd (s);
 	c.state = cs_accepting;
 	c.peer_addr_str = peer_addr_str;
+	c.peer_connected_since = timestamp();
 
 	c.start_accept(); //bump the thing
 
@@ -995,6 +996,8 @@ void connection::try_connect()
 			          id, peer_addr_str.c_str() );
 		}
 
+		peer_connected_since = timestamp();
+
 		poll_set_remove_write (fd);
 		poll_set_add_read (fd); //always needed
 		state = cs_ssl_connecting;
@@ -1146,7 +1149,6 @@ void connection::reset()
 	stats_clear();
 	ubl_available = 0;
 	dbl_over = 0;
-	peer_addr_str.clear();
 
 	if (address.length() )
 		state = cs_retry_timeout;
@@ -1385,18 +1387,27 @@ connection::connection()
  * to change this interval.
  */
 
+uint64_t connection::all_in_p_total = 0;
+uint64_t connection::all_in_s_total = 0;
+uint64_t connection::all_out_p_total = 0;
+uint64_t connection::all_out_s_total = 0;
+
 void connection::stat_packet (bool in, int size)
 {
 	if (in) {
 		in_p_total += 1;
 		in_p_now += 1;
+		all_in_p_total += 1;
 		in_s_total += size;
 		in_s_now += size;
+		all_in_s_total += size;
 	} else {
 		out_p_total += 1;
 		out_p_now += 1;
+		all_out_p_total += 1;
 		out_s_total += size;
 		out_s_now += size;
+		all_out_s_total += size;
 	}
 }
 
@@ -1418,6 +1429,8 @@ void connection::stats_clear()
 	out_p_total = out_p_now = out_s_total = out_s_now = 0;
 	in_p_speed = in_s_speed = out_p_speed = out_s_speed = 0;
 	stat_update = 0;
+	peer_addr_str.clear();
+	peer_connected_since = 0;
 }
 
 /*

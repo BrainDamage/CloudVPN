@@ -49,11 +49,8 @@ static int status_to_file (const char*fn)
 	FILE*outfile;
 
 	uint64_t //for computing totals
-	in_p_total, in_s_total,
-	out_p_total, out_s_total,
 	in_p_speed, in_s_speed,
 	out_p_speed, out_s_speed;
-	out_p_total = in_p_total = out_s_total = in_s_total = 0;
 	in_p_speed = in_s_speed = out_p_speed = out_s_speed = 0;
 
 	outfile = fopen (fn, "w");
@@ -90,6 +87,10 @@ static int status_to_file (const char*fn)
 		if (c->second.peer_addr_str.length() )
 			output (" = connected to addr `%s'\n",
 			        c->second.peer_addr_str.c_str() );
+		if (c->second.peer_connected_since)
+			output (" = connected for %g seconds\n", 0.000001 *
+			        (timestamp() - c->second.peer_connected_since) );
+
 
 		output (" >> in  %sB/s, %spkt/s; total %sB, %spkt\n",
 		        data_format (c->second.in_s_speed).c_str(),
@@ -103,13 +104,9 @@ static int status_to_file (const char*fn)
 		        data_format (c->second.out_p_total).c_str() );
 
 		in_p_speed += c->second.in_p_speed;
-		in_p_total += c->second.in_p_total;
 		in_s_speed += c->second.in_s_speed;
-		in_s_total += c->second.in_s_total;
 		out_p_speed += c->second.out_p_speed;
-		out_p_total += c->second.out_p_total;
 		out_s_speed += c->second.out_s_speed;
-		out_s_total += c->second.out_s_total;
 
 		for (r = c->second.remote_routes.begin();
 		        r != c->second.remote_routes.end();++r)
@@ -123,13 +120,13 @@ static int status_to_file (const char*fn)
 	output (" >> total in  %sB/s, %spkt/s; total %sB, %spkt\n",
 	        data_format (in_s_speed).c_str(),
 	        data_format (in_p_speed).c_str(),
-	        data_format (in_s_total).c_str(),
-	        data_format (in_p_total).c_str() );
+	        data_format (connection::all_in_s_total).c_str(),
+	        data_format (connection::all_in_p_total).c_str() );
 	output (" << total out %sB/s, %spkt/s; total %sB, %spkt\n",
 	        data_format (out_s_speed).c_str(),
 	        data_format (out_p_speed).c_str(),
-	        data_format (out_s_total).c_str(),
-	        data_format (out_p_total).c_str() );
+	        data_format (connection::all_out_s_total).c_str(),
+	        data_format (connection::all_out_p_total).c_str() );
 
 	output ("---\n\n");
 
