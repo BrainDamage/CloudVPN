@@ -64,6 +64,52 @@ static SSL_CTX* ssl_ctx;
 static string ssl_pass;
 
 /*
+ * socket initialization
+ *
+ * generally, sets socket option according to configuration.
+ *
+ * We support TCP_NODELAY as it is vitable for gaming,
+ * and IP_TOS settings for optimizing the delay/throughput/reliability/cost
+ */
+
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
+
+static bool tcp_nodelay = false;
+static int ip_tos = 0;
+
+static void sockoptions_init()
+{
+	tcp_nodelay = config_is_true ("tcp_nodelay");
+	if (tcp_nodelay) Log_info ("TCP_NODELAY is set for all sockets");
+	string t;
+	if (!config_get ("ip_tos", t) ) return;
+	if (t == "lowdelay") ip_tos = IPTOS_LOWDELAY;
+	else if (t == "throughput") ip_tos = IPTOS_THROUGHPUT;
+	else if (t == "reliability") ip_tos = IPTOS_RELIABILITY;
+	else if (t == "mincost") ip_tos = IPTOS_MINCOST;
+	if (ip_tos) Log_info ("type of service is `%s' for all sockets",
+		                      t.c_str() );
+}
+
+static void sockoptions_set (int s)
+{
+	int t;
+	if (tcp_nodelay) {
+		t = 1;
+		if (setsockopt (s, IPPROTO_TCP, TCP_NODELAY, &t, sizeof (t) ) )
+		Log_warn ( "setsockopt(%d,TCP,NODELAY) failed with %d: %s",
+			s, errno, strerror (errno) );
+	}
+	if (ip_tos) {
+		t = ip_tos;
+		if (setsockopt (s, IPPROTO_IP, IP_TOS, &t, sizeof (t) ) )
+			Log_warn ("setsockopt(%d,IP,TOS) failed with %d: %s",
+			          s, errno, strerror (errno) );
+	}
+}
+
+/*
  * SSL initialization
  * mostly only key loading
  */
@@ -276,6 +322,8 @@ static int tcp_connect_socket (const string&addr)
 		return -3;
 	}
 
+	sockoptions_set (s);
+
 	if (connect (s, &sa, sa_len) < 0 ) {
 		int e = errno;
 		if (e != EINPROGRESS) {
@@ -380,6 +428,8 @@ static int try_accept_connection (int sock)
 		Log_error ("accept(%d) failed with %d", errno);
 		return 1;
 	}
+
+	sockoptions_set (s);
 
 	string peer_addr_str = sockaddr_to_str (&addr);
 	Log_info ("get connection from address %s on socket %d",
@@ -1668,6 +1718,8 @@ int comm_init()
 	} else connection::dbl_burst = 20480;
 	if (connection::dbl_enabled)
 		Log_info ("burst download size is %dB", t);
+
+	sockoptions_init();
 
 	if (ssl_initialize() ) {
 		Log_fatal ("SSL initialization failed");
