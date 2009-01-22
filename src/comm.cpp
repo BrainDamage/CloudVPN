@@ -381,8 +381,9 @@ static int try_accept_connection (int sock)
 		return 1;
 	}
 
+	string peer_addr_str = sockaddr_to_str (&addr);
 	Log_info ("get connection from address %s on socket %d",
-	          sockaddr_to_str (&addr), s);
+	          peer_addr_str.c_str(), s);
 
 	if (!sock_nonblock (s) ) {
 		Log_error ("could not put accepted socket %d in nonblocking mode", s);
@@ -401,6 +402,7 @@ static int try_accept_connection (int sock)
 
 	c.set_fd (s);
 	c.state = cs_accepting;
+	c.peer_addr_str = peer_addr_str;
 
 	c.start_accept(); //bump the thing
 
@@ -934,8 +936,11 @@ void connection::try_connect()
 		socklen_t s = sockaddr_type_size;
 		if (getpeername (fd, (sockaddr*) &addr_4, &s) )
 			Log_info ("conn %d connected to unknown peer", id);
-		else	Log_info ("conn %d connected to address %s",
-			               id, sockaddr_to_str (&addr) );
+		else {
+			peer_addr_str = sockaddr_to_str (&addr);
+			Log_info ("conn %d connected to address %s",
+			          id, peer_addr_str.c_str() );
+		}
 
 		poll_set_remove_write (fd);
 		poll_set_add_read (fd); //always needed
@@ -969,6 +974,10 @@ void connection::try_ssl_connect()
 
 void connection::try_close()
 {
+	if (!ssl) {
+		reset(); //someone already terminated it.
+		return;
+	}
 	int r = SSL_shutdown (ssl);
 	if (r < 0) {
 		Log_warn ("SSL connection on %d not terminated properly", fd);
@@ -1084,6 +1093,7 @@ void connection::reset()
 	stats_clear();
 	ubl_available = 0;
 	dbl_over = 0;
+	peer_addr_str.clear();
 
 	if (address.length() )
 		state = cs_retry_timeout;

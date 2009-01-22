@@ -83,9 +83,14 @@ static int status_to_file (const char*fn)
 			        c->first, c->second.ping,
 			        c->second.remote_routes.size(), c->second.fd);
 		else output ("connection %d inactive\n", c->first);
+
 		if (c->second.address.length() )
 			output (" * assigned to host `%s'\n",
 			        c->second.address.c_str() );
+		if (c->second.peer_addr_str.length() )
+			output (" = connected to addr `%s'\n",
+			        c->second.peer_addr_str.c_str() );
+
 		output (" >> in  %sB/s, %spkt/s; total %sB, %spkt\n",
 		        data_format (c->second.in_s_speed).c_str(),
 		        data_format (c->second.in_p_speed).c_str(),

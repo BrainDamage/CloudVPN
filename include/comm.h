@@ -93,6 +93,7 @@ public:
 		stats_clear();
 		ubl_available = 0;
 		dbl_over = 0;
+		peer_addr_str = "";
 	}
 
 	connection (); //this is supposed to fail, always use c(ID)
@@ -236,6 +237,8 @@ public:
 	out_s_total, out_s_now,
 	in_p_speed, in_s_speed,
 	out_p_speed, out_s_speed;
+
+	string peer_addr_str;
 
 	/*
 	 * bandwidth limiting
