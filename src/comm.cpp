@@ -72,6 +72,7 @@ static string ssl_pass;
  * and IP_TOS settings for optimizing the delay/throughput/reliability/cost
  */
 
+#include <netinet/in_systm.h>  //required on some platforms for n_time
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 
@@ -87,7 +88,9 @@ static void sockoptions_init()
 	if (t == "lowdelay") ip_tos = IPTOS_LOWDELAY;
 	else if (t == "throughput") ip_tos = IPTOS_THROUGHPUT;
 	else if (t == "reliability") ip_tos = IPTOS_RELIABILITY;
+#ifdef IPTOS_MINCOST  //not available on some platforms.
 	else if (t == "mincost") ip_tos = IPTOS_MINCOST;
+#endif
 	if (ip_tos) Log_info ("type of service is `%s' for all sockets",
 		                      t.c_str() );
 }
@@ -98,8 +101,8 @@ static void sockoptions_set (int s)
 	if (tcp_nodelay) {
 		t = 1;
 		if (setsockopt (s, IPPROTO_TCP, TCP_NODELAY, &t, sizeof (t) ) )
-		Log_warn ( "setsockopt(%d,TCP,NODELAY) failed with %d: %s",
-			s, errno, strerror (errno) );
+			Log_warn ( "setsockopt(%d,TCP,NODELAY) failed with %d: %s",
+			           s, errno, strerror (errno) );
 	}
 	if (ip_tos) {
 		t = ip_tos;
