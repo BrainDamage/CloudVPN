@@ -114,8 +114,16 @@ static void sockoptions_set (int s)
 
 /*
  * SSL initialization
- * mostly only key loading
+ *
+ * What is loaded:
+ * - key+cert
+ * - DH params
+ * - Some number of CA's. If there's no CA specified, there's no checking.
+ * - Some number of CRL's.
  */
+
+static STACK_OF (X509) * CAs = NULL;
+static STACK_OF (X509_CRL) * CRLs = NULL;
 
 static int ssl_password_callback (char*buffer, int num, int rwflag, void*udata)
 {
@@ -131,30 +139,40 @@ static int ssl_password_callback (char*buffer, int num, int rwflag, void*udata)
 
 static int ssl_verify_callback (int preverify_ok, X509_STORE_CTX*ctx)
 {
-	if(!preverify_ok) {
-		Log_info("certificate preverify failure: %s",
-			X509_verify_cert_error_string(
-			X509_STORE_CTX_get_error(ctx)));
+	if (!preverify_ok) {
+		Log_info ("certificate preverify failure: %s",
+		          X509_verify_cert_error_string (
+		              X509_STORE_CTX_get_error (ctx) ) );
 		return 0; //no errors allowed!
 	}
 
-	/*
-	 * X509_STORE_set_flags(X509_V_FLAG_CRL_CHECK);
-	 * X509_STORE_CTX_trusted_stack
-	 * X509_STORE_add_crl
-	 */
+	if (!ctx->cert) {
+		Log_info ("no certificate supplied");
+		X509_STORE_CTX_set_error (ctx,
+		                          X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT);
+		return 0;
+	}
 
+	if (CAs) {
+		if (CRLs) {
+			X509_STORE_CTX_set_flags (ctx, X509_V_FLAG_CRL_CHECK);
+			X509_STORE_CTX_set0_crls (ctx, CRLs);
+		}
+		ctx->chain = CAs;
+		int ok = X509_verify_cert (ctx);
+		ctx->chain = 0; //so it doesn't get deleted
+		if (!ok) return 0;
+	}
 	return 1; //all OK
 }
 
 static int ssl_initialize()
 {
-	string keypath, certpath, capath, t;
+	string keypath, certpath, t;
 
 	if ( (!config_get ("key", keypath) ) ||
-	        (!config_get ("cert", certpath) ) ||
-	        (!config_get ("ca_cert", capath) ) ) {
-		Log_fatal ("you must correctly specify key, cert and ca_cert options");
+	        (!config_get ("cert", certpath) ) ) {
+		Log_fatal ("you must correctly specify key and cert options");
 		return 1;
 	}
 
@@ -205,12 +223,6 @@ static int ssl_initialize()
 		return 3;
 	}
 
-	if (!SSL_CTX_load_verify_locations (ssl_ctx, capath.c_str(), 0) ) {
-		Log_error ("SSL CA loading failed: %s",
-		           ERR_error_string (ERR_get_error(), 0) );
-		return 4;
-	}
-
 	string dh_file;
 	if (config_get ("dh", dh_file) ) {
 
@@ -253,10 +265,30 @@ static int ssl_initialize()
 		return 9;
 	}
 
+	/*
+	 * Here:
+	 * Load CA's to STACK_OF(X509), set if the certs should be checked
+	 * Load CRL's to STACK_OF(X509_CRL)
+	 */
+
+	list<string> cl;
+	list<string>::iterator i, e;
+
+	config_get_list ("ca", cl);
+	for (i = cl.begin(), e = cl.end();i != e;++i) {
+		//TODO load here
+	}
+
+	config_get_list ("crl", cl);
+	for (i = cl.begin(), e = cl.end();i != e;++i) {
+		//TODO
+	}
+
+	if (!CAs) Log_warn ("SECURITY WARNING: CA checking disabled, your network is open for everyone.");
+
 	//policy - verify peer's signature, and refuse peers without certificate
-	SSL_CTX_set_verify (ssl_ctx, SSL_VERIFY_PEER |
-	                    SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
-			    ssl_verify_callback);
+	SSL_CTX_set_verify (ssl_ctx, SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
+	                    ssl_verify_callback);
 
 	Log_info ("SSL initialized OK");
 	return 0;
@@ -264,6 +296,7 @@ static int ssl_initialize()
 
 static int ssl_destroy()
 {
+	//TODO unload CRLs and CAs
 	SSL_CTX_free (ssl_ctx);
 	return 0;
 }
