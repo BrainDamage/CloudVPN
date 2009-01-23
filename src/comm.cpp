@@ -129,6 +129,24 @@ static int ssl_password_callback (char*buffer, int num, int rwflag, void*udata)
 	return ssl_pass.length();
 }
 
+static int ssl_verify_callback (int preverify_ok, X509_STORE_CTX*ctx)
+{
+	if(!preverify_ok) {
+		Log_info("certificate preverify failure: %s",
+			X509_verify_cert_error_string(
+			X509_STORE_CTX_get_error(ctx)));
+		return 0; //no errors allowed!
+	}
+
+	/*
+	 * X509_STORE_set_flags(X509_V_FLAG_CRL_CHECK);
+	 * X509_STORE_CTX_trusted_stack
+	 * X509_STORE_add_crl
+	 */
+
+	return 1; //all OK
+}
+
 static int ssl_initialize()
 {
 	string keypath, certpath, capath, t;
@@ -237,7 +255,8 @@ static int ssl_initialize()
 
 	//policy - verify peer's signature, and refuse peers without certificate
 	SSL_CTX_set_verify (ssl_ctx, SSL_VERIFY_PEER |
-	                    SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
+	                    SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
+			    ssl_verify_callback);
 
 	Log_info ("SSL initialized OK");
 	return 0;
