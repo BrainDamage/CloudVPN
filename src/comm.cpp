@@ -265,28 +265,66 @@ static int ssl_initialize()
 		return 9;
 	}
 
-	/*
-	 * Here:
-	 * Load CA's to STACK_OF(X509), set if the certs should be checked
-	 * Load CRL's to STACK_OF(X509_CRL)
-	 */
-
 	list<string> cl;
 	list<string>::iterator i, e;
 
-	config_get_list ("ca", cl);
+	config_get_list ("ca_cert", cl);
+	CAs=sk_X509_new_null();
 	for (i = cl.begin(), e = cl.end();i != e;++i) {
-		//TODO load here
+		BIO*bio;
+		X509*cert;
+		int n;
+		
+		bio=BIO_new_file(i->c_str(),"r");
+		
+		if(!bio) {
+			Log_warn("cannot load CA certs from `%s'", i->c_str());
+			continue;
+		}
+
+		n=0;
+
+		while(1){
+			cert=PEM_read_bio_X509(bio,0,0,0);
+			if(!cert) break;
+			sk_X509_push(CAs,cert);
+			++n;
+		}
+
+		Log_info("loaded %d CA cert%s from `%s'",
+			n,n>1?"s":"",i->c_str());
+		BIO_free(bio);
 	}
 
 	config_get_list ("crl", cl);
+	CRLs=sk_X509_CRL_new_null();
 	for (i = cl.begin(), e = cl.end();i != e;++i) {
-		//TODO
+		BIO*bio;
+		X509_CRL*crl;
+		int n;
+		bio=BIO_new_file(i->c_str(),"r");
+		
+		if(!bio) {
+			Log_warn("cannot load CRLs from `%s'", i->c_str());
+			continue;
+		}
+
+		n=0;
+
+		while(1){
+			crl=PEM_read_bio_X509_CRL(bio,0,0,0);
+			if(!crl) break;
+			sk_X509_CRL_push(CRLs,crl);
+			++n;
+		}
+
+		Log_info("loaded %d CRL%s from `%s'",
+			n,n>1?"s":"",i->c_str());
+		BIO_free(bio);
 	}
 
-	if (!CAs) Log_warn ("SECURITY WARNING: CA checking disabled, your network is open for everyone.");
+	if (!CAs) Log_warn ("SECURITY WARNING: CA checking disabled, your network is OPEN FOR EVERYONE!");
 
-	//policy - verify peer's signature, and refuse peers without certificate
 	SSL_CTX_set_verify (ssl_ctx, SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
 	                    ssl_verify_callback);
 
@@ -296,7 +334,8 @@ static int ssl_initialize()
 
 static int ssl_destroy()
 {
-	//TODO unload CRLs and CAs
+	sk_X509_free(CAs);
+	sk_X509_CRL_free(CRLs);
 	SSL_CTX_free (ssl_ctx);
 	return 0;
 }
