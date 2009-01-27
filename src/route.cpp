@@ -265,8 +265,7 @@ void route_init()
 	route_max_dist = t;
 
 	if (config_is_true ("bridge_mode") ) {
-		broadcast_send = broadcast_nocopy =
-		                     ignore_macs = promisc = true;
+		broadcast_send = ignore_macs = promisc = true;
 		Log_info ("bridging mode enabled");
 	}
 
