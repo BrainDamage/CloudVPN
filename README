@@ -251,14 +251,18 @@ ip_tos lowdelay|throughtput|reliability|mincost
 
 promisc yes -- enables the real promisc on tap0.
 
-broadcast_all yes
-	-- helps to ignore inner mac addresses,
-	-- which would potentially collide with some bridged ones.
+ignore_macs yes -- avoid bridged-MACs' collisions with the VPN's MACs.
+
+broadcast_send yes -- send all packets as broadcasts. Usuable at bridging.
+
+bridge_mode yes -- selects all the above options at once.
 
 broadcast_nocopy yes
-	--don't really broadcast the broadcast packets, only send one copy.
-	--usuable when you are bridging via multipath connection.
-	--It may cripple real ethernet functionality.
+	--don't really broadcast the broadcast packets, only send one copy
+	--to a random connection. usuable ONLY when you are multipath-connected
+	--to ONE node (for example you have two ADSL's).
+	--It otherwise WILL cripple real ethernet functionality.
+	--The benefit lies at using the multipath much better.
 
 --if you are doing a simple point-to-point bridge, you might also
 --want to decrease the br_id_cache_size (to 16 or so). If there's more hosts,

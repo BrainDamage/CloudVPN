@@ -236,8 +236,9 @@ static int route_report_ping_diff = 5000;
 static int route_max_dist = 64;
 static map<hwaddr, route_info> route, reported_route;
 static bool promisc = false;
-static bool broadcast_all = false;
+static bool broadcast_send = false;
 static bool broadcast_nocopy = false;
+static bool ignore_macs = false;
 
 static void report_route();
 
@@ -263,14 +264,27 @@ void route_init()
 	Log_info ("maximal node distance is %d", t);
 	route_max_dist = t;
 
-	if (broadcast_all = config_is_true ("broadcast_all") )
-		Log_info ("routing all packets as broadcasts");
+	if (config_is_true ("bridge_mode") ) {
+		broadcast_send = broadcast_nocopy =
+		                     ignore_macs = promisc = true;
+		Log_info ("bridging mode enabled");
+	}
 
-	if (broadcast_nocopy = config_is_true ("broadcast_nocopy") )
+	if (config_is_set ("broadcast_send") &&
+	        (broadcast_send = config_is_true ("broadcast_send") ) )
+		Log_info ("sending all packets as broadcasts");
+
+	if (config_is_set ("broadcast_nocopy") &&
+	        (broadcast_nocopy = config_is_true ("broadcast_nocopy") ) )
 		Log_info ("not doing multiple copies of broadcast packets");
 
-	if (promisc = config_is_true ("promisc") )
-		Log_info ("promiscuous mode");
+	if (config_is_set ("ignore_macs") &&
+	        (ignore_macs = config_is_true ("ignore_macs") ) )
+		Log_info ("avoiding collisions with inner mac addresses");
+
+	if (config_is_set ("promisc") &&
+	        (promisc = config_is_true ("promisc") ) )
+		Log_info ("promiscuous mode enabled");
 }
 
 void route_shutdown()
@@ -313,6 +327,13 @@ void route_update()
 	if (iface_get_sockfd() >= 0)
 		route[hwaddr (iface_cached_hwaddr() ) ] = route_info (1, 0, -1);
 
+	/*
+	 * When ignoring MACs, let's dont fill in any route information,
+	 * as we dont need it, and it would only confuse the other guys.
+	 */
+
+	if(ignore_macs) goto end;
+
 	for (i = cons.begin();i != cons.end();++i) {
 		if (i->second.state != cs_active)
 			continue;
@@ -340,6 +361,7 @@ void route_update()
 
 	route_update_multi();
 
+end:
 	report_route();
 }
 
@@ -348,7 +370,8 @@ void route_packet (void*buf, size_t len, int conn)
 	if (len < 2 + (2*hwaddr_size) ) return;
 	hwaddr a (buf);
 
-	if (broadcast_all || is_addr_broadcast (a) ) {
+	if ( ignore_macs || (broadcast_send && (conn == -1) )
+	        || is_addr_broadcast (a) ) {
 		route_broadcast_packet (new_packet_uid(), buf, len, conn);
 		return;
 	}
@@ -394,7 +417,7 @@ void route_broadcast_packet (uint32_t id, void*buf, size_t len, int conn)
 
 	hwaddr a (buf); //destination
 
-	if ( (!broadcast_all) && (a == iface_cached_hwaddr() ) && (conn >= 0) ) {
+	if ( (!ignore_macs) && (a == iface_cached_hwaddr() ) && (conn >= 0) ) {
 		iface_write (buf, len);
 		return; //it was only for us.
 	}
@@ -405,7 +428,8 @@ void route_broadcast_packet (uint32_t id, void*buf, size_t len, int conn)
 
 	map<hwaddr, route_info>::iterator r;
 	if ( !is_addr_broadcast (a) ) {
-		if ( (!broadcast_all) &&
+		if (promisc && (conn >= 0) ) iface_write (buf, len);
+		if ( (!ignore_macs) &&
 		        (route.end() != (r = route.find (a) ) ) )  {
 
 			/*
@@ -427,21 +451,23 @@ void route_broadcast_packet (uint32_t id, void*buf, size_t len, int conn)
 				return;
 			} //if the connection didn't exist, forget about this.
 		}
-		if (promisc) iface_write (buf, len);
 	}
 
-	//if real broadcast is disabled, select one connection to use
+broadcast:
+	//if real broadcast is disabled, select random connection to use
 	if (broadcast_nocopy) {
+		if (conn >= 0) return;
+		//TODO, this works only in connections that are 1:1.
+		//We should weight the ratio accordingly to the pings.
 		int n = comm_connections().size();
-		if (conn >= 0)--n; //we do not send back
-		n = rand() % n; //one random of them;
+		n = rand() % n; //one random of them
 		map<int, connection>::iterator i = comm_connections().begin();
 		for (;n > 0;--n, ++i) if (i->first == conn) ++n;
 		i->second.write_broadcast_packet (id, buf, len);
 		return;
 	}
 
-	//now broadcast the thing.
+	//now just broadcast the thing.
 	map<int, connection>::iterator
 	i = comm_connections().begin(),
 	    e = comm_connections().end();
