@@ -196,7 +196,9 @@ iface_device tap0  --remember NOT to specify tun.
 mac 00:00:00:00:00:00
 
 -- on the BSD, you should be able to create tap0 device by
--- # ifconfig tap0 create
+-- '# ifconfig tap0 create'.
+-- on OpenBSD, you NEED to specify tun0, because there's no tap:
+-- '# ifconfig tun0 link0' makes it behave like a tap.
 
 
  -- local security
@@ -245,6 +247,23 @@ ip_tos lowdelay|throughtput|reliability|mincost
 	--set IP type of service. see 'man 7 ip' for description
 
 
+ -- network bridging - you usually need those options create a br0-like bridge
+
+promisc yes -- enables the real promisc on tap0.
+
+broadcast_all yes
+	-- helps to ignore inner mac addresses,
+	-- which would potentially collide with some bridged ones.
+
+broadcast_nocopy yes
+	--don't really broadcast the broadcast packets, only send one copy.
+	--usuable when you are bridging via multipath connection.
+	--It may cripple real ethernet functionality.
+
+--if you are doing a simple point-to-point bridge, you might also
+--want to decrease the br_id_cache_size (to 16 or so). If there's more hosts,
+--do _NOT_ decrease it.
+
  -- tuning
 
 br_id_cache_size 1024 --broadcast ID cache size, in ID entries.
@@ -282,8 +301,9 @@ report_ping_changes_above 5000 -- usuable when route information updates fills
 
 ssl_method tls -- default ssl method to use. 'ssl' (SSLv3) is the second option
 
-status-file /some/file  -- file where to print nice information exports
+status-file /some/file -- file where to print nice information exports
 status-interval 30000000 -- periodicity of the above
+status-verbose yes -- also report routes of the connections
 
 broadcast_filter_allow 0806 -- broadcast packet filter by EtherID
 	-- when not specified, every EtherID is allowed

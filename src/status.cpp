@@ -26,6 +26,7 @@ static string status_file = "";
 static uint64_t last_export = 0;
 static uint64_t start_time = 0;
 static int status_interval = 30000000;
+static bool verbose = false;
 
 #include <stdio.h>
 
@@ -108,11 +109,11 @@ static int status_to_file (const char*fn)
 		out_p_speed += c->second.out_p_speed;
 		out_s_speed += c->second.out_s_speed;
 
-		for (r = c->second.remote_routes.begin();
-		        r != c->second.remote_routes.end();++r)
-			output (" `--route to %s \tdist %u \tping %u\n",
-			        format_hwaddr (r->first).c_str(),
-			        r->second.dist, r->second.ping);
+		if (verbose) for (r = c->second.remote_routes.begin();
+			                  r != c->second.remote_routes.end();++r)
+				output (" `--route to %s \tdist %u \tping %u\n",
+				        format_hwaddr (r->first).c_str(),
+				        r->second.dist, r->second.ping);
 	}
 
 	output ("---\n\n");
@@ -149,6 +150,8 @@ int status_init()
 {
 	config_get ("status-file", status_file);
 	config_get_int ("status-interval", status_interval);
+	verbose = config_is_true ("status-verbose");
+
 	if (!status_interval) return 0;
 
 	if (status_file.length() )
