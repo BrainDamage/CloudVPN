@@ -235,6 +235,10 @@ static int route_dirty = 0;
 static int route_report_ping_diff = 5000;
 static int route_max_dist = 64;
 static map<hwaddr, route_info> route, reported_route;
+static bool promisc = false;
+static bool broadcast_send = false;
+static bool broadcast_nocopy = false;
+static bool ignore_macs = false;
 
 static void report_route();
 
@@ -259,6 +263,27 @@ void route_init()
 	if (!config_get_int ("route_max_dist", t) ) t = 64;
 	Log_info ("maximal node distance is %d", t);
 	route_max_dist = t;
+
+	if (config_is_true ("bridge_mode") ) {
+		broadcast_send = ignore_macs = promisc = true;
+		Log_info ("bridging mode enabled");
+	}
+
+	if (config_is_set ("broadcast_send") &&
+	        (broadcast_send = config_is_true ("broadcast_send") ) )
+		Log_info ("sending all packets as broadcasts");
+
+	if (config_is_set ("broadcast_nocopy") &&
+	        (broadcast_nocopy = config_is_true ("broadcast_nocopy") ) )
+		Log_info ("not doing multiple copies of broadcast packets");
+
+	if (config_is_set ("ignore_macs") &&
+	        (ignore_macs = config_is_true ("ignore_macs") ) )
+		Log_info ("avoiding collisions with inner mac addresses");
+
+	if (config_is_set ("promisc") &&
+	        (promisc = config_is_true ("promisc") ) )
+		Log_info ("promiscuous mode enabled");
 }
 
 void route_shutdown()
@@ -301,6 +326,13 @@ void route_update()
 	if (iface_get_sockfd() >= 0)
 		route[hwaddr (iface_cached_hwaddr() ) ] = route_info (1, 0, -1);
 
+	/*
+	 * When ignoring MACs, let's dont fill in any route information,
+	 * as we dont need it, and it would only confuse the other guys.
+	 */
+
+	if (ignore_macs) goto end;
+
 	for (i = cons.begin();i != cons.end();++i) {
 		if (i->second.state != cs_active)
 			continue;
@@ -328,28 +360,28 @@ void route_update()
 
 	route_update_multi();
 
+end:
 	report_route();
 }
 
 void route_packet (void*buf, size_t len, int conn)
 {
 	if (len < 2 + (2*hwaddr_size) ) return;
+	hwaddr a (buf);
 
-	route_update();
-
-	hwaddr a (buf); //destination
-
-	if (is_addr_broadcast (a) ) {
+	if ( ignore_macs || (broadcast_send && (conn == -1) )
+	        || is_addr_broadcast (a) ) {
 		route_broadcast_packet (new_packet_uid(), buf, len, conn);
 		return;
 	}
 
+	route_update();
+
 	int res;
 
-	if (do_multiroute) {
+	if (do_multiroute)
 		res = route_scatter (a);
-		if (res < -1) return;
-	} else {
+	else {
 		map<hwaddr, route_info>::iterator r = route.find (a);
 
 		if (r == route.end() ) {
@@ -361,8 +393,8 @@ void route_packet (void*buf, size_t len, int conn)
 		res = r->second.id;
 	}
 
-	if (res == -1) iface_write (buf, len);
-	else {
+	if ( (res == -1) || promisc) iface_write (buf, len);
+	if (res >= 0) {
 		map<int, connection>::iterator i;
 		i = comm_connections().find (res);
 		if (i != comm_connections().end() )
@@ -378,11 +410,13 @@ void route_broadcast_packet (uint32_t id, void*buf, size_t len, int conn)
 	if (queue_already_broadcasted (id) ) return; //check duplicates
 	queue_add_id (id);
 
+	if (!etherfilter_allowed ( (uint8_t*) buf) ) return;  //discard filtered
+
 	route_update();
 
 	hwaddr a (buf); //destination
 
-	if (a == iface_cached_hwaddr() && (conn >= 0) ) {
+	if ( (!ignore_macs) && (a == iface_cached_hwaddr() ) && (conn >= 0) ) {
 		iface_write (buf, len);
 		return; //it was only for us.
 	}
@@ -392,27 +426,47 @@ void route_broadcast_packet (uint32_t id, void*buf, size_t len, int conn)
 	}
 
 	map<hwaddr, route_info>::iterator r;
-	if ( (!is_addr_broadcast (a) ) &&
-	        (route.end() != (r = route.find (a) ) ) ) {
+	if ( !is_addr_broadcast (a) ) {
+		if (promisc && (conn >= 0) ) iface_write (buf, len);
+		if ( (!ignore_macs) &&
+		        (route.end() != (r = route.find (a) ) ) )  {
 
-		/*
-		 * if the packet is broadcast only for reason of not knowing
-		 * the correct destination, let's send it the right way.
-		 * We need to keep it in "broadcast" state, so it doesn't get
-		 * duplicated by multiple hosts.
-		 */
-
-		map<int, connection>::iterator
-		i = comm_connections().find (r->second.id);
-		if (i != comm_connections().end() ) {
-			i->second.write_broadcast_packet (id, buf, len);
-			return;
-		} //if the connection didn't exist, forget about this.
+			/*
+			 * if the packet is broadcast only for not knowing
+			 * the correct destination, let's send it the right way.
+			 * We need to keep it "broadcast", so it doesn't get
+			 * duplicated by multiple hosts.
+			 */
+			if (do_multiroute) {
+				int r = route_scatter (a);
+				if (r >= 0) comm_connections() [r]
+					.write_broadcast_packet (id, buf, len);
+				return;
+			}
+			map<int, connection>::iterator
+			i = comm_connections().find (r->second.id);
+			if (i != comm_connections().end() ) {
+				i->second.write_broadcast_packet (id, buf, len);
+				return;
+			} //if the connection didn't exist, forget about this.
+		}
 	}
 
-	if (!etherfilter_allowed ( (uint8_t*) buf) ) return;  //discard filtered
+broadcast:
+	//if real broadcast is disabled, select random connection to use
+	if (broadcast_nocopy) {
+		if (conn >= 0) return;
+		//TODO, this works only in connections that are 1:1.
+		//We should weight the ratio accordingly to the pings.
+		int n = comm_connections().size();
+		n = rand() % n; //one random of them
+		map<int, connection>::iterator i = comm_connections().begin();
+		for (;n > 0;--n, ++i) if (i->first == conn) ++n;
+		i->second.write_broadcast_packet (id, buf, len);
+		return;
+	}
 
-	//now broadcast the thing.
+	//now just broadcast the thing.
 	map<int, connection>::iterator
 	i = comm_connections().begin(),
 	    e = comm_connections().end();
