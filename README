@@ -174,10 +174,15 @@ connect_retry time   --in seconds, probably.
 
 listen IP port --repeat as needed, should be set like 0.0.0.0 60606
 
-ca_cert path --auth
+ca path --load CA certificates from given file (this option may be repeated)
+	--note that if your CA's are chained, whole chain is required to be
+	--loaded. (may be splitted across more files)
+
+crl path --load all certificate revocation lists from a file (also repeatable)
+
 key path  --this key pair is used for both server and client connections
-key_pass string  --key unlocker
-cert path  --public certificate preferably signed by CA
+key_pass string  --key unlocker password
+cert path  --public certificate (preferably signed by CA)
 
 
  -- iface on Linux
@@ -275,6 +280,7 @@ br_id_cache_size 1024 --broadcast ID cache size, in ID entries.
 route_max_dist 64 -- maximal distance of remote peers. Allows the network
 	--to forget about the disappeared node. Increase as needed, decreasing
 	--for unstable networks improves speed and decreases bandwidth.
+max_remote_routes 256 -- maximal count of routes that connection can report.
 
 -- increase these values to stabilize high route-info/TCP throughput
 max_waiting_proto_packets 64

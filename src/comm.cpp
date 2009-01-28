@@ -122,9 +122,6 @@ static void sockoptions_set (int s)
  * - Some number of CRL's.
  */
 
-static STACK_OF (X509) * CAs = NULL;
-static STACK_OF (X509_CRL) * CRLs = NULL;
-
 static int ssl_password_callback (char*buffer, int num, int rwflag, void*udata)
 {
 	if (num < ssl_pass.length() + 1) {
@@ -135,35 +132,6 @@ static int ssl_password_callback (char*buffer, int num, int rwflag, void*udata)
 	strncpy (buffer, ssl_pass.c_str(), num);
 
 	return ssl_pass.length();
-}
-
-static int ssl_verify_callback (int preverify_ok, X509_STORE_CTX*ctx)
-{
-	if (!preverify_ok) {
-		Log_info ("certificate preverify failure: %s",
-		          X509_verify_cert_error_string (
-		              X509_STORE_CTX_get_error (ctx) ) );
-		return 0; //no errors allowed!
-	}
-
-	if (!ctx->cert) {
-		Log_info ("no certificate supplied");
-		X509_STORE_CTX_set_error (ctx,
-		                          X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT);
-		return 0;
-	}
-
-	if (CAs) {
-		if (CRLs) {
-			X509_STORE_CTX_set_flags (ctx, X509_V_FLAG_CRL_CHECK);
-			X509_STORE_CTX_set0_crls (ctx, CRLs);
-		}
-		ctx->chain = CAs;
-		int ok = X509_verify_cert (ctx);
-		ctx->chain = 0; //so it doesn't get deleted
-		if (!ok) return 0;
-	}
-	return 1; //all OK
 }
 
 static int ssl_initialize()
@@ -267,65 +235,65 @@ static int ssl_initialize()
 	list<string> cl;
 	list<string>::iterator i, e;
 
-	config_get_list ("ca_cert", cl);
-	CAs=sk_X509_new_null();
+	config_get_list ("ca", cl);
+	int total_ca = 0;
 	for (i = cl.begin(), e = cl.end();i != e;++i) {
 		BIO*bio;
 		X509*cert;
 		int n;
-		
-		bio=BIO_new_file(i->c_str(),"r");
-		
-		if(!bio) {
-			Log_warn("cannot load CA certs from `%s'", i->c_str());
+
+		bio = BIO_new_file (i->c_str(), "r");
+
+		if (!bio) {
+			Log_warn ("cannot load CA certs from `%s'", i->c_str() );
 			continue;
 		}
 
-		n=0;
+		n = 0;
 
-		while(1){
-			cert=PEM_read_bio_X509(bio,0,0,0);
-			if(!cert) break;
-			sk_X509_push(CAs,cert);
+		while (1) {
+			cert = PEM_read_bio_X509 (bio, 0, 0, 0);
+			if (!cert) break;
+			X509_STORE_add_cert (ssl_ctx->cert_store, cert);
 			++n;
 		}
 
-		Log_info("loaded %d CA cert%s from `%s'",
-			n,n>1?"s":"",i->c_str());
-		BIO_free(bio);
+		Log_info ("loaded %d CA cert%s from `%s'",
+		          n, n > 1 ? "s" : "", i->c_str() );
+		total_ca += n;
+		BIO_free (bio);
 	}
 
+	if (!total_ca) Log_warn ("No CA certificates specified!");
+
 	config_get_list ("crl", cl);
-	CRLs=sk_X509_CRL_new_null();
 	for (i = cl.begin(), e = cl.end();i != e;++i) {
 		BIO*bio;
 		X509_CRL*crl;
 		int n;
-		bio=BIO_new_file(i->c_str(),"r");
-		
-		if(!bio) {
-			Log_warn("cannot load CRLs from `%s'", i->c_str());
+		bio = BIO_new_file (i->c_str(), "r");
+
+		if (!bio) {
+			Log_warn ("cannot load CRLs from `%s'", i->c_str() );
 			continue;
 		}
 
-		n=0;
+		n = 0;
 
-		while(1){
-			crl=PEM_read_bio_X509_CRL(bio,0,0,0);
-			if(!crl) break;
-			sk_X509_CRL_push(CRLs,crl);
+		while (1) {
+			crl = PEM_read_bio_X509_CRL (bio, 0, 0, 0);
+			if (!crl) break;
+			X509_STORE_add_crl (ssl_ctx->cert_store, crl);
 			++n;
 		}
 
-		Log_info("loaded %d CRL%s from `%s'",
-			n,n>1?"s":"",i->c_str());
-		BIO_free(bio);
+		Log_info ("loaded %d CRL%s from `%s'",
+		          n, n > 1 ? "s" : "", i->c_str() );
+		BIO_free (bio);
 	}
 
-	if (!CAs) Log_warn ("SECURITY WARNING: CA checking disabled, your network is OPEN FOR EVERYONE!");
-
-	SSL_CTX_set_verify (ssl_ctx, SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
-	                    ssl_verify_callback);
+	SSL_CTX_set_verify (ssl_ctx, SSL_VERIFY_PEER |
+	                    SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
 
 	Log_info ("SSL initialized OK");
 	return 0;
@@ -333,8 +301,6 @@ static int ssl_initialize()
 
 static int ssl_destroy()
 {
-	sk_X509_free(CAs);
-	sk_X509_CRL_free(CRLs);
 	SSL_CTX_free (ssl_ctx);
 	return 0;
 }
@@ -1739,7 +1705,7 @@ static int comm_connections_close()
 int connection::mtu = 8192;
 int connection::max_waiting_data_packets = 256;
 int connection::max_waiting_proto_packets = 64;
-int connection::max_remote_routes = 1024;
+int connection::max_remote_routes = 256;
 bool connection::ubl_enabled = false;
 int connection::ubl_total = 0;
 int connection::ubl_conn = 0;
@@ -1779,8 +1745,8 @@ int comm_init()
 	Log_info ("max %d pending proto packets",
 	          connection::max_waiting_proto_packets);
 
-	if (!config_get_int ("connection::max_remote_routes", t) )
-		connection::max_remote_routes = 64;
+	if (!config_get_int ("max_remote_routes", t) )
+		connection::max_remote_routes = 256;
 	else connection::max_remote_routes = t;
 	Log_info ("max %d remote routes",
 	          connection::max_remote_routes);
