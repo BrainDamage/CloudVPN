@@ -331,7 +331,7 @@ void route_update()
 	 * as we dont need it, and it would only confuse the other guys.
 	 */
 
-	if(ignore_macs) goto end;
+	if (ignore_macs) goto end;
 
 	for (i = cons.begin();i != cons.end();++i) {
 		if (i->second.state != cs_active)

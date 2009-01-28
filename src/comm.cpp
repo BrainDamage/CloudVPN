@@ -150,9 +150,8 @@ static int ssl_initialize()
 
 	SSL_load_error_strings();
 
-	//maybe signal(sigpipe) belons here, no idea why.
+	OpenSSL_add_all_algorithms();
 
-	t;
 	config_get ("ssl_method", t);
 	if (t == "ssl") {
 		Log_info ("using SSLv3 protocol");
@@ -1017,6 +1016,18 @@ void connection::try_ssl_connect()
 	int r = SSL_connect (ssl);
 	if (r > 0) {
 		Log_info ("socket %d established SSL connection id %d", fd, id);
+
+		/*
+		 * Documentation about SSL_set_verify tells us that
+		 * client mode doesn't check for real presence of
+		 * server certificate. Let's check it here.
+		 */
+
+		if (!SSL_get_peer_certificate (ssl) ) {
+			Log_error ("peer presented no certificate, disconnecting");
+			disconnect();
+			return;
+		}
 
 		activate();
 
