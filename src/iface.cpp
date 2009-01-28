@@ -108,8 +108,6 @@ int iface_create()
 
 	struct ifreq ifr;
 
-	int ctl_fd;
-
 	string tun_dev = "/dev/net/tun";
 
 	config_get ("tunctl", tun_dev);
@@ -419,7 +417,7 @@ int iface_destroy()
 
 	Log_info ("destroying local interface");
 
-	if (ret = close (tun) ) {
+	if ( (ret = close (tun) ) ) {
 		Log_error ("iface_destroy: close(%d) failed with %d (%s). this may cause trouble elsewhere.", tun, errno, strerror (errno) );
 		return 1;
 	}

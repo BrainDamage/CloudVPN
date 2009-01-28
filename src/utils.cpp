@@ -90,7 +90,6 @@ bool sockaddr_from_str (const char *str,
                         struct sockaddr*addr, int*len, int*sock_domain)
 {
 	char ip_buf[1025], port_buf[65]; //which should be enough for everyone.
-	int port = 0;
 
 	if (! (str && addr) ) return false;
 

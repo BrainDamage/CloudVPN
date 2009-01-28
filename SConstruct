@@ -10,7 +10,7 @@ env['CXXFLAGS']=['-O3']
 env['LIBS']=['ssl','crypto']
 
 #enable this for debugging
-#env['CXXFLAGS']=['-g','-pg']
+#env['CXXFLAGS']=['-g','-pg','-Wall']
 #env['LINKFLAGS']=['-pg']
 
 sources = glob('src/*.c') + glob('src/*.cpp')

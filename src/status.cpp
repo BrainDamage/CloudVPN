@@ -70,14 +70,14 @@ static int status_to_file (const char*fn)
 	        format_hwaddr (iface_cached_hwaddr() ).c_str()
 	        : "disabled");
 
-	output ("listening sockets: %d\n\n", comm_listeners().size() );
-	output ("connections: %d\n", comm_connections().size() );
+	output ("listening sockets: %zd\n\n", comm_listeners().size() );
+	output ("connections: %zd\n", comm_connections().size() );
 
 	map<int, connection>::iterator c;
 	map<hwaddr, connection::remote_route>::iterator r;
 	for (c = comm_connections().begin();c != comm_connections().end();++c) {
 		if (c->second.state == cs_active)
-			output ("connection %d \tping %u \troute count %d \t(fd %d)\n",
+			output ("connection %d \tping %u \troute count %zd \t(fd %d)\n",
 			        c->first, c->second.ping,
 			        c->second.remote_routes.size(), c->second.fd);
 		else output ("connection %d inactive\n", c->first);
@@ -131,7 +131,7 @@ static int status_to_file (const char*fn)
 
 	output ("---\n\n");
 
-	output ("local route count: %d\n", route_get().size() );
+	output ("local route count: %zd\n", route_get().size() );
 
 	map<hwaddr, route_info>::iterator i;
 	for (i = route_get().begin();i != route_get().end();++i)

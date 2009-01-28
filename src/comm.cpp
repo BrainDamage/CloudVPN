@@ -124,7 +124,7 @@ static void sockoptions_set (int s)
 
 static int ssl_password_callback (char*buffer, int num, int rwflag, void*udata)
 {
-	if (num < ssl_pass.length() + 1) {
+	if ( (size_t) num < ssl_pass.length() + 1) {
 		Log_warn ("ssl_pw_cb: supplied buffer too small, will fail!");
 		return 0;
 	}
@@ -612,7 +612,7 @@ static bool parse_packet_header (squeue&q, uint8_t&type,
 void connection::handle_packet (void*buf, int len)
 {
 	if (dbl_enabled) {
-		if (dbl_over > dbl_burst) return;
+		if (dbl_over > (unsigned int) dbl_burst) return;
 		dbl_over += len + 4;
 	}
 	stat_packet (true, len + p_head_size);
@@ -622,7 +622,7 @@ void connection::handle_packet (void*buf, int len)
 void connection::handle_broadcast_packet (uint32_t ID, void*buf, int len)
 {
 	if (dbl_enabled) {
-		if (dbl_over > dbl_burst) return;
+		if (dbl_over > (unsigned int) dbl_burst) return;
 		dbl_over += len + 8;
 	}
 	stat_packet (true, len + p_head_size + 4);
@@ -711,7 +711,7 @@ void connection::write_packet (void*buf, int len)
 		try_write();
 		return;
 	}
-	if (len > mtu) return;
+	if ( (unsigned int) len > mtu) return;
 	stat_packet (false, p_head_size + len);
 	pbuffer& b = new_data();
 	add_packet_header (b, pt_eth_frame, 0, len);
@@ -725,7 +725,7 @@ void connection::write_broadcast_packet (uint32_t ID, void*buf, int len)
 		try_write();
 		return;
 	}
-	if (len > mtu) return;
+	if ( (unsigned int) len > mtu) return;
 	stat_packet (false, p_head_size + len + 4);
 	pbuffer& b = new_data();
 	add_packet_header (b, pt_broadcast, 0, len);
@@ -816,7 +816,8 @@ try_more:
 	case 0:
 		break;
 	case pt_route_set:
-		if (recv_q.len() >= cached_header.size*route_entry_size) {
+		if (recv_q.len() >=
+		        (unsigned int) cached_header.size*route_entry_size) {
 			handle_route_set (recv_q.begin(), cached_header.size);
 			recv_q.read (cached_header.size*route_entry_size);
 			cached_header.type = 0;
@@ -824,7 +825,8 @@ try_more:
 		}
 		break;
 	case pt_route_diff:
-		if (recv_q.len() >= cached_header.size*route_entry_size) {
+		if (recv_q.len() >=
+		        (unsigned int) cached_header.size*route_entry_size) {
 			handle_route_diff (recv_q.begin(), cached_header.size);
 			recv_q.read (cached_header.size*route_entry_size);
 			cached_header.type = 0;
@@ -842,7 +844,7 @@ try_more:
 		break;
 
 	case pt_broadcast:
-		if (recv_q.len() >= cached_header.size + 4) {
+		if (recv_q.len() >= (unsigned int) cached_header.size + 4) {
 			uint32_t t;
 			recv_q.pop<uint32_t> (t);
 			t = ntohl (t);
@@ -945,7 +947,7 @@ bool connection::try_write()
 		//choke the bandwidth. Note that we dont want to really
 		//discard the packet here, because of SSL.
 		if (sending_from_data_q && ubl_enabled &&
-		        (n > ubl_available) ) break;
+		        ( (unsigned int) n > ubl_available) ) break;
 
 		//or try to send.
 		r = SSL_write (ssl, buf, n);
@@ -1008,7 +1010,7 @@ void connection::try_accept()
 		reset();
 		return;
 	}
-	if ( (timestamp() - last_ping) > timeout) {
+	if ( (timestamp() - last_ping) > (unsigned int) timeout) {
 		Log_error ("accepting fd %d timeout", fd);
 		reset();
 		return;
@@ -1029,7 +1031,7 @@ void connection::try_connect()
 	}
 
 	if (e == EINPROGRESS) {
-		if ( (timestamp() - last_ping) > timeout) {
+		if ( (timestamp() - last_ping) > (unsigned int) timeout) {
 			Log_error ("timeout connecting %d", fd);
 			reset();
 			return;
@@ -1044,7 +1046,7 @@ void connection::try_connect()
 		//print a nice info about who are we connected to
 		sockaddr_type (addr);
 		socklen_t s = sockaddr_type_size;
-		if (getpeername (fd, (sockaddr*) &addr_4, &s) )
+		if (getpeername (fd, (sockaddr*) &addr, &s) )
 			Log_info ("conn %d connected to unknown peer", id);
 		else {
 			peer_addr_str = sockaddr_to_str (&addr);
@@ -1108,7 +1110,7 @@ void connection::try_close()
 		reset();
 	} else if (r != 0) reset(); //closed OK
 	else if (handle_ssl_error (r) ) reset ();
-	else if ( (timestamp() - last_ping) > timeout) {
+	else if ( (timestamp() - last_ping) > (unsigned int) timeout) {
 		Log_warn ("%d timeouted disconnecting SSL", fd);
 		reset();
 	} else return; //wait for another poll
@@ -1248,7 +1250,7 @@ int connection::handle_ssl_error (int ret)
 		Log_error ("on connection %d got SSL error %d, ret=%d!", id, e, ret);
 		int err;
 
-		while (err = ERR_get_error() ) {
+		while ( (err = ERR_get_error() ) ) {
 			Log_error (
 			    "on conn %d SSL_ERR %d: %s; func %s; reason %s",
 			    id, err,
@@ -1312,14 +1314,16 @@ void connection::periodic_update()
 		try_close();
 		break;
 	case cs_retry_timeout:
-		if ( (timestamp() - last_retry) > retry) start_connect();
+		if ( (timestamp() - last_retry) > (unsigned int) retry)
+			start_connect();
 		break;
 	case cs_active:
-		if ( (timestamp() - last_ping) > timeout) {
+		if ( (timestamp() - last_ping) > (unsigned int) timeout) {
 			Log_info ("Connection %d ping timeout", id);
 			disconnect();
 			return;
-		} else if ( (timestamp() - sent_ping_time) > keepalive) send_ping();
+		} else if ( (timestamp() - sent_ping_time) >
+		            (unsigned int) keepalive) send_ping();
 		try_write();
 		break;
 	}
@@ -1403,10 +1407,10 @@ void connection::handle_route_overflow()
 		to_del.clear();
 		for (rri = remote_routes.begin(), rre = remote_routes.end();
 		        rri != rre; ++rri) {
-			if (rri->second.dist > max_dist) {
+			if (rri->second.dist > (unsigned int) max_dist) {
 				to_del.clear();
 			}
-			if (rri->second.dist == max_dist)
+			if (rri->second.dist == (unsigned int) max_dist)
 				to_del.push_back (rri->first);
 		}
 		if (!to_del.size() ) {
@@ -1570,7 +1574,7 @@ void connection::bl_recompute()
 	for (i = connections.begin(), e = connections.end(); i != e; ++i) {
 		if (i->second.needs_upload() )
 			i->second.ubl_available += up_bandwidth_to_add;
-		if (i->second.dbl_over < down_bandwidth_to_add)
+		if (i->second.dbl_over < (unsigned int) down_bandwidth_to_add)
 			i->second.dbl_over = 0;
 		else i->second.dbl_over -= down_bandwidth_to_add;
 	}
@@ -1702,10 +1706,10 @@ static int comm_connections_close()
  * base comm_ stuff
  */
 
-int connection::mtu = 8192;
-int connection::max_waiting_data_packets = 256;
-int connection::max_waiting_proto_packets = 64;
-int connection::max_remote_routes = 256;
+unsigned int connection::mtu = 8192;
+unsigned int connection::max_waiting_data_packets = 256;
+unsigned int connection::max_waiting_proto_packets = 64;
+unsigned int connection::max_remote_routes = 256;
 bool connection::ubl_enabled = false;
 int connection::ubl_total = 0;
 int connection::ubl_conn = 0;

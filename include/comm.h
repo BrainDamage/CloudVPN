@@ -199,10 +199,10 @@ public:
 	 * queue management
 	 */
 
-	static int mtu;
-	static int max_waiting_data_packets;
-	static int max_waiting_proto_packets;
-	static int max_remote_routes;
+	static unsigned int mtu;
+	static unsigned int max_waiting_data_packets;
+	static unsigned int max_waiting_proto_packets;
+	static unsigned int max_remote_routes;
 
 	inline bool can_write_data() {
 		return data_q.size() < max_waiting_data_packets;

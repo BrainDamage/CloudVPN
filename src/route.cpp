@@ -172,6 +172,7 @@ static int route_init_multi()
 		if (multi_ratio < 2) multi_ratio = 2;
 		Log_info ("multipath scatter ratio is %d", multi_ratio);
 	}
+	return 0;
 }
 
 static void route_update_multi()
@@ -340,7 +341,10 @@ void route_update()
 		for ( j = i->second.remote_routes.begin();
 		        j != i->second.remote_routes.end();
 		        ++j ) {
-			if (1 + j->second.dist > route_max_dist) continue;
+
+			if (1 + j->second.dist > (unsigned int) route_max_dist)
+				continue;
+
 			if (route.count (j->first) ) {
 				if (route[j->first].ping <
 				        (2 + j->second.ping + i->second.ping) )
@@ -452,7 +456,6 @@ void route_broadcast_packet (uint32_t id, void*buf, size_t len, int conn)
 		}
 	}
 
-broadcast:
 	//if real broadcast is disabled, select random connection to use
 	if (broadcast_nocopy) {
 		if (conn >= 0) return;
@@ -520,7 +523,7 @@ static void report_route()
 	        (r != route.end() ) && (oldr != reported_route.end() );) {
 
 		if (r->first == oldr->first) { // hwaddresses match, check ping and distance
-			if ( (route_report_ping_diff <
+			if ( ( (unsigned int) route_report_ping_diff <
 
 			        ( (r->second.ping > oldr->second.ping) ?
 			          r->second.ping - oldr->second.ping :

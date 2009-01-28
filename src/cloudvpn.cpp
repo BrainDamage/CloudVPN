@@ -105,7 +105,8 @@ int run_cloudvpn (int argc, char**argv)
 
 		timestamp_update();
 
-		if ( (timestamp() - last_beat) < heartbeat_usec) {
+		if ( (timestamp() - last_beat) 
+			< (unsigned int) heartbeat_usec) {
 			//poll more stuff
 			poll_wait_for_event (heartbeat_usec
 			                     - timestamp()

@@ -256,7 +256,7 @@ int poll_wait_for_event (int timeout)
 		return 1;
 	}
 
-	int i, t;
+	int i;
 	for (i = 0;i < ret;++i) poll_handle_event (ev[i].data.fd,
 		        ( (ev[i].events & EPOLLOUT) ? WRITE_READY : 0) |
 		        ( (ev[i].events & EPOLLIN) ? READ_READY : 0) |

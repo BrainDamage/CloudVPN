@@ -34,7 +34,7 @@ public:
 	inline int len() const {
 		return b.size();
 	}
-	void push (const uint8_t*, int);
+	void push (const uint8_t*, size_t);
 	void push (const pbuffer&);
 	template<class T> inline void push (const T&a) {
 		b.reserve (sizeof (a) + b.size() );
@@ -47,7 +47,7 @@ void squeue_init();
 class squeue
 {
 public:
-	int front, back;
+	size_t front, back;
 	vector<uint8_t> d;
 
 	inline void clear() {
@@ -59,14 +59,14 @@ public:
 		clear();
 	}
 
-	inline int len() {
+	inline size_t len() {
 		return back -front;
 	}
 
 	inline uint8_t*begin() {
 		return d.begin().base() + front;
 	}
-	inline void read (int size) {
+	inline void read (size_t size) {
 		front += size;
 		if (front > back) front = back;
 	}
@@ -75,14 +75,14 @@ public:
 		return d.begin().base() + back;
 	}
 
-	uint8_t*get_buffer (int size);
+	uint8_t*get_buffer (size_t size);
 
-	inline void append (int size) {
+	inline void append (size_t size) {
 		back += size;
 		if (back > d.size() ) back = d.size();
 	};
 
-	void realloc (int reserve_size = 0);
+	void realloc (size_t reserve_size = 0);
 
 	template<class T> inline void pop (T&t) {
 		if (len() < sizeof (T) ) return;

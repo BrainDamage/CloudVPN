@@ -21,7 +21,7 @@ using namespace std;
  * pbuffer
  */
 
-void pbuffer::push (const uint8_t*d, int size)
+void pbuffer::push (const uint8_t*d, size_t size)
 {
 	b.reserve (b.size() + size);
 	copy (d, d + size, back_insert_iterator<vector<uint8_t> > (b) );
@@ -41,14 +41,14 @@ void pbuffer::push (const uint8_t*d, int size)
 
 static int squeue_max_alloc = 4194304;
 
-uint8_t* squeue::get_buffer (int size)
+uint8_t* squeue::get_buffer (size_t size)
 {
 	if (d.size() < back + size) realloc (size);
 	if (d.size() < back + size) return 0;
 	return end();
 }
 
-void squeue::realloc (int size)
+void squeue::realloc (size_t size)
 {
 	if ( !len() ) {  //flush to begin
 		front = back = 0;
@@ -61,8 +61,8 @@ void squeue::realloc (int size)
 	if (	(d.size() < back + size) || //too short
 	        (d.size() > squeue_max_free_size + back + size) ) { //too long
 
-		int t = back + size + squeue_back_free_space;
-		if (t > squeue_max_alloc) t = squeue_max_alloc;
+		size_t t = back + size + squeue_back_free_space;
+		if (t > (size_t) squeue_max_alloc) t = squeue_max_alloc;
 		d.resize (t);  //resize
 	}
 }
