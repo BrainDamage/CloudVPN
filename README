@@ -248,7 +248,7 @@ downlimit-burst 20480
  -- socket options
 
 tcp_nodelay yes   -- just sets TCP_NODELAY. see 'man 7 tcp'
-ip_tos lowdelay|throughtput|reliability|mincost
+ip_tos lowdelay|throughput|reliability|mincost
 	--set IP type of service. see 'man 7 ip' for description
 
 
