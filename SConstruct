@@ -2,16 +2,13 @@
 import os
 from glob import glob
 
-SetOption('num_jobs',3)
-
 env=Environment(ENV=os.environ)
 env['CPPPATH']=['#include/']
-env['CXXFLAGS']=['-O3']
 env['LIBS']=['ssl','crypto']
 
-#enable this for debugging
-#env['CXXFLAGS']=['-g','-pg','-Wall']
-#env['LINKFLAGS']=['-pg']
+for i in ['CFLAGS','CXXFLAGS','CPPFLAGS','LDFLAGS']:
+	if os.environ.has_key(i): env[i]=os.environ[i]
+
 
 sources = glob('src/*.c') + glob('src/*.cpp')
 env.Program('cloudvpn',sources)

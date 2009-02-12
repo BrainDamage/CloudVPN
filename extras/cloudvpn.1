@@ -276,8 +276,9 @@ Mirek Kratochvil <exa.exa@gmail.com>
 .I http://exa.czweb.org/
 
 .SH BUGS
-Routing will probably die when you change the virtual interface MAC address,
-for example with ifconfig. This will be fixed soon.
+Routing will probably die when you change the virtual interface MAC address
+without restarting CloudVPN, for example with `ifconfig tap0 hw ether ...'.
+This will be fixed soon.
 
 If you find some more, report to authors as fast as you can.
 .SH "SEE ALSO"
