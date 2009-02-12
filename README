@@ -170,7 +170,7 @@ config options:
 
 connect IP port  --repeat as needed, normal topology connect
 
-connect_retry time   --in seconds, probably.
+conn_retry 10000000 -- how long to sleep after disconnect/conn fail
 
 listen IP port --repeat as needed, should be set like 0.0.0.0 60606
 
