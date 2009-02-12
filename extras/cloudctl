@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# CloudVPN Control
+# CloudVPN Control tool
 #
 # This program is a free software: You can redistribute and/or modify it
 # under the terms of GNU GPLv3 license, or any later version of the license.
@@ -14,6 +14,12 @@ CLOUDVPN=/usr/bin/cloudvpn
 CONFDIR=/etc/cloudvpn.d/
 LOGDIR=/var/log/cloudvpn/
 PIDDIR=/var/run/cloudvpn/
+
+#use this file to override default directories
+#users can have their own CloudVPN pools defined in ~/.cloudctl
+CONFIG=/etc/cloudctl.conf
+[ -f "$CONFIG" ] && source "$CONFIG"
+[ -f "$HOME/.cloudctl" ] && source "$HOME/.cloudctl"
 
 function die {
 	echo $@
@@ -77,8 +83,9 @@ function do_status {
 test -f "$CLOUDVPN" || die "not a file: $CLOUDVPN"
 test -x "$CLOUDVPN" || die "not executable: $CLOUDVPN"
 
-test -d "$LOGDIR" || mkdir -p "$LOGDIR" || die "cannot access $LOGDIR"
-test -d "$PIDDIR" || mkdir -p "$PIDDIR" || die "cannot access $PIDDIR"
+for i in "$LOGDIR" "$PIDDIR" "$CONFDIR" ; do
+	test -d "$i" || mkdir -p "$i" || die "cannot access $i"
+done
 
 case "$1" in
 start|stop|restart|zap|status) do_$1 $2 ;;

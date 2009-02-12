@@ -11,18 +11,16 @@ SLOT="0"
 KEYWORDS="~x86 ~amd64"
 IUSE=""
 
-DEPEND="dev-util/scons dev-libs/openssl"
-RDEPEND=""
+RDEPEND="dev-libs/openssl"
+DEPEND="dev-util/scons $RDEPEND"
 
 src_compile () {
-	scons $MAKEOPTS
+	scons $MAKEOPTS || die "compilation failed"
 }
 
 src_install () {
-	local bindir="${D}/usr/bin"
-	mkdir -p "${bindir}"
-	cp "cloudvpn" "${bindir}"
-	cp "extras/cloudctl" "${bindir}"
+	dobin "cloudvpn"
+	dobin "extras/cloudctl"
 	doman "extras/cloudvpn.1"
 }
 
