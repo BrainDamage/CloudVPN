@@ -8,19 +8,19 @@ SRC_URI="http://exa.czweb.org/releases/${P}.tar.bz2"
 
 LICENSE="GPL-3"
 SLOT="0"
-KEYWORDS="~x86 ~amd64"
+KEYWORDS="~amd64 ~x86"
 IUSE=""
 
 RDEPEND="dev-libs/openssl"
-DEPEND="dev-util/scons $RDEPEND"
+DEPEND="dev-util/scons ${RDEPEND}"
 
 src_compile () {
-	scons $MAKEOPTS || die "compilation failed"
+	# dont pass make's -l option, as scons uses it differently.
+	scons ${MAKEOPTS/-l[0-9]} || die "compilation failed"
 }
 
 src_install () {
-	dobin "cloudvpn"
-	dobin "extras/cloudctl"
-	doman "extras/cloudvpn.1"
+	dobin cloudvpn extras/cloudctl || die
+	doman extras/cloudvpn.1 || die
 }
 
