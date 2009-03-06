@@ -1,0 +1,7 @@
+# This is the configuration file for /etc/init.d/cloudvpn
+# Please fill the IP variable
+IP="10.1.1.1"
+# TAP used, the *same* than in the cloudvpn.conf file
+TAP="tap1"
+# Default SUBMASK is 255.255.255.0
+SUBMASK=""
