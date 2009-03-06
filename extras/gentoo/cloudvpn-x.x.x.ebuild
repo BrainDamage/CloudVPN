@@ -21,6 +21,6 @@ src_compile () {
 
 src_install () {
 	dobin cloudvpn extras/cloudctl || die
-	doman extras/cloudvpn.1 || die
+	doman extras/man/cloudvpn.1 || die
 }
 
