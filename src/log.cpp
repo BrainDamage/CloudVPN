@@ -47,10 +47,10 @@ static const char* loglevel_mark (int level)
 void Log (int lvl, const char*fmt, ...)
 {
 	if (lvl < log_level) return;
-	char date_buf[33];
+	char date_buf[65];
 	time_t t = time (0);
 
-	strftime (date_buf, 32, "%c ", localtime (&t) );
+	strftime (date_buf, 64, "%c: ", localtime (&t) );
 	fputs (date_buf, output_file);
 	fputs (loglevel_mark (lvl), output_file);
 
@@ -67,10 +67,10 @@ void Log_full (int lvl, const char*file, int line,
                const char*fmt, ...)
 {
 	if (lvl < log_level) return;
-	char date_buf[33];
+	char date_buf[65];
 	time_t t = time (0);
 
-	strftime (date_buf, 32, "%c ", localtime (&t) );
+	strftime (date_buf, 64, "%c: ", localtime (&t) );
 	fputs (date_buf, output_file);
 	fputs (loglevel_mark (lvl), output_file);
 	fprintf (output_file, "in `%s' line %d:\t", file, line);
