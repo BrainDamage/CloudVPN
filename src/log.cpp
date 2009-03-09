@@ -51,8 +51,8 @@ void Log (int lvl, const char*fmt, ...)
 	time_t t = time (0);
 
 	strftime (date_buf, 32, "%c ", localtime (&t) );
-	fprintf (output_file, date_buf);
-	fprintf (output_file, loglevel_mark (lvl) );
+	fputs (date_buf, output_file);
+	fputs (loglevel_mark (lvl), output_file);
 
 	va_list ap;
 	va_start (ap, fmt);
@@ -71,8 +71,8 @@ void Log_full (int lvl, const char*file, int line,
 	time_t t = time (0);
 
 	strftime (date_buf, 32, "%c ", localtime (&t) );
-	fprintf (output_file, date_buf);
-	fprintf (output_file, loglevel_mark (lvl) );
+	fputs (date_buf, output_file);
+	fputs (loglevel_mark (lvl), output_file);
 	fprintf (output_file, "in `%s' line %d:\t", file, line);
 
 	va_list ap;
