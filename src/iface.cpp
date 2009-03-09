@@ -10,6 +10,16 @@
  * if not, see <http://www.gnu.org/licenses/>.
  */
 
+
+#include "iface.h"
+
+#include "route.h"
+#include "conf.h"
+#include "poll.h"
+#include "log.h"
+
+#ifndef __WIN32__
+
 //probable incompatibility notice
 #include "utils.h"
 #if ( ! defined (__BSD__) ) &&\
@@ -21,13 +31,6 @@
 # warning "CloudVPN, a miracle has happened and you should report it to"
 # warning "the developers, along with description of your configuration."
 #endif
-
-#include "iface.h"
-
-#include "route.h"
-#include "conf.h"
-#include "poll.h"
-#include "log.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -505,3 +508,60 @@ int iface_get_sockfd()
 	return tun;
 }
 
+
+#else //__WIN32__
+
+int iface_create()
+{
+	if(config_is_true("iface")) {
+		Log_fatal("Win32 doesn't support TAP interfaces yet!");
+		return 1;
+	}
+	return 0;
+}
+
+int iface_destroy()
+{
+	return 0;
+}
+
+int iface_write (void*buf, size_t len)
+{
+	return 0;
+}
+
+int iface_read (void*buf, size_t maxlen)
+{
+	return 0;
+}
+
+int iface_set_hwaddr (uint8_t*hw)
+{
+	return 0;
+}
+
+int iface_retrieve_hwaddr (uint8_t*hw)
+{
+	return 0;
+}
+
+const uint8_t* iface_cached_hwaddr()
+{
+	return 0;
+}
+
+void iface_poll_read()
+{
+}
+
+void iface_poll_write()
+{
+}
+
+int iface_get_sockfd()
+{
+	return -1;
+}
+
+
+#endif

@@ -39,6 +39,26 @@ so the poor assemblerist can write only:
 $ extras/build.sh
 ...and watch it compile too.
 
+
+	*** Win32 COMPILING ***
+
+Win32 binary IS possible. You need:
+
+a] Mingw32-g++ on some linux box
+b] agree to the fact that Win32 TAP interface can't be polled, so you have to
+   use dumb_poll method.
+c] have openssl lib&include for win32 (for example from GnuWin32 project)
+
+Then do this:
+
+$ export CXX=i586-mingw32msvc-g++    (or any other mingw you have)
+$ export WIN32                       (mark for scons - winsock, .exe,...)
+$ scons
+
+This should throw you .exe file, run it as you like.
+Configuration is mostly the same as on any other system.
+
+
 	*** IMPLEMENTATION NOTES ***
 
 When connecting, nodes can act as server or client, therefore use server or
@@ -317,6 +337,10 @@ status-verbose yes -- also report routes of the connections
 
 broadcast_filter_allow 0806 -- broadcast packet filter by EtherID
 	-- when not specified, every EtherID is allowed
+
+poll_interval 5000 -- amount of usec to wait between 2 dumb polls.
+	-- You will use this on Win32. If you need ping, decrease;
+	-- if it eats your precious CPU, increase.
 
 
 	*** INTERNALS ***

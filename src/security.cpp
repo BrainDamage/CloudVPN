@@ -12,14 +12,17 @@
 
 #include "security.h"
 
+#ifndef __WIN32__
 #include "conf.h"
 #include "log.h"
 
 #include <unistd.h>
 #include <errno.h>
+#endif
 
 static int do_chroot()
 {
+#ifndef __WIN32__
 	string dir;
 	if (!config_get ("chroot", dir) ) return 0;
 
@@ -28,15 +31,19 @@ static int do_chroot()
 		return 1;
 	}
 
+#endif
 	return 0;
 }
 
+#ifndef __WIN32__
 #include <sys/types.h>
 #include <pwd.h>
 #include <grp.h>
+#endif
 
 static int do_switch_user()
 {
+#ifndef __WIN32__
 	struct passwd*pw;
 	struct group*gr;
 
@@ -73,17 +80,22 @@ static int do_switch_user()
 			return 4;
 		} else Log_info ("uid changed to %d", uid);
 
+#endif
 	return 0;
 }
 
+#ifndef __WIN32__
 #include <sys/mman.h>
+#endif
 
 int do_memlock()
 {
+#ifndef __WIN32__
 	if (config_is_true ("mlockall") ) if (mlockall (MCL_CURRENT | MCL_FUTURE) ) {
 			Log_error ("mlockall() failed with errno %d", errno);
 			return 1;
 		}
+#endif
 	return 0;
 }
 

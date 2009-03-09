@@ -22,7 +22,12 @@
  */
 
 #include <stdlib.h>
+
+#ifndef __WIN32__
 #include <arpa/inet.h> //for net/host endianiness
+#else
+#include <winsock2.h>
+#endif
 
 void init_random()
 {

@@ -139,7 +139,11 @@ static void poll_handle_event (int fd, int what)
 
 #include "conf.h"
 
+#ifdef __WIN32__
+#include <windows.h>
+#else
 #include <unistd.h>
+#endif
 
 #include <set>
 using std::set;
@@ -218,7 +222,11 @@ int poll_wait_for_event (int timeout_usec)
 	for(i=w.begin();i!=w.end();++i)
 		poll_handle_event(*i,WRITE_READY);
 	
+#ifdef __WIN32__
+	Sleep(interval/1000);
+#else
 	usleep(interval);
+#endif
 		
 	return 0;
 }

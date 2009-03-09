@@ -19,6 +19,7 @@
 
 int setup_sighandler()
 {
+#ifndef __WIN32__
 	struct sigaction a;
 
 	Log_info ("setting up signal handler");
@@ -31,6 +32,11 @@ int setup_sighandler()
 	sigaction (SIGINT, &a, 0);
 
 	return 0;
+#else //__WIN32__
+	signal(SIGINT, kill_cloudvpn);
+	signal(SIGTERM, kill_cloudvpn);
+	return 0;
+#endif
 }
 
 /*
@@ -79,12 +85,18 @@ void hwaddr::get (uint8_t*c) const
  * ip/name -> sockaddr resolution
  */
 
+#ifndef __WIN32__
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
+#else
+#define _WIN32_WINNT 0x0501 //for mingw's addrinfo
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#endif
 
 bool sockaddr_from_str (const char *str,
                         struct sockaddr*addr, int*len, int*sock_domain)
@@ -118,6 +130,7 @@ bool sockaddr_from_str (const char *str,
 
 const char* sockaddr_to_str (struct sockaddr*addr)
 {
+#ifndef __WIN32__
 	static char buf[128];
 	const void*t;
 	int port;
@@ -137,6 +150,9 @@ const char* sockaddr_to_str (struct sockaddr*addr)
 	if (!inet_ntop (addr->sa_family, t, buf, 127) ) return 0;
 	snprintf (buf + strlen (buf), 16, " %d", port);
 	return buf;
+#else
+	return "(???)";
+#endif
 }
 
 #include <fcntl.h>
@@ -144,7 +160,12 @@ const char* sockaddr_to_str (struct sockaddr*addr)
 
 bool sock_nonblock (int fd)
 {
+#ifndef __WIN32__
 	return fcntl (fd, F_SETFL, O_NONBLOCK) >= 0;
+#else
+	u_long a=1;
+	return ioctlsocket(fd, FIONBIO, &a) >= 0;
+#endif
 }
 
 string format_hwaddr (const hwaddr& a)

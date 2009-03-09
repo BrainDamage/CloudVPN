@@ -22,10 +22,20 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+#ifndef __WIN32__
 #include <netinet/in.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#else
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#define close closesocket
+#endif
+
+#ifndef EINPROGRESS
+#define EINPROGRESS EAGAIN
+#endif
 
 #include <string.h>
 
@@ -72,15 +82,18 @@ static string ssl_pass;
  * and IP_TOS settings for optimizing the delay/throughput/reliability/cost
  */
 
+#ifndef __WIN32__
 #include <netinet/in_systm.h>  //required on some platforms for n_time
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
+#endif
 
 static bool tcp_nodelay = false;
 static int ip_tos = 0;
 
 static void sockoptions_init()
 {
+#ifndef __WIN32__
 	tcp_nodelay = config_is_true ("tcp_nodelay");
 	if (tcp_nodelay) Log_info ("TCP_NODELAY is set for all sockets");
 	string t;
@@ -93,10 +106,12 @@ static void sockoptions_init()
 #endif
 	if (ip_tos) Log_info ("type of service is `%s' for all sockets",
 		                      t.c_str() );
+#endif
 }
 
 static void sockoptions_set (int s)
 {
+#ifndef __WIN32__
 	int t;
 	if (tcp_nodelay) {
 		t = 1;
@@ -110,6 +125,7 @@ static void sockoptions_set (int s)
 			Log_warn ("setsockopt(%d,IP,TOS) failed with %d: %s",
 			          s, errno, strerror (errno) );
 	}
+#endif
 }
 
 /*
@@ -331,7 +347,11 @@ static int tcp_listen_socket (const string&addr)
 	}
 
 	int opt = 1;
-	if (setsockopt (s, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof (opt) ) < 0)
+	if (setsockopt (s, SOL_SOCKET, SO_REUSEADDR,
+#ifdef __WIN32__
+		(const char*)
+#endif
+		&opt, sizeof (opt) ) < 0)
 		Log_warn ("setsockopt(%d,SO_REUSEADDR) failed, may cause errors.", s);
 
 	if (!sock_nonblock (s) ) {
@@ -408,7 +428,9 @@ static int tcp_close_socket (int sock)
  * this is needed to determine if socket is properly connected
  */
 
+#ifndef __WIN32__
 #include <sys/select.h>
+#endif
 
 static int tcp_socket_writeable (int sock)
 {
@@ -1022,7 +1044,11 @@ void connection::try_connect()
 	int e = -1, t;
 	socklen_t e_len = sizeof (e);
 
-	t = getsockopt (fd, SOL_SOCKET, SO_ERROR, &e, &e_len);
+	t = getsockopt (fd, SOL_SOCKET, SO_ERROR, 
+#ifdef __WIN32__
+		(char*)
+#endif
+		&e, &e_len);
 
 	if (t) {
 		Log_error ("getsockopt(%d) failed with errno %d", fd, errno);
