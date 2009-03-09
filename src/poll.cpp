@@ -26,21 +26,39 @@
  *
  * Available backends:
  *
- * epoll device on Linuxes
- * kqueue on BSD
- *
- * If we cannot select automatically, we fallback to:
- * poll (if defined(HAVE_POLL))
- * select()
+ * USE_EPOLL epoll device on Linuxes
+ * USE_KQUEUE kqueue on BSD
+ * USE_POLL poll (if defined(HAVE_POLL))
+ * USE_SELECT select()
+ * USE_DUMB_POLL dumb poll (just try polling with some intervals)
  */
 
-#ifndef HAVE_POLL //by default, assume yes.
-#define HAVE_POLL 1
+#if 	(!USE_EPOLL) && \
+	(!USE_KQUEUE) && \
+	(!USE_POLL) && \
+	(!USE_SELECT) && \
+	(!USE_DUMB_POLL)
+
+#if defined(__linux__)
+#undef USE_EPOLL
+#define USE_EPOLL 1
+#endif
+
+#if (defined(__FreeBSD__)||defined(__OpenBSD__)||defined(__NetBSD__))
+#undef USE_KQUEUE
+#define USE_KQUEUE 1
 #endif
 
 #ifdef __darwin__ //this is suggested on MACs
-#undef HAVE_POLL
-#define HAVE_POLL 0
+#undef USE_SELECT
+#define USE_SELECT 1
+#endif
+
+#endif //all USE_*
+
+#ifdef __WIN32__
+#undef USE_DUMB_POLL
+#define USE_DUMB_POLL 1
 #endif
 
 /*
@@ -107,7 +125,106 @@ static void poll_handle_event (int fd, int what)
  * now the polling engines
  */
 
-#if defined(__linux__)
+#if USE_DUMB_POLL
+
+/*
+ * The Dumb Fallback.
+ * If no other engines are available, just use this.
+ *
+ * This backend doesn't really do any polling, just periodically
+ * pokes given FDs.
+ *
+ * Note that it eats CPU, even if idle!
+ */
+
+#include "conf.h"
+
+#include <unistd.h>
+
+#include <set>
+using std::set;
+set<int>read_set,write_set;
+
+static int interval=5000; 
+/*
+ * 5 ms is pretty good even for gamers,
+ * and isn't-that-much-cpu-squeezing.
+ */
+
+int poll_init()
+{
+	bool r=config_get_int("poll_interval",interval);
+	Log_info("poll interval %s to %d usec",r?"set":"defaults", interval);
+
+	read_set.clear();
+	write_set.clear();
+	return 0;
+}
+
+int poll_deinit()
+{
+	return 0;
+}
+
+int poll_set_add_read (int fd)
+{
+	read_set.insert(fd);
+	return 0;
+}
+
+int poll_set_add_write (int fd)
+{
+	write_set.insert(fd);
+	return 0;
+}
+
+int poll_set_remove_read (int fd)
+{
+	read_set.erase(fd);
+	return 0;
+}
+
+int poll_set_remove_write (int fd)
+{
+	write_set.erase(fd);
+	return 0;
+}
+
+int poll_set_clear()
+{
+	read_set.clear();
+	write_set.clear();
+	return 0;
+}
+
+int poll_wait_for_event (int timeout_usec)
+{
+	/*
+	 * Let's
+	 * a] poke all active connections
+	 * 	- we need to create copies, because
+	 * 	  connections can invalidate our iterators
+	 * b] sleep a little
+	 * c] return
+	 */
+
+	vector<int>
+		r(read_set.begin(),read_set.end()),
+		w(write_set.begin(),write_set.end());
+	
+	vector<int>::iterator i;
+	for(i=r.begin();i!=r.end();++i)
+		poll_handle_event(*i,READ_READY);
+	for(i=w.begin();i!=w.end();++i)
+		poll_handle_event(*i,WRITE_READY);
+	
+	usleep(interval);
+		
+	return 0;
+}
+
+
+#elif USE_EPOLL
 
 /*
  * epoll engine
@@ -266,7 +383,7 @@ int poll_wait_for_event (int timeout)
 	return 0;
 }
 
-#elif (defined(__FreeBSD__)||defined(__OpenBSD__)||defined(__NetBSD__))
+#elif USE_KQUEUE
 
 /*
  * kqueue default for *BSD
@@ -391,7 +508,7 @@ int poll_wait_for_event (int timeout_usec)
 	return 0;
 }
 
-#elif HAVE_POLL
+#elif USE_POLL
 
 /*
  * poll.h poll(), fallback number one.
@@ -500,7 +617,7 @@ int poll_wait_for_event (int usec)
 	return 0;
 }
 
-#else
+#elif USE_SELECT
 
 /*
  * select() polling engine, fallback number two (last)
@@ -613,4 +730,6 @@ int poll_wait_for_event (int timeout)
 	return 0;
 }
 
+#else
+#error "no poll backend specified"
 #endif
