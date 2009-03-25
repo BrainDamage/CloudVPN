@@ -151,7 +151,7 @@ const char* sockaddr_to_str (struct sockaddr*addr)
 	snprintf (buf + strlen (buf), 16, " %d", port);
 	return buf;
 #else
-	return "(???)";
+	return "(?)";
 #endif
 }
 
