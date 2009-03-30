@@ -1800,13 +1800,13 @@ int comm_init()
 	          connection::mtu);
 
 	if (!config_get_int ("max_waiting_data_size", t) )
-		connection::max_waiting_data_size = 256;
+		connection::max_waiting_data_size = 262144;
 	else connection::max_waiting_data_size = t;
 	Log_info ("max %d pending data packets",
 	          connection::max_waiting_data_size);
 
 	if (!config_get_int ("max_waiting_proto_size", t) )
-		connection::max_waiting_proto_size = 64;
+		connection::max_waiting_proto_size = 65536;
 	else connection::max_waiting_proto_size = t;
 	Log_info ("max %d pending proto packets",
 	          connection::max_waiting_proto_size);
