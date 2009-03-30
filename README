@@ -303,8 +303,8 @@ route_max_dist 64 -- maximal distance of remote peers. Allows the network
 max_remote_routes 256 -- maximal count of routes that connection can report.
 
 -- increase these values to stabilize high route-info/TCP throughput
-max_waiting_proto_packets 64
-max_waiting_data_packets 256
+max_waiting_proto_size 65536
+max_waiting_data_size 262144
 max_input_queue_size 4194304
 
 conn-mtu 8192  -- drop data packets larger than this.

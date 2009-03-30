@@ -123,6 +123,7 @@ public:
 
 	squeue recv_q;
 	deque<pbuffer> proto_q, data_q;
+	unsigned int proto_q_size, data_q_size;
 	bool sending_from_data_q;
 
 	struct {
@@ -133,8 +134,8 @@ public:
 
 	void try_parse_input();
 
-	pbuffer& new_proto ();
-	pbuffer& new_data ();
+	pbuffer& new_proto (size_t size);
+	pbuffer& new_data (size_t size);
 
 	bool try_read();
 	bool try_write(); //both called by try_data(); dont use directly
@@ -200,16 +201,17 @@ public:
 	 */
 
 	static unsigned int mtu;
-	static unsigned int max_waiting_data_packets;
-	static unsigned int max_waiting_proto_packets;
+	static unsigned int max_waiting_data_size;
+	static unsigned int max_waiting_proto_size;
 	static unsigned int max_remote_routes;
 
-	inline bool can_write_data() {
-		return data_q.size() < max_waiting_data_packets;
+	inline bool can_write_data(size_t s) {
+		return data_q_size + s < max_waiting_data_size;
+		// TODO RED here
 	}
 
-	inline bool can_write_proto() {
-		return proto_q.size() < max_waiting_proto_packets;
+	inline bool can_write_proto(size_t s) {
+		return proto_q_size + s < max_waiting_proto_size;
 	}
 
 	/*
@@ -258,9 +260,16 @@ public:
 
 	static void bl_recompute();
 
-	inline bool needs_upload() {
+	inline bool needs_write() {
 		return data_q.size()||proto_q.size();
 	}
+
+	/*
+	 * traffic shaping - Random Early Drop
+	 */
+
+	static bool red_enabled;
+	static int red_threshold;
 };
 
 void comm_listener_poll (int fd);
