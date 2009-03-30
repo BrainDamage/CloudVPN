@@ -259,7 +259,7 @@ public:
 	static void bl_recompute();
 
 	inline bool needs_upload() {
-		return data_q.size();
+		return data_q.size()||proto_q.size();
 	}
 };
 
