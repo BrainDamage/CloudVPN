@@ -264,6 +264,12 @@ downlimit-burst 20480
 --downlimit-burst should always be a little larger, because we don't do
 --any bandwidth queuing, but just drop things.
 
+red-ratio 25   --(in percent)
+
+-- Random Early Detection. We randomly drop packets if outgoing queue is filled
+-- more than specified (and drop linearly more packets when there's more data)
+-- Tuning a good ratio of this percentage and maximal queue sizes is generally
+-- alchemy, but often produces good results.
 
  -- socket options
 

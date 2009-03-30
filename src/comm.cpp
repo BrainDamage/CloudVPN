@@ -1622,6 +1622,25 @@ void connection::bl_recompute()
 }
 
 /*
+ * Random Early Detection
+ *
+ * Note that RED threshold is set in "percent". Below this fill, no packets
+ * are discarded; above it, linearly increasing random ratio of packets is
+ * discarded. Proto packets are not affected by RED.
+ */
+
+bool connection::red_can_send(size_t s)
+{
+	if(red_enabled){
+		int fill = (100*(data_q_size+s)) /max_waiting_data_size;
+		if(fill<red_threshold) return true;
+		if(fill>red_threshold+(rand()%(101-red_threshold)))
+			return false;
+	}
+	return true;
+}
+
+/*
  * comm_listener stuff
  */
 
@@ -1849,6 +1868,17 @@ int comm_init()
 	} else connection::dbl_burst = 20480;
 	if (connection::dbl_enabled)
 		Log_info ("burst download size is %dB", t);
+
+	if (config_get_int ("red-ratio", t) ){
+		connection::red_enabled = true;
+		connection::red_threshold = t%100;
+		Log_info("RED enabled with ratio %d%%",
+			connection::red_threshold);
+	}
+	
+	/*
+	 * configuration done, lets init.
+	 */
 
 	sockoptions_init();
 

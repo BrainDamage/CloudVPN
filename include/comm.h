@@ -206,11 +206,12 @@ public:
 	static unsigned int max_remote_routes;
 
 	inline bool can_write_data(size_t s) {
-		return data_q_size + s < max_waiting_data_size;
-		// TODO RED here
+		return (data_q_size + s < max_waiting_data_size)
+			&& red_can_send(s);
 	}
 
 	inline bool can_write_proto(size_t s) {
+		//RED doesn't apply to proto packets
 		return proto_q_size + s < max_waiting_proto_size;
 	}
 
@@ -270,6 +271,7 @@ public:
 
 	static bool red_enabled;
 	static int red_threshold;
+	bool red_can_send(size_t);
 };
 
 void comm_listener_poll (int fd);
