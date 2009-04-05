@@ -147,9 +147,9 @@ static void poll_handle_event (int fd, int what)
 
 #include <set>
 using std::set;
-set<int>read_set,write_set;
+set<int>read_set, write_set;
 
-static int interval=5000; 
+static int interval = 5000;
 /*
  * 5 ms is pretty good even for gamers,
  * and isn't-that-much-cpu-squeezing.
@@ -157,8 +157,8 @@ static int interval=5000;
 
 int poll_init()
 {
-	bool r=config_get_int("poll_interval",interval);
-	Log_info("poll interval %s to %d usec",r?"set":"defaults", interval);
+	bool r = config_get_int ("poll_interval", interval);
+	Log_info ("poll interval %s to %d usec", r ? "set" : "defaults", interval);
 
 	read_set.clear();
 	write_set.clear();
@@ -172,25 +172,25 @@ int poll_deinit()
 
 int poll_set_add_read (int fd)
 {
-	read_set.insert(fd);
+	read_set.insert (fd);
 	return 0;
 }
 
 int poll_set_add_write (int fd)
 {
-	write_set.insert(fd);
+	write_set.insert (fd);
 	return 0;
 }
 
 int poll_set_remove_read (int fd)
 {
-	read_set.erase(fd);
+	read_set.erase (fd);
 	return 0;
 }
 
 int poll_set_remove_write (int fd)
 {
-	write_set.erase(fd);
+	write_set.erase (fd);
 	return 0;
 }
 
@@ -213,21 +213,21 @@ int poll_wait_for_event (int timeout_usec)
 	 */
 
 	vector<int>
-		r(read_set.begin(),read_set.end()),
-		w(write_set.begin(),write_set.end());
-	
+	r (read_set.begin(), read_set.end() ),
+	w (write_set.begin(), write_set.end() );
+
 	vector<int>::iterator i;
-	for(i=r.begin();i!=r.end();++i)
-		poll_handle_event(*i,READ_READY);
-	for(i=w.begin();i!=w.end();++i)
-		poll_handle_event(*i,WRITE_READY);
-	
+	for (i = r.begin();i != r.end();++i)
+		poll_handle_event (*i, READ_READY);
+	for (i = w.begin();i != w.end();++i)
+		poll_handle_event (*i, WRITE_READY);
+
 #ifdef __WIN32__
-	Sleep(interval/1000);
+	Sleep (interval / 1000);
 #else
-	usleep(interval);
+	usleep (interval);
 #endif
-		
+
 	return 0;
 }
 

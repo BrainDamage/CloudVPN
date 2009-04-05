@@ -33,8 +33,8 @@ int setup_sighandler()
 
 	return 0;
 #else //__WIN32__
-	signal(SIGINT, kill_cloudvpn);
-	signal(SIGTERM, kill_cloudvpn);
+	signal (SIGINT, kill_cloudvpn);
+	signal (SIGTERM, kill_cloudvpn);
 	return 0;
 #endif
 }
@@ -163,8 +163,8 @@ bool sock_nonblock (int fd)
 #ifndef __WIN32__
 	return fcntl (fd, F_SETFL, O_NONBLOCK) >= 0;
 #else
-	u_long a=1;
-	return ioctlsocket(fd, FIONBIO, &a) >= 0;
+	u_long a = 1;
+	return ioctlsocket (fd, FIONBIO, &a) >= 0;
 #endif
 }
 

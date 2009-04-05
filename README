@@ -220,6 +220,8 @@ iface yes/no
 iface_device tap0  --remember NOT to specify tun.
 mac 00:00:00:00:00:00
 
+iface_setup_cmd ifconfig tap0 10.0.2.3 --execute this command right after init.
+
 -- on the BSD, you should be able to create tap0 device by
 -- '# ifconfig tap0 create'.
 -- on OpenBSD, you NEED to specify tun0, because there's no tap:

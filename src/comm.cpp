@@ -349,9 +349,9 @@ static int tcp_listen_socket (const string&addr)
 	int opt = 1;
 	if (setsockopt (s, SOL_SOCKET, SO_REUSEADDR,
 #ifdef __WIN32__
-		(const char*)
+	                (const char*)
 #endif
-		&opt, sizeof (opt) ) < 0)
+	                &opt, sizeof (opt) ) < 0)
 		Log_warn ("setsockopt(%d,SO_REUSEADDR) failed, may cause errors.", s);
 
 	if (!sock_nonblock (s) ) {
@@ -717,31 +717,31 @@ void connection::handle_route_request ()
 
 pbuffer& connection::new_data (size_t size)
 {
-	data_q_size+=size;
+	data_q_size += size;
 	data_q.push_back (pbuffer() );
-	data_q.back().b.reserve(size);
+	data_q.back().b.reserve (size);
 	stat_packet (false, size);
 	return data_q.back();
 }
 
 pbuffer& connection::new_proto (size_t size)
 {
-	proto_q_size+=size;
+	proto_q_size += size;
 	proto_q.push_back (pbuffer() );
-	proto_q.back().b.reserve(size);
+	proto_q.back().b.reserve (size);
 	stat_packet (false, size);
 	return proto_q.back();
 }
 
 void connection::write_packet (void*buf, int len)
 {
-	size_t size=p_head_size+len;
-	if (!can_write_data(size) ) {
+	size_t size = p_head_size + len;
+	if (!can_write_data (size) ) {
 		try_write();
 		return;
 	}
 	if ( (unsigned int) len > mtu) return;
-	pbuffer& b = new_data(size);
+	pbuffer& b = new_data (size);
 	add_packet_header (b, pt_eth_frame, 0, len);
 	b.push ( (uint8_t*) buf, len);
 	try_write();
@@ -749,13 +749,13 @@ void connection::write_packet (void*buf, int len)
 
 void connection::write_broadcast_packet (uint32_t ID, void*buf, int len)
 {
-	size_t size=p_head_size+len+4;
-	if (!can_write_data(size) ) {
+	size_t size = p_head_size + len + 4;
+	if (!can_write_data (size) ) {
 		try_write();
 		return;
 	}
 	if ( (unsigned int) len > mtu) return;
-	pbuffer& b = new_data(size);
+	pbuffer& b = new_data (size);
 	add_packet_header (b, pt_broadcast, 0, len);
 	b.push<uint32_t> (htonl (ID) );
 	b.push ( (uint8_t*) buf, len);
@@ -764,12 +764,12 @@ void connection::write_broadcast_packet (uint32_t ID, void*buf, int len)
 
 void connection::write_route_set (uint8_t*data, int n)
 {
-	size_t size=p_head_size+n*route_entry_size;
-	if (!can_write_proto(size) ) {
+	size_t size = p_head_size + n * route_entry_size;
+	if (!can_write_proto (size) ) {
 		try_write();
 		return;
 	}
-	pbuffer&b = new_proto(size);
+	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_route_set, 0, n);
 	b.push (data, n* route_entry_size );
 	try_write();
@@ -777,12 +777,12 @@ void connection::write_route_set (uint8_t*data, int n)
 
 void connection::write_route_diff (uint8_t*data, int n)
 {
-	size_t size=p_head_size+n*route_entry_size;
-	if (!can_write_proto(size) ) {
+	size_t size = p_head_size + n * route_entry_size;
+	if (!can_write_proto (size) ) {
 		try_write();
 		return;
 	}
-	pbuffer&b = new_proto(size);
+	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_route_diff, 0, n);
 	b.push (data, n* route_entry_size );
 	try_write();
@@ -790,36 +790,36 @@ void connection::write_route_diff (uint8_t*data, int n)
 
 void connection::write_ping (uint8_t ID)
 {
-	size_t size=p_head_size;
-	if (!can_write_proto(size) ) {
+	size_t size = p_head_size;
+	if (!can_write_proto (size) ) {
 		try_write();
 		return;
 	}
-	pbuffer&b = new_proto(size);
+	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_echo_request, ID, 0);
 	try_write();
 }
 
 void connection::write_pong (uint8_t ID)
 {
-	size_t size=p_head_size;
-	if (!can_write_proto(size) ) {
+	size_t size = p_head_size;
+	if (!can_write_proto (size) ) {
 		try_write();
 		return;
 	}
-	pbuffer&b = new_proto(size);
+	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_echo_reply, ID, 0);
 	try_write();
 }
 
 void connection::write_route_request ()
 {
-	size_t size=p_head_size;
-	if (!can_write_proto(size) ) {
+	size_t size = p_head_size;
+	if (!can_write_proto (size) ) {
 		try_write();
 		return;
 	}
-	pbuffer&b = new_proto(size);
+	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_route_request, 0, 0);
 	try_write();
 }
@@ -994,21 +994,21 @@ bool connection::try_write()
 		} else {
 			if (sending_from_data_q) {
 				if (ubl_enabled) ubl_available -= n;
-				if(data_q_size<data_q.front().b.size())
-					data_q_size=0;
-				else data_q_size-=data_q.front().b.size();
+				if (data_q_size < data_q.front().b.size() )
+					data_q_size = 0;
+				else data_q_size -= data_q.front().b.size();
 				data_q.pop_front();
 				sending_from_data_q = false;
 			} else {
-				if(proto_q_size<proto_q.front().b.size())
-					proto_q_size=0;
-				else proto_q_size-=proto_q.front().b.size();
+				if (proto_q_size < proto_q.front().b.size() )
+					proto_q_size = 0;
+				else proto_q_size -= proto_q.front().b.size();
 				proto_q.pop_front();
 			}
 		}
 	}
 	poll_set_remove_write (fd); //don't need any more write
-	data_q_size=proto_q_size=0; //to be sure
+	data_q_size = proto_q_size = 0; //to be sure
 	return true;
 }
 
@@ -1059,11 +1059,11 @@ void connection::try_connect()
 	int e = -1, t;
 	socklen_t e_len = sizeof (e);
 
-	t = getsockopt (fd, SOL_SOCKET, SO_ERROR, 
+	t = getsockopt (fd, SOL_SOCKET, SO_ERROR,
 #ifdef __WIN32__
-		(char*)
+	                (char*)
 #endif
-		&e, &e_len);
+	                & e, &e_len);
 
 	if (t) {
 		Log_error ("getsockopt(%d) failed with errno %d", fd, errno);
@@ -1629,12 +1629,12 @@ void connection::bl_recompute()
  * discarded. Proto packets are not affected by RED.
  */
 
-bool connection::red_can_send(size_t s)
+bool connection::red_can_send (size_t s)
 {
-	if(red_enabled){
-		int fill = (100*(data_q_size+s)) /max_waiting_data_size;
-		if(fill<red_threshold) return true;
-		if(fill>red_threshold+(rand()%(101-red_threshold)))
+	if (red_enabled) {
+		int fill = (100 * (data_q_size + s) ) / max_waiting_data_size;
+		if (fill < red_threshold) return true;
+		if (fill > red_threshold + (rand() % (101 - red_threshold) ) )
 			return false;
 	}
 	return true;
@@ -1869,13 +1869,13 @@ int comm_init()
 	if (connection::dbl_enabled)
 		Log_info ("burst download size is %dB", t);
 
-	if (config_get_int ("red-ratio", t) ){
+	if (config_get_int ("red-ratio", t) ) {
 		connection::red_enabled = true;
-		connection::red_threshold = t%100;
-		Log_info("RED enabled with ratio %d%%",
-			connection::red_threshold);
+		connection::red_threshold = t % 100;
+		Log_info ("RED enabled with ratio %d%%",
+		          connection::red_threshold);
 	}
-	
+
 	/*
 	 * configuration done, lets init.
 	 */
