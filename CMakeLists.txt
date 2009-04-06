@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 2.6)
 project(CLOUDVPN)
 
 set(CMAKE_C_FLAGS $ENV{CFLAGS})
+set(CMAKE_CXX_FLAGS $ENV{CXXFLAGS})
 include_directories(include/)
 
 #first, make common sources
