@@ -6,10 +6,17 @@ project(CLOUDVPN)
 set(CMAKE_C_FLAGS $ENV{CFLAGS})
 include_directories(include/)
 
+#first, make common sources
+
+file(GLOB commonsources common/*.cpp)
+add_library(common STATIC ${commonsources})
+get_target_property(common common LOCATION)
+
 #main binary
 file(GLOB sources src/*.cpp)
 add_executable(cloudvpn ${sources})
-target_link_libraries(cloudvpn ssl crypt)
+add_dependencies(cloudvpn common)
+target_link_libraries(cloudvpn ssl crypt ${common})
 
 #auths and gates
 file(GLOB clients clients/*)
@@ -25,6 +32,8 @@ foreach(i ${clients})
 	
 	if(s)
 		add_executable(${fn} ${s})
+		add_dependencies(${fn} common)
+		target_link_libraries(${fn} ${common})
 	endif(s)
 
 	include(${i}/CMakeLists.txt OPTIONAL)
