@@ -100,10 +100,23 @@ char iface_name[IFNAMSIZ] = "";
  * initialization
  */
 
-void iface_postinit_command()
+void iface_command (int which)
 {
 	string cmd;
-	if (config_get ("iface_setup_cmd", cmd) ) {
+	const char*c;
+
+	switch (which) {
+	case 1:
+		c = "iface_up_cmd";
+		break;
+	case 2:
+		c = "iface_down_cmd";
+		break;
+	default:
+		return;
+	}
+
+	if (config_get (c, cmd) ) {
 		Log_info ("iface setup command returned %d",
 		          system (cmd.c_str() ) );
 	}
@@ -183,7 +196,7 @@ int iface_create()
 
 	route_set_dirty();
 
-	iface_postinit_command();
+	iface_command (1);
 
 	return 0;
 }
@@ -241,7 +254,7 @@ int iface_create()
 
 	route_set_dirty();
 
-	iface_postinit_command();
+	iface_command (1);
 
 	return 0;
 }
@@ -430,6 +443,8 @@ int iface_destroy()
 {
 	if (tun < 0) return 0; //already closed
 	int ret;
+
+	iface_command (2);
 
 	Log_info ("destroying local interface");
 
