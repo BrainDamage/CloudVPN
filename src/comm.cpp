@@ -141,12 +141,9 @@ static gnutls_dh_params_t dh_params;
 
 static int ssl_initialize()
 {
-	/*
-	 * TODO
-	 * add failure returns
-	 */
-
 	string keypath, certpath, t;
+
+	Log_info ("Initializing ssl layer");
 
 	if ( (!config_get ("key", keypath) ) ||
 	        (!config_get ("cert", certpath) ) ) {
@@ -155,14 +152,24 @@ static int ssl_initialize()
 	}
 
 	//start gnutls
-	gnutls_global_init();
+	if (gnutls_global_init() ) {
+		Log_error ("gnutls_global_init failed");
+		return 2;
+	}
+
 	gcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
 
-	gnutls_certificate_allocate_credentials (&xcred);
+	if (gnutls_certificate_allocate_credentials (&xcred) ) {
+		Log_error ("cant allocate credentials");
+		return 3;
+	}
 
 	//load the keys
-	gnutls_certificate_set_x509_key_file
-	(xcred, certpath.c_str(), keypath.c_str(), GNUTLS_X509_FMT_PEM);
+	if (gnutls_certificate_set_x509_key_file
+	        (xcred, certpath.c_str(), keypath.c_str(), GNUTLS_X509_FMT_PEM) ) {
+		Log_error ("loading keypair failed");
+		return 4;
+	}
 
 	//load DH params, or generate some.
 	gnutls_dh_params_init (&dh_params);
@@ -202,17 +209,11 @@ static int ssl_initialize()
 
 	Log_info ("SSL initialized OK");
 	return 0;
-
-	/*/certificate/key chain loading
-	SSL_CTX_set_verify (ssl_ctx, SSL_VERIFY_PEER |
-	                    SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
-
-	return 0;
-	*/
 }
 
 static int ssl_destroy()
 {
+	Log_info ("destroying SSL layer");
 	gnutls_certificate_free_credentials (xcred);
 	gnutls_dh_params_deinit (dh_params);
 	gnutls_global_deinit();
