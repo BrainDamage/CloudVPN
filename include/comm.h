@@ -19,7 +19,7 @@
 
 #include <stdint.h>
 
-#include <openssl/ssl.h>
+#include <gnutls/gnutls.h>
 
 #include <map>
 #include <set>
@@ -84,8 +84,6 @@ public:
 		id = ID;
 		fd = -1;
 		ping = timeout;
-		ssl = 0; //point at nothing.
-		bio = 0;
 		last_ping = 0;
 		cached_header.type = 0;
 		sending_from_data_q = false;
@@ -190,8 +188,7 @@ public:
 	 * SSL data
 	 */
 
-	SSL*ssl; //should be 0 when not used
-	BIO*bio;
+	gnutls_session_t session;
 
 	int alloc_ssl();
 	void dealloc_ssl();

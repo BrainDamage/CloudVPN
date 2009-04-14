@@ -19,8 +19,8 @@
 #include "timestamp.h"
 #include "sq.h"
 
-#include <openssl/ssl.h>
-#include <openssl/err.h>
+#include <gnutls/gnutls.h>
+#include <gcrypt.h>
 
 #ifndef __WIN32__
 #include <netinet/in.h>
@@ -33,6 +33,7 @@
 #define close closesocket
 #endif
 
+#include <errno.h>
 #ifndef EINPROGRESS
 #define EINPROGRESS EAGAIN
 #endif
@@ -65,13 +66,6 @@ set<int>& comm_listeners()
 {
 	return listeners;
 }
-
-/*
- * global SSL stuff
- */
-
-static SSL_CTX* ssl_ctx;
-static string ssl_pass;
 
 /*
  * socket initialization
@@ -129,7 +123,14 @@ static void sockoptions_set (int s)
 }
 
 /*
- * SSL initialization
+ * global SSL stuff
+ */
+
+static gnutls_certificate_credentials_t xcred;
+static gnutls_dh_params_t dh_params;
+
+/*
+ * GnuTLS initialization
  *
  * What is loaded:
  * - key+cert
@@ -138,20 +139,13 @@ static void sockoptions_set (int s)
  * - Some number of CRL's.
  */
 
-static int ssl_password_callback (char*buffer, int num, int rwflag, void*udata)
-{
-	if ( (size_t) num < ssl_pass.length() + 1) {
-		Log_warn ("ssl_pw_cb: supplied buffer too small, will fail!");
-		return 0;
-	}
-
-	strncpy (buffer, ssl_pass.c_str(), num);
-
-	return ssl_pass.length();
-}
-
 static int ssl_initialize()
 {
+	/*
+	 * TODO
+	 * add failure returns
+	 */
+
 	string keypath, certpath, t;
 
 	if ( (!config_get ("key", keypath) ) ||
@@ -160,164 +154,68 @@ static int ssl_initialize()
 		return 1;
 	}
 
-	ssl_pass = "";
-	if (config_get ("key_pass", ssl_pass) )
-		Log_info ("SSL key password loaded");
-	else	Log_info ("SSL key password left blank");
+	//start gnutls
+	gnutls_global_init();
+	gcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
 
+	gnutls_certificate_allocate_credentials (&xcred);
 
-	SSL_library_init();
+	//load the keys
+	gnutls_certificate_set_x509_key_file
+	(xcred, certpath.c_str(), keypath.c_str(), GNUTLS_X509_FMT_PEM);
 
-	SSL_load_error_strings();
+	//load DH params, or generate some.
+	gnutls_dh_params_init (&dh_params);
+	//TODO loading
+	/*if (config_get ("dh", t) ) {
+		//gnutls_dh_params_import_from_pkcs3 (dh_params, &data,
+		                                    GNUTLS_X509_FORMAT_PEM);
+	} else */
+	gnutls_dh_params_generate2 (dh_params, 1024);
+	gnutls_certificate_set_dh_params (xcred, dh_params);
 
-	OpenSSL_add_all_algorithms();
+	//load CAs and CRLs
+	list<string> l;
+	list<string>::iterator il;
 
-	config_get ("ssl_method", t);
-	if (t == "ssl") {
-		Log_info ("using SSLv3 protocol");
-		ssl_ctx = SSL_CTX_new (SSLv23_method() );
-		SSL_CTX_set_options (ssl_ctx, SSL_OP_NO_SSLv2);
-		//dont want SSLv2, cuz it's deprecated.
-	} else {
-		Log_info ("using TLSv1 protocol");
-		ssl_ctx = SSL_CTX_new (TLSv1_method() );
+	config_get_list ("ca", l);
+	for (il = l.begin();il != l.end();++il) {
+		int t = gnutls_certificate_set_x509_trust_file
+		        (xcred, il->c_str(), GNUTLS_X509_FMT_PEM);
+		if (t < 0) Log_info ("loading CAs from file %s failed",
+			                     il->c_str() );
+		else Log_info ("loaded %d CAs from %s",
+			               t, il->c_str() );
 	}
 
-	//force regenerating DH params
-	SSL_CTX_set_options (ssl_ctx, SSL_OP_SINGLE_DH_USE);
-
-	//we need those two, because vectors can move
-	SSL_CTX_set_options (ssl_ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
-
-	//certificate/key chain loading
-	SSL_CTX_set_default_passwd_cb (ssl_ctx, ssl_password_callback);
-
-	if (!SSL_CTX_use_certificate_chain_file (ssl_ctx, certpath.c_str() ) ) {
-		Log_error ("SSL Certificate loading failed: %s",
-		           ERR_error_string (ERR_get_error(), 0) );
-		return 2;
+	config_get_list ("crl", l);
+	for (il = l.begin();il != l.end();++il) {
+		int t = gnutls_certificate_set_x509_crl_file
+		        (xcred, il->c_str(), GNUTLS_X509_FMT_PEM);
+		if (t < 0) Log_info ("loading CRLs from file %s failed",
+			                     il->c_str() );
+		else Log_info ("loaded %d CRLs from %s",
+			               t, il->c_str() );
 	}
 
-	if (!SSL_CTX_use_PrivateKey_file (ssl_ctx,
-	                                  keypath.c_str(),
-	                                  SSL_FILETYPE_PEM) ) {
-		Log_error ("SSL Key loading failed: %s",
-		           ERR_error_string (ERR_get_error(), 0) );
-		return 3;
-	}
-
-	string dh_file;
-	if (config_get ("dh", dh_file) ) {
-
-		BIO*bio;
-		DH*dh;
-
-		bio = BIO_new_file (dh_file.c_str(), "r");
-
-		if (!bio) {
-			Log_error ("opening DH file `%s' failed",
-			           dh_file.c_str() );
-			return 5;
-		}
-
-		dh = PEM_read_bio_DHparams (bio, 0, 0, 0);
-
-		BIO_free (bio);
-
-		if (!dh) {
-			Log_error ("loading DH params failed");
-			return 6;
-		}
-
-		if (!SSL_CTX_set_tmp_dh (ssl_ctx, dh) ) {
-			Log_error ("could not set DH parameters");
-			return 7;
-		}
-
-		Log_info ("DH parameters of size %db loaded OK",
-		          8*DH_size (dh) );
-
-	} else {
-		Log_error ("you need to supply server DH parameters");
-		return 8;
-	}
-
-	//better to die immediately.
-	if (!SSL_CTX_check_private_key (ssl_ctx) ) {
-		Log_error ("supplied private key does not match the certificate!");
-		return 9;
-	}
-
-	list<string> cl;
-	list<string>::iterator i, e;
-
-	config_get_list ("ca", cl);
-	int total_ca = 0;
-	for (i = cl.begin(), e = cl.end();i != e;++i) {
-		BIO*bio;
-		X509*cert;
-		int n;
-
-		bio = BIO_new_file (i->c_str(), "r");
-
-		if (!bio) {
-			Log_warn ("cannot load CA certs from `%s'", i->c_str() );
-			continue;
-		}
-
-		n = 0;
-
-		while (1) {
-			cert = PEM_read_bio_X509 (bio, 0, 0, 0);
-			if (!cert) break;
-			X509_STORE_add_cert (ssl_ctx->cert_store, cert);
-			++n;
-		}
-
-		Log_info ("loaded %d CA cert%s from `%s'",
-		          n, n > 1 ? "s" : "", i->c_str() );
-		total_ca += n;
-		BIO_free (bio);
-	}
-
-	if (!total_ca) Log_warn ("No CA certificates specified!");
-
-	config_get_list ("crl", cl);
-	for (i = cl.begin(), e = cl.end();i != e;++i) {
-		BIO*bio;
-		X509_CRL*crl;
-		int n;
-		bio = BIO_new_file (i->c_str(), "r");
-
-		if (!bio) {
-			Log_warn ("cannot load CRLs from `%s'", i->c_str() );
-			continue;
-		}
-
-		n = 0;
-
-		while (1) {
-			crl = PEM_read_bio_X509_CRL (bio, 0, 0, 0);
-			if (!crl) break;
-			X509_STORE_add_crl (ssl_ctx->cert_store, crl);
-			++n;
-		}
-
-		Log_info ("loaded %d CRL%s from `%s'",
-		          n, n > 1 ? "s" : "", i->c_str() );
-		BIO_free (bio);
-	}
-
-	SSL_CTX_set_verify (ssl_ctx, SSL_VERIFY_PEER |
-	                    SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
+	gnutls_certificate_set_verify_limits (xcred, 32768, 8);
 
 	Log_info ("SSL initialized OK");
 	return 0;
+
+	/*/certificate/key chain loading
+	SSL_CTX_set_verify (ssl_ctx, SSL_VERIFY_PEER |
+	                    SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
+
+	return 0;
+	*/
 }
 
 static int ssl_destroy()
 {
-	SSL_CTX_free (ssl_ctx);
+	gnutls_certificate_free_credentials (xcred);
+	gnutls_dh_params_deinit (dh_params);
+	gnutls_global_deinit();
 	return 0;
 }
 
