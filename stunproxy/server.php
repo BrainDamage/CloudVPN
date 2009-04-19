@@ -14,7 +14,7 @@
 	a] both clients get stun discovery on their mapped addresses
 	b] both clients sumbit their mapped addresses and ports to the server
 	c] server tells them what the other peer's mapped address is,
-		or tells them to retry (with http 202 accepted)
+		or tells them to retry
 	
 	a and b repeats on failure.
 	
