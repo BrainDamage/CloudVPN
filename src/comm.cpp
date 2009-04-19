@@ -936,8 +936,10 @@ void connection::try_data()
 void connection::try_accept()
 {
 	int r = gnutls_handshake (session);
-	if (r==0) {
+	if (r == 0) {
 		Log_info ("socket %d accepted SSL connection id %d", fd, id);
+
+		//TODO, check cert here?
 
 		activate();
 
@@ -997,7 +999,7 @@ void connection::try_connect()
 		poll_set_remove_write (fd);
 		poll_set_add_read (fd); //always needed
 		state = cs_ssl_connecting;
-		if (alloc_ssl(false) ) {
+		if (alloc_ssl (false) ) {
 			Log_error ("conn %d failed to allocate SSL stuff", id);
 			reset();
 		} else try_ssl_connect();
@@ -1072,7 +1074,7 @@ void connection::start_connect()
 
 void connection::start_accept()
 {
-	if (alloc_ssl(true) ) {
+	if (alloc_ssl (true) ) {
 		reset();
 		return;
 	}
@@ -1163,20 +1165,20 @@ void connection::reset()
 
 int connection::handle_ssl_error (int ret)
 {
-	if(gnutls_error_is_fatal(ret)) {
-		Log_error("fatal ssl error %d on connection %d",ret,id);
+	if (gnutls_error_is_fatal (ret) ) {
+		Log_error ("fatal ssl error %d on connection %d", ret, id);
 		return 1;
 	}
 
 	switch (ret) {
 	case GNUTLS_E_AGAIN:
 	case GNUTLS_E_INTERRUPTED:
-		if(gnutls_record_get_direction(session))
+		if (gnutls_record_get_direction (session) )
 			poll_set_add_write (fd);
 		else if (state != cs_active) poll_set_remove_write (fd);
 		break;
 	default:
-		Log_warn("non-fatal ssl error %d on connection %d",ret,id);
+		Log_warn ("non-fatal ssl error %d on connection %d", ret, id);
 	}
 
 	return 0;
@@ -1251,25 +1253,25 @@ void connection::periodic_update()
  * create and destroy SSL objects specific for each connection
  */
 
-int connection::alloc_ssl(bool server)
+int connection::alloc_ssl (bool server)
 {
 	dealloc_ssl();
-	
-	if(gnutls_init(&session,server?GNUTLS_SERVER:GNUTLS_CLIENT))
+
+	if (gnutls_init (&session, server ? GNUTLS_SERVER : GNUTLS_CLIENT) )
 		return 1;
 
 	//TODO set priorities?
-	gnutls_credentials_set(session,GNUTLS_CRD_CERTIFICATE,xcred);
-	gnutls_certificate_server_set_request(session,GNUTLS_CERT_REQUIRE);
+	gnutls_credentials_set (session, GNUTLS_CRD_CERTIFICATE, xcred);
+	gnutls_certificate_server_set_request (session, GNUTLS_CERT_REQUIRE);
 
 	return 0;
 }
 
 void connection::dealloc_ssl()
 {
-	if(session) {
-		gnutls_deinit(session);
-		session=0;
+	if (session) {
+		gnutls_deinit (session);
+		session = 0;
 	}
 }
 

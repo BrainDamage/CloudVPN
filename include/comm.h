@@ -190,7 +190,7 @@ public:
 
 	gnutls_session_t session;
 
-	int alloc_ssl(bool server);
+	int alloc_ssl (bool server);
 	void dealloc_ssl();
 
 	/*
