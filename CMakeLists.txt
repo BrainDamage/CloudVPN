@@ -40,8 +40,3 @@ foreach(i ${clients})
 	include(${i}/CMakeLists.txt OPTIONAL)
 endforeach(i)
 
-#stunproxy
-add_executable(stunp stunproxy/stunp.cpp)
-add_dependencies(stunp common)
-target_link_libraries(stunp ${common})
-
