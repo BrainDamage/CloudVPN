@@ -821,7 +821,7 @@ bool connection::try_read()
 			return false;
 		}
 
-		r = SSL_read (ssl, buf, 4096);
+		r = gnutls_record_recv (session, buf, 4096);
 		if (r == 0) {
 			Log_info ("connection id %d closed by peer", id);
 			reset();
@@ -877,7 +877,7 @@ bool connection::try_write()
 		        ( (unsigned int) n > ubl_available) ) break;
 
 		//or try to send.
-		r = SSL_write (ssl, buf, n);
+		r = gnutls_record_send (session, buf, n);
 
 		if (r == 0) {
 			Log_info ("connection id %d closed by peer", id);
@@ -935,8 +935,8 @@ void connection::try_data()
 
 void connection::try_accept()
 {
-	int r = SSL_accept (ssl);
-	if (r > 0) {
+	int r = gnutls_handshake (session);
+	if (r==0) {
 		Log_info ("socket %d accepted SSL connection id %d", fd, id);
 
 		activate();
@@ -944,9 +944,7 @@ void connection::try_accept()
 	} else if (handle_ssl_error (r) ) {
 		Log_error ("accepting fd %d lost", fd);
 		reset();
-		return;
-	}
-	if ( (timestamp() - last_ping) > (unsigned int) timeout) {
+	} else if ( (timestamp() - last_ping) > (unsigned int) timeout) {
 		Log_error ("accepting fd %d timeout", fd);
 		reset();
 		return;
@@ -999,7 +997,7 @@ void connection::try_connect()
 		poll_set_remove_write (fd);
 		poll_set_add_read (fd); //always needed
 		state = cs_ssl_connecting;
-		if (alloc_ssl() ) {
+		if (alloc_ssl(false) ) {
 			Log_error ("conn %d failed to allocate SSL stuff", id);
 			reset();
 		} else try_ssl_connect();
@@ -1012,48 +1010,41 @@ void connection::try_connect()
 
 void connection::try_ssl_connect()
 {
-	int r = SSL_connect (ssl);
-	if (r > 0) {
+	int r = gnutls_handshake (session);
+	if (r == 0) {
 		Log_info ("socket %d established SSL connection id %d", fd, id);
 
 		/*
-		 * Documentation about SSL_set_verify tells us that
-		 * client mode doesn't check for real presence of
-		 * server certificate. Let's check it here.
+		 * TODO
+		 * Do gnutls verification here
 		 */
-
-		if (!SSL_get_peer_certificate (ssl) ) {
-			Log_error ("peer presented no certificate, disconnecting");
-			disconnect();
-			return;
-		}
 
 		activate();
 
 	} else if (handle_ssl_error (r) ) {
 		Log_error ("SSL connecting on %d failed", fd);
 		reset();
+	} else if ( (timestamp() - last_ping) > (unsigned int) timeout) {
+		Log_error ("SSL connecting fd %d timeout", fd);
+		reset();
 		return;
 	}
-
 }
 
 void connection::try_close()
 {
-	if (!ssl) {
+	if (!session) {
 		reset(); //someone already terminated it.
 		return;
 	}
-	int r = SSL_shutdown (ssl);
-	if (r < 0) {
-		Log_warn ("SSL connection on %d not terminated properly", fd);
-		reset();
-	} else if (r != 0) reset(); //closed OK
+
+	int r = gnutls_bye (session, GNUTLS_SHUT_RDWR);
+	if (r == 0) reset(); //closed OK
 	else if (handle_ssl_error (r) ) reset ();
 	else if ( (timestamp() - last_ping) > (unsigned int) timeout) {
 		Log_warn ("%d timeouted disconnecting SSL", fd);
 		reset();
-	} else return; //wait for another poll
+	}
 }
 
 /*
@@ -1081,7 +1072,7 @@ void connection::start_connect()
 
 void connection::start_accept()
 {
-	if (alloc_ssl() ) {
+	if (alloc_ssl(true) ) {
 		reset();
 		return;
 	}
@@ -1172,34 +1163,20 @@ void connection::reset()
 
 int connection::handle_ssl_error (int ret)
 {
-	int e = SSL_get_error (ssl, ret);
+	if(gnutls_error_is_fatal(ret)) {
+		Log_error("fatal ssl error %d on connection %d",ret,id);
+		return 1;
+	}
 
-	switch (e) {
-	case SSL_ERROR_WANT_READ:
-		if (state != cs_active) poll_set_remove_write (fd);
-		//not much to do, read flag is always prepared.
-		break;
-	case SSL_ERROR_WANT_WRITE:
-		poll_set_add_write (fd);
+	switch (ret) {
+	case GNUTLS_E_AGAIN:
+	case GNUTLS_E_INTERRUPTED:
+		if(gnutls_record_get_direction(session))
+			poll_set_add_write (fd);
+		else if (state != cs_active) poll_set_remove_write (fd);
 		break;
 	default:
-		if ( (state == cs_closing)
-		        && (e == SSL_ERROR_SYSCALL)
-		        && (ret == 0) ) return 1; //clear disconnect
-
-		Log_error ("on connection %d got SSL error %d, ret=%d!", id, e, ret);
-		int err;
-
-		while ( (err = ERR_get_error() ) ) {
-			Log_error (
-			    "on conn %d SSL_ERR %d: %s; func %s; reason %s",
-			    id, err,
-			    ERR_lib_error_string (err),
-			    ERR_func_error_string (err),
-			    ERR_reason_error_string (err) );
-			return err;
-		}
-		return 1;
+		Log_warn("non-fatal ssl error %d on connection %d",ret,id);
 	}
 
 	return 0;
@@ -1274,37 +1251,25 @@ void connection::periodic_update()
  * create and destroy SSL objects specific for each connection
  */
 
-int connection::alloc_ssl()
+int connection::alloc_ssl(bool server)
 {
 	dealloc_ssl();
-
-	bio = BIO_new_socket (fd, BIO_NOCLOSE);
-	if (!bio) {
-		Log_fatal ("creating SSL/BIO object failed, something's gonna die.");
+	
+	if(gnutls_init(&session,server?GNUTLS_SERVER:GNUTLS_CLIENT))
 		return 1;
-	}
 
-	ssl = SSL_new (ssl_ctx);
-	SSL_set_bio (ssl, bio, bio);
-
-	if (!ssl) {
-		Log_fatal ("creating SSL object failed! something is gonna die.");
-		dealloc_ssl(); //at least free the BIO
-		return 1;
-	}
+	//TODO set priorities?
+	gnutls_credentials_set(session,GNUTLS_CRD_CERTIFICATE,xcred);
+	gnutls_certificate_server_set_request(session,GNUTLS_CERT_REQUIRE);
 
 	return 0;
 }
 
 void connection::dealloc_ssl()
 {
-	if (ssl) {
-		SSL_free (ssl);
-		ssl = 0;
-		bio = 0;
-	} else if (bio) {
-		BIO_free (bio);
-		bio = 0;
+	if(session) {
+		gnutls_deinit(session);
+		session=0;
 	}
 }
 
