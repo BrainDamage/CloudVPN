@@ -193,33 +193,37 @@ static int ssl_initialize()
 		long s;
 		vector<uint8_t>buffer;
 
-		f=fopen(t.c_str(),"r");
-		if(!f) {
-			Log_error("can't open DH params file");
+		f = fopen (t.c_str(), "r");
+		if (!f) {
+			Log_error ("can't open DH params file");
 			return 5;
 		}
 
-		fseek(f,0,SEEK_END);
-		s=ftell(f);
-		fseek(f,0,SEEK_SET);
-		if((s<=0)||s>65536) { //prevent too large files.
-			Log_error("DH params file empty or too big");
-			fclose(f);
+		fseek (f, 0, SEEK_END);
+		s = ftell (f);
+		fseek (f, 0, SEEK_SET);
+		if ( (s <= 0) || s > 65536) { //prevent too large files.
+			Log_error ("DH params file empty or too big");
+			fclose (f);
 			return 6;
 		}
 
-		buffer.resize(s,0);
-		if(fread(buffer.begin().base(),s,1,f)!=1) {
-			Log_error("bad DH param read");
-			fclose(f);
+		buffer.resize (s, 0);
+		if (fread (buffer.begin().base(), s, 1, f) != 1) {
+			Log_error ("bad DH param read");
+			fclose (f);
 			return 7;
 		}
-		fclose(f);
+		fclose (f);
 
-		gnutls_datum_t data= {buffer.begin().base(),s};
+		gnutls_datum_t data = {buffer.begin().base(), s};
 
-		gnutls_dh_params_import_pkcs3 (dh_params, &data,
-		                                    GNUTLS_X509_FMT_PEM);
+		if (gnutls_dh_params_import_pkcs3
+		        (dh_params, &data, GNUTLS_X509_FMT_PEM) ) {
+			Log_error ("DH params importing failed");
+			return 8;
+		}
+
 	} else {
 		gnutls_dh_params_generate2 (dh_params, 1024);
 	}
@@ -252,10 +256,10 @@ static int ssl_initialize()
 
 	gnutls_certificate_set_verify_limits (xcred, 32768, 8);
 
-	if(gnutls_priority_init (&prio_cache,
-	                      config_get ("tls_prio_str", t) ?
-	                      t.c_str() : "NORMAL", NULL)) {
-		Log_error("gnutls priority initialization failed");
+	if (gnutls_priority_init (&prio_cache,
+	                          config_get ("tls_prio_str", t) ?
+	                          t.c_str() : "NORMAL", NULL) ) {
+		Log_error ("gnutls priority initialization failed");
 		return 8;
 	}
 
