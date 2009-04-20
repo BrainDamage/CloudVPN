@@ -1,4 +1,4 @@
-.TH CLOUDVPN 1 "Jan 2009" Unix "CloudVPN Unix Manual"
+.TH CLOUDVPN 1 "Apr 2009" Unix "CloudVPN Unix Manual"
 .SH NAME
 cloudvpn \- secure mesh networking VPN
 .SH SYNOPSIS
@@ -97,13 +97,12 @@ Loads all CA certificates from specified PEM file and adds them to authenticatio
 Loads all CRLs from specified PEM file, and adds them to the certificate
 verification mechanism. Repeat as needed.
 .TP
-.B key, cert, key_pass
-These 3 options load specified SSL private key, SSL public certificate, and
-optionally set the key-unlocking password. Those options must be specified for
-CloudVPN to start.
+.B key, cert
+Mandatory 2 options load specified SSL private key and SSL public certificate.
 .TP
 .B dh
-Load Diffie-Hellman connection parameters from given file.
+Load Diffie-Hellman connection parameters from given file. When not specified,
+a 1024-bit DH is generated on every start.
 .TP
 .B iface yes
 Boolean option to activate local TUN/TAP connections. Without this, CloudVPN
@@ -200,6 +199,8 @@ functionality. Most of them is self-explanatory.
 How many broadcast IDs to remember. Increase when broadcasts are killing your network.
 
 .TP
+.B tls_prio_str NORMAL
+.TP
 .B route_max_dist 64
 .TP
 .B max_remote_routes 256
@@ -225,8 +226,6 @@ How many broadcast IDs to remember. Increase when broadcasts are killing your ne
 .B comm_close_timeout 10000000
 .TP
 .B report_ping_changes_above 5000
-.TP
-.B ssl_method tls
 .TP
 .B broadcast_filter_allow 0806
 Filter out broadcast packets, allow only specified EtherIDs. Repeat as needed.
@@ -282,7 +281,7 @@ This will be fixed soon.
 
 If you find some more, report to authors as fast as you can.
 .SH "SEE ALSO"
-.BR openssl(1)
+.BR certtool(1)
 .BR ifconfig(1)
 .BR ip(7)
 .BR tcp(7)
