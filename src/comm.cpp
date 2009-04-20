@@ -128,6 +128,7 @@ static void sockoptions_set (int s)
 
 static gnutls_certificate_credentials_t xcred;
 static gnutls_dh_params_t dh_params;
+static gnutls_priority_t prio_cache;
 
 /*
  * GnuTLS initialization
@@ -138,6 +139,11 @@ static gnutls_dh_params_t dh_params;
  * - Some number of CA's. If there's no CA specified, there's no checking.
  * - Some number of CRL's.
  */
+
+void ssl_logger (int level, const char*msg)
+{
+	Log_info ("gnutls (%d): %s", level, msg);
+}
 
 static int ssl_initialize()
 {
@@ -155,6 +161,12 @@ static int ssl_initialize()
 	if (gnutls_global_init() ) {
 		Log_error ("gnutls_global_init failed");
 		return 2;
+	}
+
+	gnutls_global_set_log_function (ssl_logger);
+	{
+		int i;
+		gnutls_global_set_log_level (config_get_int ("tls_loglevel", i) ? i : 0);
 	}
 
 	gcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
@@ -207,6 +219,10 @@ static int ssl_initialize()
 
 	gnutls_certificate_set_verify_limits (xcred, 32768, 8);
 
+	gnutls_priority_init (&prio_cache,
+	                      config_get ("tls_prio_str", t) ?
+	                      t.c_str() : "NORMAL", NULL);
+
 	Log_info ("SSL initialized OK");
 	return 0;
 }
@@ -215,6 +231,7 @@ static int ssl_destroy()
 {
 	Log_info ("destroying SSL layer");
 	gnutls_certificate_free_credentials (xcred);
+	gnutls_priority_deinit (prio_cache);
 	gnutls_dh_params_deinit (dh_params);
 	gnutls_global_deinit();
 	return 0;
@@ -1166,7 +1183,8 @@ void connection::reset()
 int connection::handle_ssl_error (int ret)
 {
 	if (gnutls_error_is_fatal (ret) ) {
-		Log_error ("fatal ssl error %d on connection %d", ret, id);
+		Log_error ("fatal ssl error %d (%s) on connection %d",
+		           ret, gnutls_strerror (ret), id);
 		return 1;
 	}
 
@@ -1178,7 +1196,8 @@ int connection::handle_ssl_error (int ret)
 		else if (state != cs_active) poll_set_remove_write (fd);
 		break;
 	default:
-		Log_warn ("non-fatal ssl error %d on connection %d", ret, id);
+		Log_warn ("non-fatal ssl error %d (%s) on connection %d",
+		          ret, gnutls_strerror (ret), id);
 	}
 
 	return 0;
@@ -1260,7 +1279,8 @@ int connection::alloc_ssl (bool server)
 	if (gnutls_init (&session, server ? GNUTLS_SERVER : GNUTLS_CLIENT) )
 		return 1;
 
-	//TODO set priorities?
+	gnutls_transport_set_ptr (session, (gnutls_transport_ptr_t) fd);
+	gnutls_priority_set (session, prio_cache);
 	gnutls_credentials_set (session, GNUTLS_CRD_CERTIFICATE, xcred);
 	gnutls_certificate_server_set_request (session, GNUTLS_CERT_REQUIRE);
 

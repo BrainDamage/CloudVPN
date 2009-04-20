@@ -91,6 +91,7 @@ public:
 		stats_clear();
 		ubl_available = 0;
 		dbl_over = 0;
+		session = 0;
 	}
 
 	connection (); //this is supposed to fail, always use c(ID)
