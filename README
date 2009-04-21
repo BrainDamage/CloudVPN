@@ -125,15 +125,15 @@ and authenticators.
 	and addresses, but don't want to write those so-long addresses twice,
 	those are indexed from the packet payload:
 
-	PACKET---
-	16b proto ID
-	16b instance ID
-	16b source offset
-	16b source size
-	16b dest offset
-	16b dest size
-	16b payload size
-	payload
+		PACKET---
+		16b proto ID
+		16b instance ID
+		16b source offset
+		16b source size
+		16b dest offset
+		16b dest size
+		16b payload size
+		payload
 
 	This adds 14 bytes header to each packet, which is acceptable.
 
@@ -144,11 +144,11 @@ and authenticators.
 	- time needed to reach given destination
 	- address of it
 
-	ROUTE ENTRY---
-	32b ping (measured in usec. That gives us around 1.2 hour max ping.)
-	32b distance (measured in hops)
-	16b address size
-	address
+		ROUTE ENTRY---
+		32b ping (measured in usec. gives us around 1.2 hour max ping.)
+		32b distance (measured in hops)
+		16b address size
+		address
 
 	Totally, this gives us 10 bytes + address size.
 
@@ -159,11 +159,11 @@ and authenticators.
 	
 	Packet format is classical header-data.
 
-	PACKET-HEADER---
-	 8b type
-	 8b special
-	16b size
-	payload
+		PACKET-HEADER---
+		 8b type
+		 8b special
+		16b size
+		payload
 
 	Type is meant as "command" and can have values:
 	1 - route-set         -- used to report state of routes
@@ -198,10 +198,10 @@ and authenticators.
 
 	Gate protocol uses header-data format too.
 
-	GATE-HEADER---
-	8b type
-	16b size
-	payload
+		GATE-HEADER---
+		8b type
+		16b size
+		payload
 
 	Size means the size of payload.
 	Type can have following values:
@@ -219,9 +219,9 @@ and authenticators.
 	are reachable at the client side. it is followed by a list of simplified
 	route entries:
 
-	GATE-ROUTE---
-	16b size
-	address
+		GATE-ROUTE---
+		16b size
+		address
 
 	Note that client should not request route for a broadcast address.
 
