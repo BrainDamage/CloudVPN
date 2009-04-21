@@ -17,7 +17,7 @@ get_target_property(common common LOCATION)
 file(GLOB sources src/*.cpp)
 add_executable(cloudvpn ${sources})
 add_dependencies(cloudvpn common)
-target_link_libraries(cloudvpn ssl crypt ${common})
+target_link_libraries(cloudvpn gnutls ${common})
 
 #auths and gates
 file(GLOB clients clients/*)

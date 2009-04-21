@@ -30,7 +30,6 @@ Contents:
 3] Internals
 4] Protocol
 5] Configuration
-6] SSL key generator
 
 ************************************************************* COMPILING *******
 
@@ -95,7 +94,6 @@ This section describes how CloudVPN core communicates with other cores, gates,
 and auth daemon.
 
 
-
 ********************************************************* CONFIGURATION *******
 
 
@@ -103,25 +101,4 @@ This section lists all configuration options available for running CloudVPN
 core and some of the most important CloudVPN gates/auth daemons.
 
 
-
-***************************************************** SSL KEY GENERATOR *******
-
-For simplicity, I provide some basic openssl scripts which generate keys good
-enough for the purpose of cloudvpning. Basic usage looks like this:
-
-We have both RSA and DSA keys. Thanks to snajpa (snajpa@snajpa.net) for DSA.
-
-cd keygen/dsa   --or /rsa. DSA is considered to be a little more secure.
-mkdir my_keys
-cd my_keys
-../gen-dh
-../gen-ca
-../ca-selfsign   (or send the request to verisign, lol.)
-KEY=ssl.key REQ=ssl.req ../gen-key
-REQ_ssl.req OUT=ssl.crt ../ca-sign
-
-Please remember to supply different common names for all keys, otherwise index
-will get mad. If anything goes wrong, don't hesitate to use similar and more
-sophisticated packages, like easy-rsa from openvpn, but remember to use correct
-nsCertType purpose, for both client and server things.
 

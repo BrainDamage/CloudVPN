@@ -1,8 +1,0 @@
-#!/bin/bash
-
-size=${SIZE:-1024}
-
-fn=${OUT:-dh$size.pem}
-
-openssl dhparam -out ${fn} ${size}
-

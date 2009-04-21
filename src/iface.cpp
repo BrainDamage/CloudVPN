@@ -100,6 +100,28 @@ char iface_name[IFNAMSIZ] = "";
  * initialization
  */
 
+void iface_command (int which)
+{
+	string cmd;
+	const char*c;
+
+	switch (which) {
+	case 1:
+		c = "iface_up_cmd";
+		break;
+	case 2:
+		c = "iface_down_cmd";
+		break;
+	default:
+		return;
+	}
+
+	if (config_get (c, cmd) ) {
+		Log_info ("iface setup command returned %d",
+		          system (cmd.c_str() ) );
+	}
+}
+
 #if defined (__linux__)
 
 int iface_create()
@@ -174,6 +196,8 @@ int iface_create()
 
 	route_set_dirty();
 
+	iface_command (1);
+
 	return 0;
 }
 
@@ -229,6 +253,8 @@ int iface_create()
 	poll_set_add_read (tun);
 
 	route_set_dirty();
+
+	iface_command (1);
 
 	return 0;
 }
@@ -418,6 +444,8 @@ int iface_destroy()
 	if (tun < 0) return 0; //already closed
 	int ret;
 
+	iface_command (2);
+
 	Log_info ("destroying local interface");
 
 	if ( (ret = close (tun) ) ) {
@@ -513,8 +541,8 @@ int iface_get_sockfd()
 
 int iface_create()
 {
-	if(config_is_true("iface")) {
-		Log_fatal("Win32 doesn't support TAP interfaces yet!");
+	if (config_is_true ("iface") ) {
+		Log_fatal ("Win32 doesn't support TAP interfaces yet!");
 		return 1;
 	}
 	return 0;

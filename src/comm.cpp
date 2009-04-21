@@ -19,8 +19,8 @@
 #include "timestamp.h"
 #include "sq.h"
 
-#include <openssl/ssl.h>
-#include <openssl/err.h>
+#include <gnutls/gnutls.h>
+#include <gcrypt.h>
 
 #ifndef __WIN32__
 #include <netinet/in.h>
@@ -33,6 +33,7 @@
 #define close closesocket
 #endif
 
+#include <errno.h>
 #ifndef EINPROGRESS
 #define EINPROGRESS EAGAIN
 #endif
@@ -65,13 +66,6 @@ set<int>& comm_listeners()
 {
 	return listeners;
 }
-
-/*
- * global SSL stuff
- */
-
-static SSL_CTX* ssl_ctx;
-static string ssl_pass;
 
 /*
  * socket initialization
@@ -129,7 +123,15 @@ static void sockoptions_set (int s)
 }
 
 /*
- * SSL initialization
+ * global SSL stuff
+ */
+
+static gnutls_certificate_credentials_t xcred;
+static gnutls_dh_params_t dh_params;
+static gnutls_priority_t prio_cache;
+
+/*
+ * GnuTLS initialization
  *
  * What is loaded:
  * - key+cert
@@ -138,21 +140,18 @@ static void sockoptions_set (int s)
  * - Some number of CRL's.
  */
 
-static int ssl_password_callback (char*buffer, int num, int rwflag, void*udata)
+void ssl_logger (int level, const char*msg)
 {
-	if ( (size_t) num < ssl_pass.length() + 1) {
-		Log_warn ("ssl_pw_cb: supplied buffer too small, will fail!");
-		return 0;
-	}
-
-	strncpy (buffer, ssl_pass.c_str(), num);
-
-	return ssl_pass.length();
+	Log_info ("gnutls (%d): %s", level, msg);
 }
+
+#include <stdio.h>
 
 static int ssl_initialize()
 {
 	string keypath, certpath, t;
+
+	Log_info ("Initializing ssl layer");
 
 	if ( (!config_get ("key", keypath) ) ||
 	        (!config_get ("cert", certpath) ) ) {
@@ -160,156 +159,109 @@ static int ssl_initialize()
 		return 1;
 	}
 
-	ssl_pass = "";
-	if (config_get ("key_pass", ssl_pass) )
-		Log_info ("SSL key password loaded");
-	else	Log_info ("SSL key password left blank");
-
-
-	SSL_library_init();
-
-	SSL_load_error_strings();
-
-	OpenSSL_add_all_algorithms();
-
-	config_get ("ssl_method", t);
-	if (t == "ssl") {
-		Log_info ("using SSLv3 protocol");
-		ssl_ctx = SSL_CTX_new (SSLv23_method() );
-		SSL_CTX_set_options (ssl_ctx, SSL_OP_NO_SSLv2);
-		//dont want SSLv2, cuz it's deprecated.
-	} else {
-		Log_info ("using TLSv1 protocol");
-		ssl_ctx = SSL_CTX_new (TLSv1_method() );
-	}
-
-	//force regenerating DH params
-	SSL_CTX_set_options (ssl_ctx, SSL_OP_SINGLE_DH_USE);
-
-	//we need those two, because vectors can move
-	SSL_CTX_set_options (ssl_ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
-
-	//certificate/key chain loading
-	SSL_CTX_set_default_passwd_cb (ssl_ctx, ssl_password_callback);
-
-	if (!SSL_CTX_use_certificate_chain_file (ssl_ctx, certpath.c_str() ) ) {
-		Log_error ("SSL Certificate loading failed: %s",
-		           ERR_error_string (ERR_get_error(), 0) );
+	//start gnutls
+	if (gnutls_global_init() ) {
+		Log_error ("gnutls_global_init failed");
 		return 2;
 	}
 
-	if (!SSL_CTX_use_PrivateKey_file (ssl_ctx,
-	                                  keypath.c_str(),
-	                                  SSL_FILETYPE_PEM) ) {
-		Log_error ("SSL Key loading failed: %s",
-		           ERR_error_string (ERR_get_error(), 0) );
+	gnutls_global_set_log_function (ssl_logger);
+	{
+		int i;
+		gnutls_global_set_log_level (config_get_int ("tls_loglevel", i) ? i : 0);
+	}
+
+	gcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
+
+	if (gnutls_certificate_allocate_credentials (&xcred) ) {
+		Log_error ("cant allocate credentials");
 		return 3;
 	}
 
-	string dh_file;
-	if (config_get ("dh", dh_file) ) {
+	//load the keys
+	if (gnutls_certificate_set_x509_key_file
+	        (xcred, certpath.c_str(), keypath.c_str(), GNUTLS_X509_FMT_PEM) ) {
+		Log_error ("loading keypair failed");
+		return 4;
+	}
 
-		BIO*bio;
-		DH*dh;
+	//load DH params, or generate some.
+	gnutls_dh_params_init (&dh_params);
 
-		bio = BIO_new_file (dh_file.c_str(), "r");
+	if (config_get ("dh", t) ) {
+		FILE*f;
+		long s;
+		vector<uint8_t>buffer;
 
-		if (!bio) {
-			Log_error ("opening DH file `%s' failed",
-			           dh_file.c_str() );
+		f = fopen (t.c_str(), "r");
+		if (!f) {
+			Log_error ("can't open DH params file");
 			return 5;
 		}
 
-		dh = PEM_read_bio_DHparams (bio, 0, 0, 0);
-
-		BIO_free (bio);
-
-		if (!dh) {
-			Log_error ("loading DH params failed");
+		fseek (f, 0, SEEK_END);
+		s = ftell (f);
+		fseek (f, 0, SEEK_SET);
+		if ( (s <= 0) || s > 65536) { //prevent too large files.
+			Log_error ("DH params file empty or too big");
+			fclose (f);
 			return 6;
 		}
 
-		if (!SSL_CTX_set_tmp_dh (ssl_ctx, dh) ) {
-			Log_error ("could not set DH parameters");
+		buffer.resize (s, 0);
+		if (fread (buffer.begin().base(), s, 1, f) != 1) {
+			Log_error ("bad DH param read");
+			fclose (f);
 			return 7;
 		}
+		fclose (f);
 
-		Log_info ("DH parameters of size %db loaded OK",
-		          8*DH_size (dh) );
+		gnutls_datum_t data = {buffer.begin().base(), s};
+
+		if (gnutls_dh_params_import_pkcs3
+		        (dh_params, &data, GNUTLS_X509_FMT_PEM) ) {
+			Log_error ("DH params importing failed");
+			return 8;
+		}
 
 	} else {
-		Log_error ("you need to supply server DH parameters");
+		gnutls_dh_params_generate2 (dh_params, 1024);
+	}
+
+	gnutls_certificate_set_dh_params (xcred, dh_params);
+
+	//load CAs and CRLs
+	list<string> l;
+	list<string>::iterator il;
+
+	config_get_list ("ca", l);
+	for (il = l.begin();il != l.end();++il) {
+		int t = gnutls_certificate_set_x509_trust_file
+		        (xcred, il->c_str(), GNUTLS_X509_FMT_PEM);
+		if (t < 0) Log_info ("loading CAs from file %s failed",
+			                     il->c_str() );
+		else Log_info ("loaded %d CAs from %s",
+			               t, il->c_str() );
+	}
+
+	config_get_list ("crl", l);
+	for (il = l.begin();il != l.end();++il) {
+		int t = gnutls_certificate_set_x509_crl_file
+		        (xcred, il->c_str(), GNUTLS_X509_FMT_PEM);
+		if (t < 0) Log_info ("loading CRLs from file %s failed",
+			                     il->c_str() );
+		else Log_info ("loaded %d CRLs from %s",
+			               t, il->c_str() );
+	}
+
+	gnutls_certificate_set_verify_limits (xcred, 32768, 8);
+
+	if (gnutls_priority_init (&prio_cache,
+	                          config_get ("tls_prio_str", t) ?
+	                          t.c_str() : "NORMAL", NULL) ) {
+		Log_error ("gnutls priority initialization failed");
 		return 8;
 	}
-
-	//better to die immediately.
-	if (!SSL_CTX_check_private_key (ssl_ctx) ) {
-		Log_error ("supplied private key does not match the certificate!");
-		return 9;
-	}
-
-	list<string> cl;
-	list<string>::iterator i, e;
-
-	config_get_list ("ca", cl);
-	int total_ca = 0;
-	for (i = cl.begin(), e = cl.end();i != e;++i) {
-		BIO*bio;
-		X509*cert;
-		int n;
-
-		bio = BIO_new_file (i->c_str(), "r");
-
-		if (!bio) {
-			Log_warn ("cannot load CA certs from `%s'", i->c_str() );
-			continue;
-		}
-
-		n = 0;
-
-		while (1) {
-			cert = PEM_read_bio_X509 (bio, 0, 0, 0);
-			if (!cert) break;
-			X509_STORE_add_cert (ssl_ctx->cert_store, cert);
-			++n;
-		}
-
-		Log_info ("loaded %d CA cert%s from `%s'",
-		          n, n > 1 ? "s" : "", i->c_str() );
-		total_ca += n;
-		BIO_free (bio);
-	}
-
-	if (!total_ca) Log_warn ("No CA certificates specified!");
-
-	config_get_list ("crl", cl);
-	for (i = cl.begin(), e = cl.end();i != e;++i) {
-		BIO*bio;
-		X509_CRL*crl;
-		int n;
-		bio = BIO_new_file (i->c_str(), "r");
-
-		if (!bio) {
-			Log_warn ("cannot load CRLs from `%s'", i->c_str() );
-			continue;
-		}
-
-		n = 0;
-
-		while (1) {
-			crl = PEM_read_bio_X509_CRL (bio, 0, 0, 0);
-			if (!crl) break;
-			X509_STORE_add_crl (ssl_ctx->cert_store, crl);
-			++n;
-		}
-
-		Log_info ("loaded %d CRL%s from `%s'",
-		          n, n > 1 ? "s" : "", i->c_str() );
-		BIO_free (bio);
-	}
-
-	SSL_CTX_set_verify (ssl_ctx, SSL_VERIFY_PEER |
-	                    SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
 
 	Log_info ("SSL initialized OK");
 	return 0;
@@ -317,7 +269,11 @@ static int ssl_initialize()
 
 static int ssl_destroy()
 {
-	SSL_CTX_free (ssl_ctx);
+	Log_info ("destroying SSL layer");
+	gnutls_certificate_free_credentials (xcred);
+	gnutls_priority_deinit (prio_cache);
+	gnutls_dh_params_deinit (dh_params);
+	gnutls_global_deinit();
 	return 0;
 }
 
@@ -349,9 +305,9 @@ static int tcp_listen_socket (const string&addr)
 	int opt = 1;
 	if (setsockopt (s, SOL_SOCKET, SO_REUSEADDR,
 #ifdef __WIN32__
-		(const char*)
+	                (const char*)
 #endif
-		&opt, sizeof (opt) ) < 0)
+	                &opt, sizeof (opt) ) < 0)
 		Log_warn ("setsockopt(%d,SO_REUSEADDR) failed, may cause errors.", s);
 
 	if (!sock_nonblock (s) ) {
@@ -717,31 +673,31 @@ void connection::handle_route_request ()
 
 pbuffer& connection::new_data (size_t size)
 {
-	data_q_size+=size;
+	data_q_size += size;
 	data_q.push_back (pbuffer() );
-	data_q.back().b.reserve(size);
+	data_q.back().b.reserve (size);
 	stat_packet (false, size);
 	return data_q.back();
 }
 
 pbuffer& connection::new_proto (size_t size)
 {
-	proto_q_size+=size;
+	proto_q_size += size;
 	proto_q.push_back (pbuffer() );
-	proto_q.back().b.reserve(size);
+	proto_q.back().b.reserve (size);
 	stat_packet (false, size);
 	return proto_q.back();
 }
 
 void connection::write_packet (void*buf, int len)
 {
-	size_t size=p_head_size+len;
-	if (!can_write_data(size) ) {
+	size_t size = p_head_size + len;
+	if (!can_write_data (size) ) {
 		try_write();
 		return;
 	}
 	if ( (unsigned int) len > mtu) return;
-	pbuffer& b = new_data(size);
+	pbuffer& b = new_data (size);
 	add_packet_header (b, pt_eth_frame, 0, len);
 	b.push ( (uint8_t*) buf, len);
 	try_write();
@@ -749,13 +705,13 @@ void connection::write_packet (void*buf, int len)
 
 void connection::write_broadcast_packet (uint32_t ID, void*buf, int len)
 {
-	size_t size=p_head_size+len+4;
-	if (!can_write_data(size) ) {
+	size_t size = p_head_size + len + 4;
+	if (!can_write_data (size) ) {
 		try_write();
 		return;
 	}
 	if ( (unsigned int) len > mtu) return;
-	pbuffer& b = new_data(size);
+	pbuffer& b = new_data (size);
 	add_packet_header (b, pt_broadcast, 0, len);
 	b.push<uint32_t> (htonl (ID) );
 	b.push ( (uint8_t*) buf, len);
@@ -764,12 +720,12 @@ void connection::write_broadcast_packet (uint32_t ID, void*buf, int len)
 
 void connection::write_route_set (uint8_t*data, int n)
 {
-	size_t size=p_head_size+n*route_entry_size;
-	if (!can_write_proto(size) ) {
+	size_t size = p_head_size + n * route_entry_size;
+	if (!can_write_proto (size) ) {
 		try_write();
 		return;
 	}
-	pbuffer&b = new_proto(size);
+	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_route_set, 0, n);
 	b.push (data, n* route_entry_size );
 	try_write();
@@ -777,12 +733,12 @@ void connection::write_route_set (uint8_t*data, int n)
 
 void connection::write_route_diff (uint8_t*data, int n)
 {
-	size_t size=p_head_size+n*route_entry_size;
-	if (!can_write_proto(size) ) {
+	size_t size = p_head_size + n * route_entry_size;
+	if (!can_write_proto (size) ) {
 		try_write();
 		return;
 	}
-	pbuffer&b = new_proto(size);
+	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_route_diff, 0, n);
 	b.push (data, n* route_entry_size );
 	try_write();
@@ -790,36 +746,36 @@ void connection::write_route_diff (uint8_t*data, int n)
 
 void connection::write_ping (uint8_t ID)
 {
-	size_t size=p_head_size;
-	if (!can_write_proto(size) ) {
+	size_t size = p_head_size;
+	if (!can_write_proto (size) ) {
 		try_write();
 		return;
 	}
-	pbuffer&b = new_proto(size);
+	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_echo_request, ID, 0);
 	try_write();
 }
 
 void connection::write_pong (uint8_t ID)
 {
-	size_t size=p_head_size;
-	if (!can_write_proto(size) ) {
+	size_t size = p_head_size;
+	if (!can_write_proto (size) ) {
 		try_write();
 		return;
 	}
-	pbuffer&b = new_proto(size);
+	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_echo_reply, ID, 0);
 	try_write();
 }
 
 void connection::write_route_request ()
 {
-	size_t size=p_head_size;
-	if (!can_write_proto(size) ) {
+	size_t size = p_head_size;
+	if (!can_write_proto (size) ) {
 		try_write();
 		return;
 	}
-	pbuffer&b = new_proto(size);
+	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_route_request, 0, 0);
 	try_write();
 }
@@ -922,7 +878,7 @@ bool connection::try_read()
 			return false;
 		}
 
-		r = SSL_read (ssl, buf, 4096);
+		r = gnutls_record_recv (session, buf, 4096);
 		if (r == 0) {
 			Log_info ("connection id %d closed by peer", id);
 			reset();
@@ -978,7 +934,7 @@ bool connection::try_write()
 		        ( (unsigned int) n > ubl_available) ) break;
 
 		//or try to send.
-		r = SSL_write (ssl, buf, n);
+		r = gnutls_record_send (session, buf, n);
 
 		if (r == 0) {
 			Log_info ("connection id %d closed by peer", id);
@@ -994,21 +950,21 @@ bool connection::try_write()
 		} else {
 			if (sending_from_data_q) {
 				if (ubl_enabled) ubl_available -= n;
-				if(data_q_size<data_q.front().b.size())
-					data_q_size=0;
-				else data_q_size-=data_q.front().b.size();
+				if (data_q_size < data_q.front().b.size() )
+					data_q_size = 0;
+				else data_q_size -= data_q.front().b.size();
 				data_q.pop_front();
 				sending_from_data_q = false;
 			} else {
-				if(proto_q_size<proto_q.front().b.size())
-					proto_q_size=0;
-				else proto_q_size-=proto_q.front().b.size();
+				if (proto_q_size < proto_q.front().b.size() )
+					proto_q_size = 0;
+				else proto_q_size -= proto_q.front().b.size();
 				proto_q.pop_front();
 			}
 		}
 	}
 	poll_set_remove_write (fd); //don't need any more write
-	data_q_size=proto_q_size=0; //to be sure
+	data_q_size = proto_q_size = 0; //to be sure
 	return true;
 }
 
@@ -1036,18 +992,18 @@ void connection::try_data()
 
 void connection::try_accept()
 {
-	int r = SSL_accept (ssl);
-	if (r > 0) {
+	int r = gnutls_handshake (session);
+	if (r == 0) {
 		Log_info ("socket %d accepted SSL connection id %d", fd, id);
+
+		//TODO, check cert here?
 
 		activate();
 
 	} else if (handle_ssl_error (r) ) {
 		Log_error ("accepting fd %d lost", fd);
 		reset();
-		return;
-	}
-	if ( (timestamp() - last_ping) > (unsigned int) timeout) {
+	} else if ( (timestamp() - last_ping) > (unsigned int) timeout) {
 		Log_error ("accepting fd %d timeout", fd);
 		reset();
 		return;
@@ -1059,11 +1015,11 @@ void connection::try_connect()
 	int e = -1, t;
 	socklen_t e_len = sizeof (e);
 
-	t = getsockopt (fd, SOL_SOCKET, SO_ERROR, 
+	t = getsockopt (fd, SOL_SOCKET, SO_ERROR,
 #ifdef __WIN32__
-		(char*)
+	                (char*)
 #endif
-		&e, &e_len);
+	                & e, &e_len);
 
 	if (t) {
 		Log_error ("getsockopt(%d) failed with errno %d", fd, errno);
@@ -1100,7 +1056,7 @@ void connection::try_connect()
 		poll_set_remove_write (fd);
 		poll_set_add_read (fd); //always needed
 		state = cs_ssl_connecting;
-		if (alloc_ssl() ) {
+		if (alloc_ssl (false) ) {
 			Log_error ("conn %d failed to allocate SSL stuff", id);
 			reset();
 		} else try_ssl_connect();
@@ -1113,48 +1069,41 @@ void connection::try_connect()
 
 void connection::try_ssl_connect()
 {
-	int r = SSL_connect (ssl);
-	if (r > 0) {
+	int r = gnutls_handshake (session);
+	if (r == 0) {
 		Log_info ("socket %d established SSL connection id %d", fd, id);
 
 		/*
-		 * Documentation about SSL_set_verify tells us that
-		 * client mode doesn't check for real presence of
-		 * server certificate. Let's check it here.
+		 * TODO
+		 * Do gnutls verification here
 		 */
-
-		if (!SSL_get_peer_certificate (ssl) ) {
-			Log_error ("peer presented no certificate, disconnecting");
-			disconnect();
-			return;
-		}
 
 		activate();
 
 	} else if (handle_ssl_error (r) ) {
 		Log_error ("SSL connecting on %d failed", fd);
 		reset();
+	} else if ( (timestamp() - last_ping) > (unsigned int) timeout) {
+		Log_error ("SSL connecting fd %d timeout", fd);
+		reset();
 		return;
 	}
-
 }
 
 void connection::try_close()
 {
-	if (!ssl) {
+	if (!session) {
 		reset(); //someone already terminated it.
 		return;
 	}
-	int r = SSL_shutdown (ssl);
-	if (r < 0) {
-		Log_warn ("SSL connection on %d not terminated properly", fd);
-		reset();
-	} else if (r != 0) reset(); //closed OK
+
+	int r = gnutls_bye (session, GNUTLS_SHUT_RDWR);
+	if (r == 0) reset(); //closed OK
 	else if (handle_ssl_error (r) ) reset ();
 	else if ( (timestamp() - last_ping) > (unsigned int) timeout) {
 		Log_warn ("%d timeouted disconnecting SSL", fd);
 		reset();
-	} else return; //wait for another poll
+	}
 }
 
 /*
@@ -1182,7 +1131,7 @@ void connection::start_connect()
 
 void connection::start_accept()
 {
-	if (alloc_ssl() ) {
+	if (alloc_ssl (true) ) {
 		reset();
 		return;
 	}
@@ -1273,34 +1222,22 @@ void connection::reset()
 
 int connection::handle_ssl_error (int ret)
 {
-	int e = SSL_get_error (ssl, ret);
+	if (gnutls_error_is_fatal (ret) ) {
+		Log_error ("fatal ssl error %d (%s) on connection %d",
+		           ret, gnutls_strerror (ret), id);
+		return 1;
+	}
 
-	switch (e) {
-	case SSL_ERROR_WANT_READ:
-		if (state != cs_active) poll_set_remove_write (fd);
-		//not much to do, read flag is always prepared.
-		break;
-	case SSL_ERROR_WANT_WRITE:
-		poll_set_add_write (fd);
+	switch (ret) {
+	case GNUTLS_E_AGAIN:
+	case GNUTLS_E_INTERRUPTED:
+		if (gnutls_record_get_direction (session) )
+			poll_set_add_write (fd);
+		else if (state != cs_active) poll_set_remove_write (fd);
 		break;
 	default:
-		if ( (state == cs_closing)
-		        && (e == SSL_ERROR_SYSCALL)
-		        && (ret == 0) ) return 1; //clear disconnect
-
-		Log_error ("on connection %d got SSL error %d, ret=%d!", id, e, ret);
-		int err;
-
-		while ( (err = ERR_get_error() ) ) {
-			Log_error (
-			    "on conn %d SSL_ERR %d: %s; func %s; reason %s",
-			    id, err,
-			    ERR_lib_error_string (err),
-			    ERR_func_error_string (err),
-			    ERR_reason_error_string (err) );
-			return err;
-		}
-		return 1;
+		Log_warn ("non-fatal ssl error %d (%s) on connection %d",
+		          ret, gnutls_strerror (ret), id);
 	}
 
 	return 0;
@@ -1375,37 +1312,26 @@ void connection::periodic_update()
  * create and destroy SSL objects specific for each connection
  */
 
-int connection::alloc_ssl()
+int connection::alloc_ssl (bool server)
 {
 	dealloc_ssl();
 
-	bio = BIO_new_socket (fd, BIO_NOCLOSE);
-	if (!bio) {
-		Log_fatal ("creating SSL/BIO object failed, something's gonna die.");
+	if (gnutls_init (&session, server ? GNUTLS_SERVER : GNUTLS_CLIENT) )
 		return 1;
-	}
 
-	ssl = SSL_new (ssl_ctx);
-	SSL_set_bio (ssl, bio, bio);
-
-	if (!ssl) {
-		Log_fatal ("creating SSL object failed! something is gonna die.");
-		dealloc_ssl(); //at least free the BIO
-		return 1;
-	}
+	gnutls_transport_set_ptr (session, (gnutls_transport_ptr_t) fd);
+	gnutls_priority_set (session, prio_cache);
+	gnutls_credentials_set (session, GNUTLS_CRD_CERTIFICATE, xcred);
+	gnutls_certificate_server_set_request (session, GNUTLS_CERT_REQUIRE);
 
 	return 0;
 }
 
 void connection::dealloc_ssl()
 {
-	if (ssl) {
-		SSL_free (ssl);
-		ssl = 0;
-		bio = 0;
-	} else if (bio) {
-		BIO_free (bio);
-		bio = 0;
+	if (session) {
+		gnutls_deinit (session);
+		session = 0;
 	}
 }
 
@@ -1629,12 +1555,12 @@ void connection::bl_recompute()
  * discarded. Proto packets are not affected by RED.
  */
 
-bool connection::red_can_send(size_t s)
+bool connection::red_can_send (size_t s)
 {
-	if(red_enabled){
-		int fill = (100*(data_q_size+s)) /max_waiting_data_size;
-		if(fill<red_threshold) return true;
-		if(fill>red_threshold+(rand()%(101-red_threshold)))
+	if (red_enabled) {
+		int fill = (100 * (data_q_size + s) ) / max_waiting_data_size;
+		if (fill < red_threshold) return true;
+		if (fill > red_threshold + (rand() % (101 - red_threshold) ) )
 			return false;
 	}
 	return true;
@@ -1869,13 +1795,13 @@ int comm_init()
 	if (connection::dbl_enabled)
 		Log_info ("burst download size is %dB", t);
 
-	if (config_get_int ("red-ratio", t) ){
+	if (config_get_int ("red-ratio", t) ) {
 		connection::red_enabled = true;
-		connection::red_threshold = t%100;
-		Log_info("RED enabled with ratio %d%%",
-			connection::red_threshold);
+		connection::red_threshold = t % 100;
+		Log_info ("RED enabled with ratio %d%%",
+		          connection::red_threshold);
 	}
-	
+
 	/*
 	 * configuration done, lets init.
 	 */

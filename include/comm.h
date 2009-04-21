@@ -19,7 +19,7 @@
 
 #include <stdint.h>
 
-#include <openssl/ssl.h>
+#include <gnutls/gnutls.h>
 
 #include <map>
 #include <set>
@@ -84,8 +84,6 @@ public:
 		id = ID;
 		fd = -1;
 		ping = timeout;
-		ssl = 0; //point at nothing.
-		bio = 0;
 		last_ping = 0;
 		cached_header.type = 0;
 		sending_from_data_q = false;
@@ -93,6 +91,7 @@ public:
 		stats_clear();
 		ubl_available = 0;
 		dbl_over = 0;
+		session = 0;
 	}
 
 	connection (); //this is supposed to fail, always use c(ID)
@@ -190,10 +189,9 @@ public:
 	 * SSL data
 	 */
 
-	SSL*ssl; //should be 0 when not used
-	BIO*bio;
+	gnutls_session_t session;
 
-	int alloc_ssl();
+	int alloc_ssl (bool server);
 	void dealloc_ssl();
 
 	/*
@@ -205,12 +203,12 @@ public:
 	static unsigned int max_waiting_proto_size;
 	static unsigned int max_remote_routes;
 
-	inline bool can_write_data(size_t s) {
+	inline bool can_write_data (size_t s) {
 		return (data_q_size + s < max_waiting_data_size)
-			&& red_can_send(s);
+		       && red_can_send (s);
 	}
 
-	inline bool can_write_proto(size_t s) {
+	inline bool can_write_proto (size_t s) {
 		//RED doesn't apply to proto packets
 		return proto_q_size + s < max_waiting_proto_size;
 	}
@@ -262,7 +260,7 @@ public:
 	static void bl_recompute();
 
 	inline bool needs_write() {
-		return data_q.size()||proto_q.size();
+		return data_q.size() || proto_q.size();
 	}
 
 	/*
@@ -271,7 +269,7 @@ public:
 
 	static bool red_enabled;
 	static int red_threshold;
-	bool red_can_send(size_t);
+	bool red_can_send (size_t);
 };
 
 void comm_listener_poll (int fd);
