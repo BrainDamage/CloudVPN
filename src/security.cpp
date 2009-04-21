@@ -101,6 +101,12 @@ int do_memlock()
 
 int do_local_security()
 {
+	/*
+	 * note that memlock should be called before certs are loaded,
+	 * but chroot and user switching after that. Therefore, do_memlock is
+	 * not here.
+	 */
+
 	if (do_chroot() ) return 1;
 	if (do_switch_user() ) return 2;
 	return 0;

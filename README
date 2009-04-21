@@ -12,7 +12,7 @@ Needed goals:
 
 Whole network consists of connected nodes, all with equal functionality.  Nodes
 are connected in a mesh of any shape, topology really doesn't matter. The mesh
-can transfer multiple protocols at once, with varying link addresses.
+can transfer multiple protocols at once.
 
 Optional goals:
 
@@ -25,22 +25,11 @@ License:
 GNU GPLv3 (see LICENSE file)
 
 Contents:
-1] Compiling
-2] Terminology
-3] Internals
-4] Protocol
+1] Terminology
+2] Internals
+3] Protocol
+4] Compiling
 5] Configuration
-
-************************************************************* COMPILING *******
-
-Use CMake:
-
-$ cmake . && make
-
-On Win32 you should try to use ported CMake along with MinGW32 compiler.
-Should be achievable on Win64, though not tested.
-
-
 
 *********************************************************** TERMINOLOGY *******
 
@@ -57,7 +46,8 @@ protocol-specific stuff. This means that Ethernet "TAP backends" and similar
 communication agents are moved from the core to separate programs, which
 connect to core using a special protocol, announce themselves, and send/receive
 packets, expecting that core will eventually mesh them correctly to marked
-destinations. Those programs will be called GATEs.
+destinations. Those programs will be called CLIENTs. The connection between
+client and mesh core is called GATE.
 
 This requires core to distinguish between PROTOCOLS, so that it knows which
 addresses are in one protocol and which aren't, and also whether given gate
@@ -71,13 +61,6 @@ implies that Protocol identifier will be needed to be combined with INSTANCE
 identifier. Because of similarity of those identifiers, they are gonna be
 probably united in higher/lower 32bit integer parts.
 
-Finally, as authentication using SSL only is not sufficient in many situation,
-each CloudVPN instance opens a special AUTH protocol socket, which can be used
-by special daemon to decide what key IDs are allowed to connect at given time.
-It is informed by simple instructions in form "Key XXX wants to connect" about
-what goes on, and replies with "Key XXX authenticated" or "Key XXX access
-denied", which can cause even disconnection of already-active connections.
-
 
 
 ************************************************************* INTERNALS *******
@@ -85,13 +68,180 @@ denied", which can cause even disconnection of already-active connections.
 
 This section describes all the hacks used in how routing works.
 
+Every node in the network handles packets, pings, and route information.
+
+Packet is an unified datagram with source address, destination address, and
+data.
+
+Broadcast packet comes also with a broadcast packet ID and TTL entry.
+
+Route information is an address-destination info shared among nodes. Route
+entry consists of address, measured ping to given address, and distance of
+address.
+
+Route entries are sent as a block, but, better, as a "diff" from last state.
+
+Address, that is meant as a broadcast address, is distinguished by having least
+significant bit of the first byte set to 1. Broadcast-mark of address doesn't
+anyhow relate with broadcast-type packet.
+
+All route entries from all connections are merged to a table, which provides
+fast packet-routing-direction lookup.
+
+Clients connected to the mesh node can provide list of "their", local
+addresses, which must not be broadcast. Those packets are then routed to them.
+
 
 
 ************************************************************** PROTOCOL *******
 
 
 This section describes how CloudVPN core communicates with other cores, gates,
-and auth daemon.
+and authenticators.
+
+1] Addresses
+
+	Address is a arbitrarily-long sequence of bytes.
+	Least significant bit in the first byte of address marks the address
+	for broadcasting.
+	Adress bytes translate directly to binary format, and are textually
+	written, for similarity with ethernet addresses, in colon notation:
+
+	0x12345678 (hex) == 12:34:56:78  (and it is NOT broadcast address)
+
+	03:45 (this IS broadcast.)
+
+2] Packet format
+	
+	Packet, in its basic form, incorporates:
+	- protocol ID
+	- instance ID
+	- source address
+	- destination address
+	- payload
+
+	Because we need interoperability with all possible protocols that
+	place addresses on many different places and assign different sizes
+	and addresses, but don't want to write those so-long addresses twice,
+	those are indexed from the packet payload:
+
+	PACKET---
+	16b proto ID
+	16b instance ID
+	16b source offset
+	16b source size
+	16b dest offset
+	16b dest size
+	16b payload size
+	payload
+
+	This adds 14 bytes header to each packet, which is acceptable.
+
+3] Route entry format
+	
+	Route entry tells us:
+	- distance of given destination
+	- time needed to reach given destination
+	- address of it
+
+	ROUTE ENTRY---
+	32b ping (measured in usec. That gives us around 1.2 hour max ping.)
+	32b distance (measured in hops)
+	16b address size
+	address
+
+	Totally, this gives us 10 bytes + address size.
+
+4] Inter-node protocol
+
+	This protocol is used to guide communication between mesh cores. Most
+	of it is implemented by "comm" module.
+	
+	Packet format is classical header-data.
+
+	PACKET-HEADER---
+	 8b type
+	 8b special
+	16b size
+	payload
+
+	Type is meant as "command" and can have values:
+	1 - route-set         -- used to report state of routes
+	2 - route-diff        -- used to update state of routes
+	3 - packet            -- used to send packets
+	4 - broadcast-packet  -- used to send broadcast packets
+	5 - echo-request      -- ping
+	6 - echo-reply        -- pong
+	7 - route-request     -- used to request complete route-set packet
+
+	Special field is used for ID-ing the pings, otherwise it should be zero.
+
+	Size is a byte-size of the payload.
+
+	Payload can contain:
+	- packet structure, in case we transfer packet
+	- broadcast ID, TTL and packet structure, in case we transfer broadcast
+	- list of route entries when we report or update route informaton
+	
+	When handling route-diff, and remote ping is equal to zero, it means
+	that the route is no longer available. Ping should otherwise never
+	be equal to zero (1 is minimum), even in case of route-set.
+
+5] Gate protocol
+
+	Gate protocol basically allows clients to connect to mesh core,
+	send and receive packets using it, and announce its "local" addresses.
+
+	Note that gate connection is not supposed to be encrypted, and is
+	essentially meant to be "private", just as its listening socket is.
+
+
+	Gate protocol uses header-data format too.
+
+	GATE-HEADER---
+	8b type
+	16b size
+	payload
+
+	Size means the size of payload.
+	Type can have following values:
+
+	1 - keep-alive  -- client sends those back to core to verify activity
+	2 - route       -- client sends this to core to report addresses
+	3 - packet      -- data transfer
+	4 - promisc	-- set promiscuity
+
+	keep-alive requests are sent to client periodically, and client is
+	expected to reply as fast as possible. If client fails to reply several
+	times, he might be considered dead, and disconnected.
+
+	route requests are sent from to core to announce that certain addresses
+	are reachable at the client side. it is followed by a list of simplified
+	route entries:
+
+	GATE-ROUTE---
+	16b size
+	address
+
+	Note that client should not request route for a broadcast address.
+
+	packets are sent by both sides, to enable data transfer
+
+	promics is sent by client as a request to receive all seen packets
+	from given protocol/instance ID. payload then consists of pairs of
+	16b proto/16b instance, or is empty (which turns promisc off).
+
+
+
+************************************************************* COMPILING *******
+
+Use CMake:
+
+$ cmake . && make
+
+On Win32 you should try to use ported CMake along with MinGW32 compiler.
+Should be achievable on Win64, though not tested.
+
 
 
 ********************************************************* CONFIGURATION *******
@@ -100,5 +250,6 @@ and auth daemon.
 This section lists all configuration options available for running CloudVPN
 core and some of the most important CloudVPN gates/auth daemons.
 
+heh. todo.
 
 
