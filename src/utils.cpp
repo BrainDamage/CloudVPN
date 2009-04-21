@@ -92,6 +92,7 @@ void hwaddr::get (uint8_t*c) const
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #else
 #define _WIN32_WINNT 0x0501 //for mingw's addrinfo
 #include <winsock2.h>

@@ -265,6 +265,8 @@ int poll_deinit()
 	return 0;
 }
 
+#include <string.h>
+
 #include <map>
 using std::map;
 
