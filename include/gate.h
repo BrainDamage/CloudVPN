@@ -31,6 +31,9 @@ public:
 		fd=-1;
 	}
 
+	explicit gate(int ID);
+	explicit gate(); //<- never use this one!
+
 	uint64_t last_activity;
 
 	void poll_read();
@@ -47,14 +50,14 @@ public:
 	deque<pbuffer> send_q;
 };
 
-void gate_init();
+int gate_init();
 void gate_shutdown();
-void gate_periodic_update();
+int gate_periodic_update();
 
 void poll_gate_listener(int fd);
 
 map<int, int>& gate_index();
-map<int, gate>& gate_id();
+map<int, gate>& gate_gates();
 set<int>& gate_listeners();
 
 #endif
