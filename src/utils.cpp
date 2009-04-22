@@ -40,48 +40,6 @@ int setup_sighandler()
 }
 
 /*
- * hwaddr stuff
- */
-
-#include <string.h>
-
-static int hwaddr_cmp (const uint8_t*a, const uint8_t*b)
-{
-	for (int i = 0;i < hwaddr_size;++i) {
-		if (a[i] == b[i]) continue;
-
-		return (int) a[i] - (int) b[i];
-	}
-	return 0;
-}
-
-
-bool hwaddr::operator< (const hwaddr&a) const
-{
-	return (hwaddr_cmp (addr, a.addr) < 0) ? true : false;
-}
-
-bool hwaddr::operator== (const hwaddr&a) const
-{
-	return (hwaddr_cmp (addr, a.addr) == 0) ? true : false;
-}
-
-bool hwaddr::operator== (const uint8_t* a) const
-{
-	return (hwaddr_cmp (addr, a) == 0) ? true : false;
-}
-
-void hwaddr::set (const uint8_t*c)
-{
-	memcpy (addr, c, hwaddr_size);
-}
-
-void hwaddr::get (uint8_t*c) const
-{
-	memcpy (c, addr, hwaddr_size);
-}
-
-/*
  * ip/name -> sockaddr resolution
  */
 

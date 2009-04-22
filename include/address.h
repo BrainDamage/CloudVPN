@@ -37,6 +37,14 @@ public:
 	{
 		copy(data,data+size,addr.begin());
 	}
+
+	/*
+	 * string handling
+	 */
+	string format_addr();
+	string format();
+	bool scan_addr(const char*);
+	bool scan(const char*);
 };
 
 
