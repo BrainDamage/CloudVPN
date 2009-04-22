@@ -4,6 +4,9 @@
 
 #include <sys/types.h>
 
+#include <string>
+using namespace std;
+
 #define sockaddr_type(x) 	\
 union { struct sockaddr x;	\
 struct sockaddr_in x##_4;	\
@@ -21,7 +24,7 @@ string sockaddr_to_str(struct sockaddr*addr);
  * socket stuff
  */
 
-int sock_nonblock(int fd);
+bool sock_nonblock(int fd);
 int tcp_listen_socket(const char*);
 int tcp_connect_socket(const char*);
 
