@@ -36,6 +36,8 @@ public:
 
 	uint64_t last_activity;
 
+	int try_read();
+	int try_write();
 	void poll_read();
 	void poll_write();
 
@@ -44,6 +46,7 @@ public:
 	list<address>promisc; //saves only proto/instance, and zerolen addr
 	list<address>local;
 
+	void start();
 	void reset();
 
 	squeue recv_q;

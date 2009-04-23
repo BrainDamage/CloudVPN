@@ -18,25 +18,10 @@
 #include "route.h"
 #include "timestamp.h"
 #include "sq.h"
+#include "network.h"
 
 #include <gnutls/gnutls.h>
 #include <gcrypt.h>
-
-#ifndef __WIN32__
-#include <netinet/in.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#else
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#define close closesocket
-#endif
-
-#include <errno.h>
-#ifndef EINPROGRESS
-#define EINPROGRESS EAGAIN
-#endif
 
 #include <string.h>
 
@@ -65,61 +50,6 @@ map<int, connection>& comm_connections()
 set<int>& comm_listeners()
 {
 	return listeners;
-}
-
-/*
- * socket initialization
- *
- * generally, sets socket option according to configuration.
- *
- * We support TCP_NODELAY as it is vitable for gaming,
- * and IP_TOS settings for optimizing the delay/throughput/reliability/cost
- */
-
-#ifndef __WIN32__
-#include <netinet/in_systm.h>  //required on some platforms for n_time
-#include <netinet/ip.h>
-#include <netinet/tcp.h>
-#endif
-
-static bool tcp_nodelay = false;
-static int ip_tos = 0;
-
-static void sockoptions_init()
-{
-#ifndef __WIN32__
-	tcp_nodelay = config_is_true ("tcp_nodelay");
-	if (tcp_nodelay) Log_info ("TCP_NODELAY is set for all sockets");
-	string t;
-	if (!config_get ("ip_tos", t) ) return;
-	if (t == "lowdelay") ip_tos = IPTOS_LOWDELAY;
-	else if (t == "throughput") ip_tos = IPTOS_THROUGHPUT;
-	else if (t == "reliability") ip_tos = IPTOS_RELIABILITY;
-#ifdef IPTOS_MINCOST  //not available on some platforms.
-	else if (t == "mincost") ip_tos = IPTOS_MINCOST;
-#endif
-	if (ip_tos) Log_info ("type of service is `%s' for all sockets",
-		                      t.c_str() );
-#endif
-}
-
-static void sockoptions_set (int s)
-{
-#ifndef __WIN32__
-	int t;
-	if (tcp_nodelay) {
-		t = 1;
-		if (setsockopt (s, IPPROTO_TCP, TCP_NODELAY, &t, sizeof (t) ) )
-			Log_warn ( "setsockopt(%d,TCP,NODELAY) failed with %d: %s",
-			           s, errno, strerror (errno) );
-	}
-	if (ip_tos) {
-		t = ip_tos;
-		if (setsockopt (s, IPPROTO_IP, IP_TOS, &t, sizeof (t) ) )
-			Log_warn ("setsockopt(%d,IP,TOS) failed with %d: %s",
-			          s, errno, strerror (errno) );
-	}
-#endif
 }
 
 /*
@@ -274,128 +204,6 @@ static int ssl_destroy()
 	gnutls_priority_deinit (prio_cache);
 	gnutls_dh_params_deinit (dh_params);
 	gnutls_global_deinit();
-	return 0;
-}
-
-/*
- * raw network stuff
- *
- * backends to listen/connect/accept network operations
- */
-
-static int listen_backlog_size = 32;
-
-static int tcp_listen_socket (const string&addr)
-{
-	sockaddr_type (sa);
-	int sa_len, domain;
-	if (!sockaddr_from_str (addr.c_str(), &sa, &sa_len, &domain) ) {
-		Log_error ("could not resolve address and port `%s'",
-		           addr.c_str() );
-		return -1;
-	}
-
-	int s = socket (domain, SOCK_STREAM, 0);
-
-	if (s < 0) {
-		Log_error ("socket() failed with %d", errno);
-		return -2;
-	}
-
-	int opt = 1;
-	if (setsockopt (s, SOL_SOCKET, SO_REUSEADDR,
-#ifdef __WIN32__
-	                (const char*)
-#endif
-	                &opt, sizeof (opt) ) < 0)
-		Log_warn ("setsockopt(%d,SO_REUSEADDR) failed, may cause errors.", s);
-
-	if (!sock_nonblock (s) ) {
-		Log_error ("can't set socket %d to nonblocking mode", s);
-		close (s);
-		return -3;
-	}
-
-	if (bind (s, &sa, sa_len) ) {
-		Log_error ("binding socket %d failed with %d", s, errno);
-		close (s);
-		return -4;
-	}
-
-	if (listen (s, listen_backlog_size) ) {
-		Log_error ("listen(%d,%d) failed with %d",
-		           s, listen_backlog_size, errno);
-		close (s);
-		return -5;
-	}
-
-	Log_info ("created listening socket %d", s);
-
-	return s;
-}
-
-static int tcp_connect_socket (const string&addr)
-{
-	sockaddr_type (sa);
-	int sa_len, domain;
-	if (!sockaddr_from_str (addr.c_str(), &sa, &sa_len, &domain) ) {
-		Log_error ("could not resolve address and port `%s'",
-		           addr.c_str() );
-		return -1;
-	}
-
-	int s = socket (domain, SOCK_STREAM, 0);
-
-	if (s < 0) {
-		Log_error ("socket() failed with %d", errno);
-		return -2;
-	}
-
-	if (!sock_nonblock (s) ) {
-		Log_error ("can't set socket %d to nonblocking mode", s);
-		close (s);
-		return -3;
-	}
-
-	sockoptions_set (s);
-
-	if (connect (s, &sa, sa_len) < 0 ) {
-		int e = errno;
-		if (e != EINPROGRESS) {
-			Log_error ("connect(%d) to `%s' failed with %d",
-			           s, addr.c_str(), e);
-			return -4;
-		}
-	}
-
-	return s;
-}
-
-static int tcp_close_socket (int sock)
-{
-	if (close (sock) ) {
-		Log_warn ("closing socket %d failed with %d!", sock, errno);
-		return 1;
-	}
-	return 0;
-}
-
-/*
- * this is needed to determine if socket is properly connected
- */
-
-#ifndef __WIN32__
-#include <sys/select.h>
-#endif
-
-static int tcp_socket_writeable (int sock)
-{
-	fd_set s;
-	struct timeval t = {0, 0};
-	FD_ZERO (&s);
-	FD_SET (sock, &s);
-	select (sock + 1, 0, &s, 0, &t);
-	if (FD_ISSET (sock, &s) ) return 1;
 	return 0;
 }
 
@@ -1715,10 +1523,6 @@ int comm_init()
 	else max_connections = t;
 	Log_info ("max connections count is %d", max_connections);
 
-	if (!config_get_int ("listen_backlog", t) ) listen_backlog_size = 32;
-	else listen_backlog_size = t;
-	Log_info ("listen backlog size is %d", listen_backlog_size);
-
 	if (!config_get_int ("conn-mtu", t) )
 		connection::mtu = 8192;
 	else 	connection::mtu = t;
@@ -1805,8 +1609,6 @@ int comm_init()
 	/*
 	 * configuration done, lets init.
 	 */
-
-	sockoptions_init();
 
 	if (ssl_initialize() ) {
 		Log_fatal ("SSL initialization failed");

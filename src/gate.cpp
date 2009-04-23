@@ -2,6 +2,8 @@
 #include "gate.h"
 
 #include "log.h"
+#include "poll.h"
+#include "network.h"
 #include "timestamp.h"
 
 /*
@@ -65,7 +67,6 @@ gate::gate(int ID)
 {
 	id=ID;
 	fd=-1;
-	last_activity=timestamp();
 }
 
 gate::gate()
@@ -84,15 +85,34 @@ gate::gate()
  * gate internals
  */
 
+#define gate_timeout 60000000
+
 void gate::periodic_update()
 {
-	//TODO check activity
+	
+}
+
+void gate::start()
+{
+	poll_set_add_read(fd);
 }
 
 void gate::reset()
 {
 	//TODO delete poll stuff
+	if(fd<0)return;
+	close(fd);
 	unset_fd();
+}
+
+int gate::try_read()
+{
+
+}
+
+int gate::try_write()
+{
+
 }
 
 void gate::poll_read()
@@ -109,7 +129,33 @@ void gate::poll_write()
  * listener stuff
  */
 
-static void poll_gate_listener() {
+void poll_gate_listener(int fd) {
+	if(listeners.find(fd)==listeners.end())return;
+	
+	int r=accept(fd,0,0);
+	if(r<0)
+		if(errno==EAGAIN) return;
+		else Log_warn("gate accept(%d) failed with %d (%s)",
+				fd, errno, strerror(errno));
+	else {
+		sockoptions_set(fd);
+		if(!sock_nonblock(fd)) {
+			Log_error("cannot set gate socket %d to nonblocking mode",fd);
+			close(fd);
+			return;
+		}
+		int i=gate_alloc();
+		if(i<0) {
+			Log_error("too many gates already open");
+			close(fd);
+			return;
+		}
+
+		gate&g=gates[i];
+		g.set_fd(fd);
+		g.last_activity=timestamp();
+		g.start();
+	}
 }
 
 static int start_listeners() {

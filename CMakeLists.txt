@@ -6,6 +6,8 @@ project(CLOUDVPN)
 set(CMAKE_C_FLAGS $ENV{CFLAGS})
 set(CMAKE_CXX_FLAGS $ENV{CXXFLAGS})
 include_directories(include/)
+message("CFLAGS are set to '" ${CMAKE_C_FLAGS} "'")
+message("CXXFLAGS are set to '" ${CMAKE_CXX_FLAGS} "'")
 
 #first, make common sources
 
