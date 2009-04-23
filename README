@@ -159,10 +159,12 @@ and authenticators.
 		ROUTE ENTRY---
 		32b ping (measured in usec. gives us around 1.2 hour max ping.)
 		32b distance (measured in hops)
+		16b proto
+		16b id
 		16b address size
 		address
 
-	Totally, this gives us 10 bytes + address size.
+	Totally, this gives us 14 bytes + address size.
 
 4] Inter-node protocol
 
