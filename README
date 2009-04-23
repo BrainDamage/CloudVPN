@@ -111,6 +111,18 @@ and authenticators.
 
 	03:45 (this IS broadcast.)
 
+	The Protocol/Instance prefix of address is written in (full) 8 hexes
+	before the address, separated by . Should be written this way:
+
+	0001.0003.4c:00:10:02:34:56
+
+	Note that, because of ease of parsing, THIS is not the same address:
+	1.3.4c::10:2:34:56
+
+	But this IS the same address:
+
+	000100034c00103b83ad
+
 2] Packet format
 	
 	Packet, in its basic form, incorporates:

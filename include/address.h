@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include <vector>
+#include <string>
 #include <algorithm>
 using namespace std;
 
@@ -41,8 +42,8 @@ public:
 	/*
 	 * string handling
 	 */
-	string format_addr();
-	string format();
+	string format_addr() const;
+	string format() const;
 	bool scan_addr(const char*);
 	bool scan(const char*);
 };
