@@ -183,10 +183,10 @@ int tcp_close_socket (int sock)
 	return 0;
 }
 
+
 /*
  * sockaddr conversion
  */
-
 
 const char* sockaddr_to_str (struct sockaddr*addr)
 {
@@ -226,16 +226,18 @@ bool sockaddr_from_str (const char *str,
 	if (!str) return false;
 
 	//check for PF_UNIX prefix, which is '\'
+	//TODO: UNIX_MAX_PATH is here hardcoded to 108
 
 	if (str[0] == '\\') {
-		if ( (1 + strlen (str + 1) ) > UNIX_MAX_PATH) {
+		if ( (1 + strlen (str + 1) ) > 108) {
 			Log_error ("path too long for unix socket: %s", str + 1);
 			return false;
 		}
 
-		addr.sa_family = PF_UNIX;
+		addr->sa_family = PF_UNIX;
 		( (sockaddr_un*) addr)->sun_family = PF_UNIX;
-		strncpy ( ( (sockaddr_un*) addr)->sun_path, str + 1, UNIX_MAX_PATH - 1);
+		strncpy ( ( (sockaddr_un*) addr)->sun_path,
+		          str + 1, 107);
 		return true;
 	}
 
