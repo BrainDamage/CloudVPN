@@ -1411,7 +1411,7 @@ static int comm_listeners_close()
 	int ret = 0;
 	for (i = listeners.begin();i != listeners.end();++i) {
 		Log_info ("closing listener %d", *i);
-		if (close (*i) ) {
+		if (tcp_close_socket (*i) ) {
 			Log_warn ("problem closing listener socket %d", *i);
 			++ret;
 		}

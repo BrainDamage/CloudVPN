@@ -5,20 +5,13 @@
 
 
 #include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
-#ifndef __WIN32__
-#include <netinet/in.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/select.h>
-#include <netinet/in_systm.h>  //required on some platforms for n_time
-#include <netinet/ip.h>
-#include <netinet/tcp.h>
-#else
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#endif
+#include <arpa/inet.h>
+#include <netdb.h>
 
 static bool tcp_nodelay = false;
 static int ip_tos = 0;
@@ -65,8 +58,8 @@ int network_init()
 #endif
 no_tos:
 	int i;
-	if(config_get_int("listen_backlog",i)) listen_backlog_size=i;
-	Log_info("listen backlog size is %d",listen_backlog_size);
+	if (config_get_int ("listen_backlog", i) ) listen_backlog_size = i;
+	Log_info ("listen backlog size is %d", listen_backlog_size);
 	return 0;
 }
 
@@ -190,5 +183,87 @@ int tcp_close_socket (int sock)
 	return 0;
 }
 
+/*
+ * sockaddr conversion
+ */
+
+
+const char* sockaddr_to_str (struct sockaddr*addr)
+{
+#ifndef __WIN32__
+	static char buf[256];
+	const void*t;
+	int port;
+	switch (addr->sa_family) {
+	case AF_INET:
+		t = (const void*) & ( ( (sockaddr_in*) addr)->sin_addr);
+		port = ntohs ( ( (sockaddr_in*) addr)->sin_port);
+		break;
+	case AF_INET6:
+		t = (const void*) & ( ( (sockaddr_in6*) addr)->sin6_addr);
+		port = ntohs ( ( (sockaddr_in6*) addr)->sin6_port);
+		break;
+	case AF_UNIX:
+		buf[0] = '\\';
+		strncpy (buf + 1, ( (sockaddr_un*) addr)->sun_path, 254);
+		return buf;
+	default:
+		return 0;
+	}
+
+	if (!inet_ntop (addr->sa_family, t, buf, 254) ) return 0;
+	snprintf (buf + strlen (buf), 16, " %d", port);
+	return buf;
+#else
+	return "(?)";
+#endif
+}
+
+
+bool sockaddr_from_str (const char *str,
+                        struct sockaddr*addr, int*len, int*sock_domain)
+{
+	if (!str) return false;
+
+	//check for PF_UNIX prefix, which is '\'
+
+	if (str[0] == '\\') {
+		if ( (1 + strlen (str + 1) ) > UNIX_MAX_PATH) {
+			Log_error ("path too long for unix socket: %s", str + 1);
+			return false;
+		}
+
+		addr.sa_family = PF_UNIX;
+		( (sockaddr_un*) addr)->sun_family = PF_UNIX;
+		strncpy ( ( (sockaddr_un*) addr)->sun_path, str + 1, UNIX_MAX_PATH - 1);
+		return true;
+	}
+
+	char ip_buf[1025], port_buf[65]; //which should be enough for everyone.
+
+	if (! (str && addr) ) return false;
+
+	if (sscanf (str, " %1024s %64s", ip_buf, port_buf) < 2) return false;
+
+	struct addrinfo hints, *res;
+	memset (&hints, 0, sizeof (struct addrinfo) );
+	hints.ai_socktype = SOCK_STREAM;
+
+	int ret = getaddrinfo (ip_buf, port_buf, &hints, &res);
+	if (ret) {
+		Log_error ("getaddrinfo failed for entry `%s %s'", ip_buf, port_buf);
+		Log_error ("reason was: %d: %s", ret, gai_strerror (ret) );
+		return false;
+	}
+
+	if (len) *len = res->ai_addrlen;
+	if (sock_domain) *sock_domain = res->ai_family;
+
+	memcpy (addr, res->ai_addr, res->ai_addrlen);
+
+	freeaddrinfo (res);
+
+	return true;
+}
 
 

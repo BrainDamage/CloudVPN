@@ -6,7 +6,7 @@
 
 #include <signal.h>
 
-int setup_sighandler(void(*func)(int))
+int setup_sighandler (void (*func) (int) )
 {
 #ifndef __WIN32__
 	struct sigaction a;

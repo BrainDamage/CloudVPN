@@ -29,14 +29,13 @@ public:
 	}
 
 	inline address (const address&a) :
-		proto(a.proto),
-		inst(a.inst),
-		addr(a.addr) {}
-	
+			proto (a.proto),
+			inst (a.inst),
+			addr (a.addr) {}
+
 	inline address (uint16_t p, uint16_t i, uint8_t*data, size_t size) :
-		proto(p), inst(i), addr(size)
-	{
-		copy(data,data+size,addr.begin());
+			proto (p), inst (i), addr (size) {
+		copy (data, data + size, addr.begin() );
 	}
 
 	/*
@@ -44,8 +43,8 @@ public:
 	 */
 	string format_addr() const;
 	string format() const;
-	bool scan_addr(const char*);
-	bool scan(const char*);
+	bool scan_addr (const char*);
+	bool scan (const char*);
 };
 
 
