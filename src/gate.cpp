@@ -2,6 +2,7 @@
 #include "gate.h"
 
 #include "log.h"
+#include "conf.h"
 #include "poll.h"
 #include "network.h"
 #include "timestamp.h"
@@ -86,9 +87,18 @@ gate::gate()
 	fd = -1; //at least kill it asap.
 
 #ifdef CVPN_SEGV_ON_HARD_FAULT
-	Log_fatal ("in fact, doing a segfault now is nothing bad. weeee!");
-	* ( (int*) 0) = 0xDEAD;
+	Log_fatal ("quiz: only thing that can help now is a s-----t");
+	* ( (int*) 0) = 0x1337;
 #endif
+}
+
+/*
+ * gate i/o
+ */
+
+void gate::try_parse_input()
+{
+
 }
 
 /*
@@ -99,7 +109,7 @@ gate::gate()
 
 void gate::periodic_update()
 {
-
+	//TODO
 }
 
 void gate::start()
@@ -109,30 +119,82 @@ void gate::start()
 
 void gate::reset()
 {
-	//TODO delete poll stuff
 	if (fd < 0) return;
+	poll_set_remove_read (fd);
 	close (fd);
 	unset_fd();
 }
 
-int gate::try_read()
-{
-
-}
-
-int gate::try_write()
-{
-
-}
-
 void gate::poll_read()
 {
+	int r;
+	uint8_t*buf;
+	while (1) {
+		buf = recv_q.get_buffer (4096);
+		if (!buf) {
+			Log_error ("cannot allocate enough buffer space for gate %d", id);
+			reset();
+			return;
+		}
 
+		r = recv (fd, buf, 4096, 0);
+		if (!r) {
+			Log_info ("gate %d closed by peer", id);
+			reset();
+			return;
+		} else if (r < 0) {
+			if (errno != EAGAIN) {
+				Log_warn ("gate %d read error");
+				reset();
+			}
+			return;
+		} else {
+			recv_q.append (r);
+			try_parse_input();
+		}
+	}
 }
 
 void gate::poll_write()
 {
+	int r, n;
+	const uint8_t* buf;
+	while (send_q.size() ) {
+		buf = send_q.front().b.begin().base();
+		n = send_q.front().b.size();
 
+		r = 0;
+		if (n > 0)	r = send (fd, buf, n, 0);
+
+		if (r == 0) {
+			send_q.pop_front();
+			continue;
+		}
+
+		if (r < 0) {
+			if (errno != EAGAIN) {
+				Log_info ("gate %d write error", id);
+				reset();
+			} else poll_set_add_write (fd);
+			return;
+		}
+
+		if (n == r) {
+			send_q.pop_front();
+			continue;
+		}
+
+		if (n < r) {
+			Log_error ("something strange at %d with send(%d)",
+			           id, fd);
+			return;
+		}
+
+		send_q.front().shift (r);
+		//TODO, consider breaking the loop here
+	}
+
+	poll_set_remove_write (fd);
 }
 
 /*
@@ -171,11 +233,41 @@ void poll_gate_listener (int fd)
 
 static int start_listeners()
 {
+	list<string> l;
+	list<string>::iterator i;
+	int s;
+
+	config_get_list ("gate", l);
+
+	if (!l.size() ) {
+		Log_info ("no gates specified");
+		return 0;
+	}
+
+	for (i = l.begin();i != l.end();++i) {
+		Log_info ("creating gate on `%s'", i->c_str() );
+		s = tcp_listen_socket (i->c_str() );
+		if (s >= 0) {
+			listeners.insert (s);
+			poll_set_add_read (s);
+		} else return 1;
+	}
+
+	Log_info ("gates ready");
+
 	return 0;
 }
 
 static void stop_listeners()
 {
+	set<int>::iterator i;
+
+	Log_info ("Closing gates", *i);
+
+	for (i = listeners.begin();i != listeners.end();++i)
+		tcp_close_socket (*i);
+
+	listeners.clear();
 }
 
 /*

@@ -37,8 +37,12 @@ public:
 
 	uint64_t last_activity;
 
-	int try_read();
-	int try_write();
+	void try_parse_input();
+
+	inline void try_write() {
+		poll_write();
+	}
+
 	void poll_read();
 	void poll_write();
 

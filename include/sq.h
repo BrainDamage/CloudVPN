@@ -34,6 +34,7 @@ public:
 	inline int len() const {
 		return b.size();
 	}
+	void shift (size_t len); //remove front bytes
 	void push (const uint8_t*, size_t);
 	void push (const pbuffer&);
 	template<class T> inline void push (const T&a) {

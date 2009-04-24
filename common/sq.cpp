@@ -27,6 +27,15 @@ void pbuffer::push (const uint8_t*d, size_t size)
 	copy (d, d + size, back_insert_iterator<vector<uint8_t> > (b) );
 }
 
+void pbuffer::shift (size_t len)
+{
+	if (len >= b.size() ) b.clear();
+	else {
+		copy (b.begin() + len, b.end(), b.begin() );
+		b.resize (b.size() - len);
+	}
+}
+
 /*
  * squeue stuff
  *
