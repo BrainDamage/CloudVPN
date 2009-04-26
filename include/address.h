@@ -39,11 +39,11 @@ public:
 	}
 
 	inline void set (uint32_t i, const uint8_t*data, size_t size) {
-		addr.resize(size);
+		addr.resize (size);
 		copy (data, data + size, addr.begin() );
-		inst=i;
+		inst = i;
 	}
-		
+
 
 	/*
 	 * string handling

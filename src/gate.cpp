@@ -106,31 +106,33 @@ gate::gate()
 
 pbuffer& gate::new_send()
 {
-	send_q.push_back(pbuffer());
+	send_q.push_back (pbuffer() );
 	return send_q.back();
 }
 
 bool gate::parse_packet_header()
 {
-	if(recv_q.len()<p_head_size) return false;
-	recv_q.pop<uint8_t>(cached_header_type);
-	recv_q.pop<uint16_t>(cached_header_size);
-	cached_header_size=ntohs(cached_header_size);
+	if (recv_q.len() < p_head_size) return false;
+	recv_q.pop<uint8_t> (cached_header_type);
+	recv_q.pop<uint16_t> (cached_header_size);
+	cached_header_size = ntohs (cached_header_size);
 	return true;
 }
 
-void gate::add_packet_header(pbuffer&b, uint8_t type, uint16_t size)
+void gate::add_packet_header (pbuffer&b, uint8_t type, uint16_t size)
 {
-	b.b.reserve(p_head_size);
+	b.b.reserve (p_head_size);
 	b.push<uint8_t> (type);
-	b.push<uint16_t> (htons(size));
+	b.push<uint16_t> (htons (size) );
 }
 
-void gate::handle_keepalive() {
-	last_activity=timestamp();
+void gate::handle_keepalive()
+{
+	last_activity = timestamp();
 }
 
-void gate::handle_route(uint16_t size, const uint8_t*data) {
+void gate::handle_route (uint16_t size, const uint8_t*data)
+{
 
 	uint16_t asize;
 	uint32_t inst;
@@ -139,81 +141,84 @@ void gate::handle_route(uint16_t size, const uint8_t*data) {
 	route_set_dirty();
 
 try_more:
-	if(!size)return;
-	
-	if(size<6) goto error;
+	if (!size) return;
 
-	asize=ntohs(*(uint16_t*)data);
-	inst=ntohl(*(uint32_t*)(data+2));
-	if(asize+6>size) goto error;
+	if (size < 6) goto error;
 
-	local.push_back(address());
-	local.back().set(inst,data+6,asize);
-	data+=6+asize;
-	size-=6+asize;
+	asize = ntohs (* (uint16_t*) data);
+	inst = ntohl (* (uint32_t*) (data + 2) );
+	if (asize + 6 > size) goto error;
+
+	local.push_back (address() );
+	local.back().set (inst, data + 6, asize);
+	data += 6 + asize;
+	size -= 6 + asize;
 	goto try_more;
 
 error:
-	Log_error("invalid route packet received from gate %d",id);
+	Log_error ("invalid route packet received from gate %d", id);
 	reset();
 }
 
-void gate::handle_packet(uint16_t size, const uint8_t*data) {
+void gate::handle_packet (uint16_t size, const uint8_t*data)
+{
 
 }
 
-void gate::send_keepalive() {
-	if(!can_send())return;
-	pbuffer& p=new_send();
-	add_packet_header(p,pt_keepalive,0);
+void gate::send_keepalive()
+{
+	if (!can_send() ) return;
+	pbuffer& p = new_send();
+	add_packet_header (p, pt_keepalive, 0);
 }
 
-void gate::send_packet(uint32_t inst,
-	uint16_t doff, uint16_t ds,
-	uint16_t soff, uint16_t ss,
-	uint16_t size, const uint8_t*data) {
-	
-	if(!can_send()) return;
-	pbuffer&p=new_send();
-	add_packet_header(p,pt_packet, size+14);
-	p.b.reserve(size+14);
-	p.push<uint32_t>(htonl(inst));
-	p.push<uint16_t>(htons(doff));
-	p.push<uint16_t>(htons(ds));
-	p.push<uint16_t>(htons(soff));
-	p.push<uint16_t>(htons(ss));
-	p.push<uint16_t>(htons(size));
-	p.push(data,size);
+void gate::send_packet (uint32_t inst,
+                        uint16_t doff, uint16_t ds,
+                        uint16_t soff, uint16_t ss,
+                        uint16_t size, const uint8_t*data)
+{
+
+	if (!can_send() ) return;
+	pbuffer&p = new_send();
+	add_packet_header (p, pt_packet, size + 14);
+	p.b.reserve (size + 14);
+	p.push<uint32_t> (htonl (inst) );
+	p.push<uint16_t> (htons (doff) );
+	p.push<uint16_t> (htons (ds) );
+	p.push<uint16_t> (htons (soff) );
+	p.push<uint16_t> (htons (ss) );
+	p.push<uint16_t> (htons (size) );
+	p.push (data, size);
 }
 
 void gate::try_parse_input()
 {
 try_more:
-	if(fd<0) return;
+	if (fd < 0) return;
 
-	if(!cached_header_type) 
-		if(!parse_packet_header())return;
-	
-	switch(cached_header_type) {
+	if (!cached_header_type)
+		if (!parse_packet_header() ) return;
+
+	switch (cached_header_type) {
 	case pt_keepalive:
 		handle_keepalive();
 		goto try_more;
 	case pt_route:
 	case pt_packet:
-		if(recv_q.len() < cached_header_size) break;
-		
-		if(cached_header_type==pt_route)
-			handle_route(cached_header_size,recv_q.begin());
-		else	handle_packet(cached_header_size, recv_q.begin());
+		if (recv_q.len() < cached_header_size) break;
 
-		recv_q.read(cached_header_size);
-		cached_header_type=0;
+		if (cached_header_type == pt_route)
+			handle_route (cached_header_size, recv_q.begin() );
+		else	handle_packet (cached_header_size, recv_q.begin() );
+
+		recv_q.read (cached_header_size);
+		cached_header_type = 0;
 		goto try_more;
 	default:
 		Log_error ("invalid packet header received. disconnecting.");
 		reset();
 	}
-		
+
 }
 
 /*
@@ -247,8 +252,8 @@ void gate::poll_read()
 	int r;
 	uint8_t*buf;
 	while (1) {
-		if(recv_q.len()>gate_max_recv_q_len) {
-			Log_error("gate %d receive queue overflow",id);
+		if (recv_q.len() > gate_max_recv_q_len) {
+			Log_error ("gate %d receive queue overflow", id);
 			reset();
 			return;
 		}

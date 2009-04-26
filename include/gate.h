@@ -38,22 +38,22 @@ public:
 	uint64_t last_activity;
 
 	//I/O handlers
-	
+
 	uint8_t cached_header_type;
 	uint16_t cached_header_size;
 
 	bool parse_packet_header();
-	void add_packet_header(pbuffer&, uint8_t type, uint16_t size);
+	void add_packet_header (pbuffer&, uint8_t type, uint16_t size);
 
 	void handle_keepalive();
-	void handle_route(uint16_t size, const uint8_t*data);
-	void handle_packet(uint16_t size, const uint8_t*data);
+	void handle_route (uint16_t size, const uint8_t*data);
+	void handle_packet (uint16_t size, const uint8_t*data);
 
 	void send_keepalive();
-	void send_packet(uint32_t inst,
-		uint16_t doff, uint16_t ds,
-		uint16_t soff, uint16_t ss,
-		uint16_t size, const uint8_t*data);
+	void send_packet (uint32_t inst,
+	                  uint16_t doff, uint16_t ds,
+	                  uint16_t soff, uint16_t ss,
+	                  uint16_t size, const uint8_t*data);
 
 	void try_parse_input();
 
@@ -70,7 +70,9 @@ public:
 	squeue recv_q;
 	deque<pbuffer> send_q;
 
-	inline bool can_send() { return send_q.size()<gate_max_send_q_len; }
+	inline bool can_send() {
+		return send_q.size() < gate_max_send_q_len;
+	}
 	pbuffer& new_send();
 
 	void periodic_update();

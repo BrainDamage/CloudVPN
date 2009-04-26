@@ -4,7 +4,7 @@
 
 int address::cmp (const address&a) const
 {
-	if (inst != a.inst) return (inst<a.inst)?1:-1;
+	if (inst != a.inst) return (inst < a.inst) ? 1 : -1;
 
 	vector<uint8_t>::const_iterator i, j;
 	for (i = addr.begin(), j = a.addr.begin();
