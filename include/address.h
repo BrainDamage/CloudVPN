@@ -38,6 +38,14 @@ public:
 		copy (data, data + size, addr.begin() );
 	}
 
+	inline void set (uint16_t p, uint16_t i, uint8_t*data, size_t size) {
+		addr.resize(size);
+		copy (data, data + size, addr.begin() );
+		proto=p;
+		inst=i;
+	}
+		
+
 	/*
 	 * string handling
 	 */

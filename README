@@ -140,10 +140,10 @@ and authenticators.
 		PACKET---
 		16b proto ID
 		16b instance ID
-		16b source offset
-		16b source size
 		16b dest offset
 		16b dest size
+		16b source offset
+		16b source size
 		16b payload size
 		payload
 
@@ -223,7 +223,6 @@ and authenticators.
 	1 - keep-alive  -- client sends those back to core to verify activity
 	2 - route       -- client sends this to core to report addresses
 	3 - packet      -- data transfer
-	4 - promisc	-- set promiscuity
 
 	keep-alive requests are sent to client periodically, and client is
 	expected to reply as fast as possible. If client fails to reply several
@@ -235,15 +234,16 @@ and authenticators.
 
 		GATE-ROUTE---
 		16b size
+		16b proto
+		16b inst
 		address
 
 	Note that client should not request route for a broadcast address.
 
 	packets are sent by both sides, to enable data transfer
 
-	promics is sent by client as a request to receive all seen packets
-	from given protocol/instance ID. payload then consists of pairs of
-	16b proto/16b instance, or is empty (which turns promisc off).
+	If size of gate-route is zero, the route is identified as promisc
+	request, and the gate expects all proto/inst data to be copied to it.
 
 
 

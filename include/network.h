@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #ifndef __WIN32__
+#include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/select.h>

@@ -599,14 +599,12 @@ try_more:
 	if (state != cs_active) return; //safety.
 
 	if (cached_header.type == 0)
-		parse_packet_header (recv_q,
+		if(!parse_packet_header (recv_q,
 		                     cached_header.type,
 		                     cached_header.special,
-		                     cached_header.size);
+		                     cached_header.size)) return;
 
 	switch (cached_header.type) {
-	case 0:
-		break;
 	case pt_route_set:
 		if (recv_q.len() >=
 		        (unsigned int) cached_header.size*route_entry_size) {
