@@ -4,8 +4,7 @@
 
 int address::cmp (const address&a) const
 {
-	if (proto != a.proto) return proto -a.proto;
-	if (inst != a.inst) return inst -a.inst;
+	if (inst != a.inst) return (inst<a.inst)?1:-1;
 
 	vector<uint8_t>::const_iterator i, j;
 	for (i = addr.begin(), j = a.addr.begin();
@@ -44,10 +43,9 @@ string address::format_addr() const
 
 string address::format() const
 {
-	string t = "    .    ." + format_addr();
+	string t = "        ." + format_addr();
 	int i;
-	for (i = 0;i < 4;++i) t[i] = hexc ( (proto >> (4 * i) ) & 0xF);
-	for (i = 0;i < 4;++i) t[i+5] = hexc ( (inst >> (4 * i) ) & 0xF);
+	for (i = 0;i < 8;++i) t[i] = hexc ( (inst >> (4 * i) ) & 0xF);
 	return t;
 }
 
@@ -91,8 +89,7 @@ bool address::scan (const char*s)
 		prefix |= val;
 	}
 	if (i < 8) return false;
-	proto = prefix / 0x10000;
-	inst = prefix % 0x10000;
+	inst = prefix;
 	return scan_addr (s);
 }
 

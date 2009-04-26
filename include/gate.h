@@ -50,7 +50,7 @@ public:
 	void handle_packet(uint16_t size, const uint8_t*data);
 
 	void send_keepalive();
-	void send_packet(uint16_t proto, uint16_t inst,
+	void send_packet(uint32_t inst,
 		uint16_t doff, uint16_t ds,
 		uint16_t soff, uint16_t ss,
 		uint16_t size, const uint8_t*data);

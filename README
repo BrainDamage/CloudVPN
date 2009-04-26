@@ -59,7 +59,7 @@ packet structures)
 We might want to route more separate networks of one protocol on one mesh. This
 implies that Protocol identifier will be needed to be combined with INSTANCE
 identifier. Because of similarity of those identifiers, they are gonna be
-probably united in higher/lower 32bit integer parts.
+united in higher/lower parts of a 32bit integer called just "instance".
 
 
 
@@ -126,7 +126,6 @@ and authenticators.
 2] Packet format
 	
 	Packet, in its basic form, incorporates:
-	- protocol ID
 	- instance ID
 	- source address
 	- destination address
@@ -138,8 +137,7 @@ and authenticators.
 	those are indexed from the packet payload:
 
 		PACKET---
-		16b proto ID
-		16b instance ID
+		32b instance ID
 		16b dest offset
 		16b dest size
 		16b source offset
@@ -159,8 +157,7 @@ and authenticators.
 		ROUTE ENTRY---
 		32b ping (measured in usec. gives us around 1.2 hour max ping.)
 		32b distance (measured in hops)
-		16b proto
-		16b id
+		32b instance
 		16b address size
 		address
 
@@ -234,8 +231,7 @@ and authenticators.
 
 		GATE-ROUTE---
 		16b size
-		16b proto
-		16b inst
+		32b inst
 		address
 
 	Note that client should not request route for a broadcast address.
@@ -243,7 +239,7 @@ and authenticators.
 	packets are sent by both sides, to enable data transfer
 
 	If size of gate-route is zero, the route is identified as promisc
-	request, and the gate expects all proto/inst data to be copied to it.
+	request, and the gate expects all instance data to be copied to it.
 
 
 

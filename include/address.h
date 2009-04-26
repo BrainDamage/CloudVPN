@@ -13,8 +13,7 @@ class address
 {
 
 public:
-	uint16_t proto;
-	uint16_t inst;
+	uint32_t inst;
 	vector<uint8_t> addr;
 
 	int cmp (const address&) const;
@@ -28,20 +27,20 @@ public:
 		return cmp (a) == 0;
 	}
 
+	inline address() {};
+
 	inline address (const address&a) :
-			proto (a.proto),
 			inst (a.inst),
 			addr (a.addr) {}
 
-	inline address (uint16_t p, uint16_t i, uint8_t*data, size_t size) :
-			proto (p), inst (i), addr (size) {
+	inline address (uint32_t i, const uint8_t*data, size_t size) :
+			inst (i), addr (size) {
 		copy (data, data + size, addr.begin() );
 	}
 
-	inline void set (uint16_t p, uint16_t i, uint8_t*data, size_t size) {
+	inline void set (uint32_t i, const uint8_t*data, size_t size) {
 		addr.resize(size);
 		copy (data, data + size, addr.begin() );
-		proto=p;
 		inst=i;
 	}
 		

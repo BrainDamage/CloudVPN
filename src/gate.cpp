@@ -132,8 +132,8 @@ void gate::handle_keepalive() {
 
 void gate::handle_route(uint16_t size, const uint8_t*data) {
 
-	uint16_t*t;
-	uint16_t asize,proto,inst;
+	uint16_t asize;
+	uint32_t inst;
 
 	local.clear();
 	route_set_dirty();
@@ -143,14 +143,12 @@ try_more:
 	
 	if(size<6) goto error;
 
-	t=data;
-	asize=ntohs(t[0]);
-	proto=ntohs(t[1]);
-	inst=ntohs(t[2]);
+	asize=ntohs(*(uint16_t*)data);
+	inst=ntohl(*(uint32_t*)(data+2));
 	if(asize+6>size) goto error;
 
 	local.push_back(address());
-	local.back().set(proto,inst,data+6,asize);
+	local.back().set(inst,data+6,asize);
 	data+=6+asize;
 	size-=6+asize;
 	goto try_more;
@@ -170,7 +168,7 @@ void gate::send_keepalive() {
 	add_packet_header(p,pt_keepalive,0);
 }
 
-void gate::send_packet(uint16_t proto, uint16_t inst,
+void gate::send_packet(uint32_t inst,
 	uint16_t doff, uint16_t ds,
 	uint16_t soff, uint16_t ss,
 	uint16_t size, const uint8_t*data) {
@@ -179,8 +177,7 @@ void gate::send_packet(uint16_t proto, uint16_t inst,
 	pbuffer&p=new_send();
 	add_packet_header(p,pt_packet, size+14);
 	p.b.reserve(size+14);
-	p.push<uint16_t>(htons(proto));
-	p.push<uint16_t>(htons(inst));
+	p.push<uint32_t>(htonl(inst));
 	p.push<uint16_t>(htons(doff));
 	p.push<uint16_t>(htons(ds));
 	p.push<uint16_t>(htons(soff));
