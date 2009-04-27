@@ -4,6 +4,7 @@
 #include "log.h"
 #include "conf.h"
 #include "poll.h"
+#include "route.h"
 #include "network.h"
 #include "timestamp.h"
 
@@ -67,10 +68,10 @@ do_alloc:
 
 static void gate_delete (int id)
 {
-	//TODO uncomment route_set_dirty();
+	route_set_dirty();
 	map<int, gate>::iterator i = gates.find (id);
 	if (i == gates.end() ) return;
-	close(i->second.fd);
+	close (i->second.fd);
 	i->second.unset_fd();
 	gates.erase (i);
 }
@@ -163,26 +164,26 @@ error:
 void gate::handle_packet (uint16_t size, const uint8_t*data)
 {
 	uint32_t inst;
-	uint16_t dof,ds,sof,ss,s;
+	uint16_t dof, ds, sof, ss, s;
 
-	if(size<14) goto error;
+	if (size < 14) goto error;
 
-	inst=ntohl(*(uint32_t*)data);
+	inst = ntohl (* (uint32_t*) data);
 
 #define h ((uint16_t*)data)
-	dof=ntohs(h[2]);
-	ds=ntohs(h[3]);
-	sof=ntohs(h[4]);
-	ss=ntohs(h[5]);
-	s=ntohs(h[6]);
+	dof = ntohs (h[2]);
+	ds = ntohs (h[3]);
+	sof = ntohs (h[4]);
+	ss = ntohs (h[5]);
+	s = ntohs (h[6]);
 #undef h
-	
-	//beware of overflows
-	if((int)s+14>(int)size)goto error;
-	if((int)sof+(int)ss+14>(int)size) goto error;
-	if((int)dof+(int)ds+14>(int)size) goto error;
 
-	route_packet();
+	//beware of overflows
+	if ( (int) s + 14 > (int) size) goto error;
+	if ( (int) sof + (int) ss + 14 > (int) size) goto error;
+	if ( (int) dof + (int) ds + 14 > (int) size) goto error;
+
+	route_packet (inst, dof, ds, sof, ss, s, data + 14, - (id + 1) );
 
 	return;
 error:
@@ -254,10 +255,10 @@ try_more:
 
 void gate::periodic_update()
 {
-	if(timestamp()-last_activity > 10000000) //ping every 10 seconds
-		if(fd>=0) send_keepalive();
-	if(timestamp()-last_activity > gate_timeout ) {
-		Log_error ("gate %d timeout",id);
+	if (timestamp() - last_activity > 10000000) //ping every 10 seconds
+		if (fd >= 0) send_keepalive();
+	if (timestamp() - last_activity > gate_timeout ) {
+		Log_error ("gate %d timeout", id);
 		reset();
 	}
 }
@@ -437,16 +438,16 @@ static void stop_listeners()
 int gate_periodic_update()
 {
 	list<int>to_delete;
-	map<int,gate>::iterator i;
+	map<int, gate>::iterator i;
 
-	for(i=gates.begin();i!=gates.end();++i) {
+	for (i = gates.begin();i != gates.end();++i) {
 		i->second.periodic_update();
-		if(i->second.fd<0)
-			to_delete.push_back(i->first);
+		if (i->second.fd < 0)
+			to_delete.push_back (i->first);
 	}
 
-	while(to_delete.size()) {
-		gate_delete(to_delete.front());
+	while (to_delete.size() ) {
+		gate_delete (to_delete.front() );
 		to_delete.pop_front();
 	}
 
@@ -455,18 +456,18 @@ int gate_periodic_update()
 
 int gate_init()
 {
-	if(start_listeners()) {
-		Log_error("couldn't start gate listeners");
+	if (start_listeners() ) {
+		Log_error ("couldn't start gate listeners");
 		return 1;
 	}
 
-	Log_info("gate OK");
+	Log_info ("gate OK");
 	return 0;
 }
 
 void gate_shutdown()
 {
-	while(gates.size())
-		gate_delete(gates.begin()->first);
+	while (gates.size() )
+		gate_delete (gates.begin()->first);
 }
 

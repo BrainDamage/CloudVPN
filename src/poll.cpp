@@ -14,7 +14,6 @@
 
 
 #include "log.h"
-#include "utils.h"
 #include "timestamp.h"
 
 /*
@@ -71,7 +70,7 @@
 #define EXCEPTION_READY (1<<2)
 
 #include "comm.h"
-#include "iface.h"
+#include "gate.h"
 
 static void poll_handle_event (int fd, int what)
 {

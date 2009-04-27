@@ -16,13 +16,13 @@
 #include "log.h"
 #include "comm.h"
 #include "conf.h"
+#include "gate.h"
 #include "poll.h"
-#include "iface.h"
 #include "route.h"
-#include "utils.h"
 #include "status.h"
 #include "security.h"
 #include "timestamp.h"
+#include "sighandler.h"
 
 #include <unistd.h>
 
@@ -39,7 +39,7 @@ int run_cloudvpn (int argc, char**argv)
 	Log (FATAL + 1, "For more information please see the GNU GPL license,");
 	Log (FATAL + 1, "which you should have received along with this program.");
 
-	setup_sighandler();
+	setup_sighandler (kill_cloudvpn);
 
 	/*
 	 * initialization
@@ -69,10 +69,10 @@ int run_cloudvpn (int argc, char**argv)
 		goto failed_poll;
 	}
 
-	if (iface_create() ) {
-		Log_fatal ("local interface initialization failed");
+	if (gate_init() ) {
+		Log_fatal ("gate initialization failed");
 		ret = 3;
-		goto failed_iface;
+		goto failed_gate;
 	}
 
 	if (do_memlock() ) {
@@ -116,7 +116,7 @@ int run_cloudvpn (int argc, char**argv)
 
 		last_beat = timestamp();
 
-		route_update();
+		gate_periodic_update();
 		comm_periodic_update();
 
 		route_update();
@@ -135,9 +135,9 @@ failed_sec:
 
 failed_comm:
 
-	iface_destroy();
+	gate_shutdown();
 
-failed_iface:
+failed_gate:
 
 	if (poll_deinit() )
 		Log_warn ("poll_deinit somehow failed!");

@@ -13,9 +13,8 @@
 #ifndef _CVPN_COMM_H
 #define _CVPN_COMM_H
 
-#include "iface.h"
-#include "utils.h"
 #include "sq.h"
+#include "address.h"
 
 #include <stdint.h>
 
@@ -60,7 +59,7 @@ public:
 
 	uint64_t last_retry; //last connection retry
 
-	unsigned int ping; //cached ping
+	uint32_t ping; //cached ping
 	uint8_t sent_ping_id;
 	uint64_t sent_ping_time;
 	//ping is on the way, if sent_ping_time==last_ping
@@ -69,8 +68,8 @@ public:
 	class remote_route
 	{
 	public:
-		unsigned int ping, dist;
-		remote_route (unsigned int p, unsigned int d) {
+		uint32_t ping, dist;
+		remote_route (uint32_t p, uint32_t d) {
 			ping = p;
 			dist = d;
 		}
@@ -78,7 +77,7 @@ public:
 			dist = ping = timeout;
 		}
 	};
-	map<hwaddr, remote_route> remote_routes;
+	map<address, remote_route> remote_routes;
 
 	explicit inline connection (int ID) {
 		id = ID;
@@ -97,19 +96,25 @@ public:
 	connection (); //this is supposed to fail, always use c(ID)
 
 	/*
-	 * packet handling/sending functions. Those handle the endianiness.
+	 * packet handling/sending functions.
 	 */
 
-	void handle_packet (void*buf, int len);
-	void handle_broadcast_packet (uint32_t id, void*buf, int len);
-	void handle_route_set (uint8_t*data, int n);
-	void handle_route_diff (uint8_t*data, int n);
+	void handle_packet (uint8_t*data, int len);
+	void handle_broadcast_packet (uint8_t*data, int len);
+	void handle_route_set (uint8_t*data, int len);
+	void handle_route_diff (uint8_t*data, int len);
 	void handle_ping (uint8_t id);
 	void handle_pong (uint8_t id);
 	void handle_route_request ();
 
-	void write_packet (void*buf, int len);
-	void write_broadcast_packet (uint32_t id, void*buf, int len);
+	void write_packet (uint32_t inst,
+	                   uint16_t dof, uint16_t ds,
+	                   uint16_t sof, uint16_t ss,
+	                   uint16_t s, const uint8_t*buf);
+	void write_broadcast_packet (uint32_t id, uint32_t ttl, uint32_t inst,
+	                             uint16_t dof, uint16_t ds,
+	                             uint16_t sof, uint16_t ss,
+	                             uint16_t s, const uint8_t*buf);
 	void write_route_set (uint8_t*data, int n);
 	void write_route_diff (uint8_t*data, int n);
 	void write_ping (uint8_t id);
@@ -174,7 +179,7 @@ public:
 	 * address that we should try to reconnect
 	 */
 
-	string address;
+	string connect_address;
 
 	/*
 	 * operation timings

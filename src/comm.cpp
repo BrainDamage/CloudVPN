@@ -321,7 +321,7 @@ static int connect_connection (const string&addr)
 
 	c.state = cs_retry_timeout;
 	c.last_retry = 0;
-	c.address = addr;
+	c.connect_address = addr;
 
 	return 0;
 }
@@ -365,7 +365,6 @@ void connection::deindex()
 
 //sizes
 #define p_head_size 4
-#define route_entry_size 12
 
 static void add_packet_header (pbuffer&b, uint8_t type,
                                uint8_t special, uint16_t size)
@@ -606,40 +605,29 @@ try_more:
 
 	switch (cached_header.type) {
 	case pt_route_set:
-		if (recv_q.len() >=
-		        (unsigned int) cached_header.size*route_entry_size) {
-			handle_route_set (recv_q.begin(), cached_header.size);
-			recv_q.read (cached_header.size*route_entry_size);
-			cached_header.type = 0;
-			goto try_more;
-		}
-		break;
 	case pt_route_diff:
-		if (recv_q.len() >=
-		        (unsigned int) cached_header.size*route_entry_size) {
-			handle_route_diff (recv_q.begin(), cached_header.size);
-			recv_q.read (cached_header.size*route_entry_size);
-			cached_header.type = 0;
-			goto try_more;
-		}
-		break;
-
 	case pt_eth_frame:
-		if (recv_q.len() >= cached_header.size) {
-			handle_packet (recv_q.begin(), cached_header.size);
-			recv_q.read (cached_header.size);
-			cached_header.type = 0;
-			goto try_more;
-		}
-		break;
-
 	case pt_broadcast:
-		if (recv_q.len() >= (unsigned int) cached_header.size + 4) {
-			uint32_t t;
-			recv_q.pop<uint32_t> (t);
-			t = ntohl (t);
-			handle_broadcast_packet (t, recv_q.begin(),
-			                         cached_header.size);
+		if (recv_q.len() >=
+		        (unsigned int) cached_header.size) {
+			switch (cached_header.type) {
+			case pt_route_set:
+				handle_route_set (recv_q.begin(),
+				                  cached_header.size);
+				break;
+			case pt_route_diff:
+				handle_route_diff (recv_q.begin(),
+				                   cached_header.size);
+				break;
+			case pt_eth_frame:
+				handle_packet (recv_q.begin(),
+				               cached_header.size);
+				break;
+			case pt_broadcast:
+				handle_broadcast_packet (recv_q.begin(),
+				                         cached_header.size);
+				break;
+			}
 			recv_q.read (cached_header.size);
 			cached_header.type = 0;
 			goto try_more;
@@ -921,7 +909,7 @@ void connection::start_connect()
 {
 	last_retry = timestamp();
 
-	int t = tcp_connect_socket (address);
+	int t = tcp_connect_socket (connect_address);
 	if (t < 0) {
 		Log_error ("failed connecting in connection id %d", id);
 		return;
@@ -968,7 +956,7 @@ void connection::disconnect()
 	poll_set_remove_write (fd);
 	poll_set_remove_read (fd);
 
-	if ( (state == cs_retry_timeout) && (! (address.length() ) ) ) {
+	if ( (state == cs_retry_timeout) && (! (connect_address.length() ) ) ) {
 		state = cs_inactive;
 		return;
 	}
@@ -1016,7 +1004,7 @@ void connection::reset()
 	ubl_available = 0;
 	dbl_over = 0;
 
-	if (address.length() )
+	if (connect_address.length() )
 		state = cs_retry_timeout;
 	else state = cs_inactive;
 }
@@ -1470,7 +1458,7 @@ static int comm_connections_close()
 	//start ssl disconnection
 	for (i = connections.begin();i != connections.end();++i) {
 		Log_info ("disconnecting connection id %d", i->first);
-		i->second.address.clear();
+		i->second.connect_address.clear();
 		i->second.disconnect();
 	}
 

@@ -13,9 +13,8 @@
 #ifndef _CVPN_ROUTE_H
 #define _CVPN_ROUTE_H
 
-#include "iface.h"
-#include "utils.h"
 #include "comm.h"
+#include "address.h"
 
 #include <stdint.h>
 #include <stddef.h>
@@ -26,18 +25,33 @@ using std::map;
 void route_init();
 void route_shutdown();
 void route_update();
-void route_packet (void*buf, size_t len, int incoming_connection = -1);
-void route_broadcast_packet (uint32_t id, void*buf, size_t len, int ic = -1);
+
+void route_packet (uint32_t inst,
+                   uint16_t dof, uint16_t ds,
+                   uint16_t sof, uint16_t ss,
+                   uint16_t s, const uint8_t*buf, int from);
+
+void route_broadcast_packet (
+    uint32_t id, uint32_t ttl, uint32_t inst,
+    uint16_t dof, uint16_t ds,
+    uint16_t sof, uint16_t ss,
+    uint16_t s, const uint8_t*buf, int from);
+
 
 void route_set_dirty();
-void route_report_to_connection (connection&c);
+//TODO void route_report_to_connection (connection&c);
 
 class route_info
 {
 public:
-	unsigned int ping;
-	unsigned int dist;
+	uint32_t ping;
+	uint32_t dist;
 	int id;
+
+	/* about id's:
+	 * if id>=0 then it's a connection ID.
+	 * if id<0 then it's a gate ID of (-(id+1))
+	 */
 
 	inline route_info (int p, int d, int i) {
 		ping = p;
@@ -47,13 +61,12 @@ public:
 
 	inline route_info() {
 		//this shall never be called.
-		ping = 0;
-		id = -2; //-2==error, -1==iface, 0+ == other connections
-		dist = 0;
+		ping = -1;
+		dist = -1;
 	}
 };
 
-map<hwaddr, route_info>& route_get();
+map<address, route_info>& route_get();
 
 #endif
 

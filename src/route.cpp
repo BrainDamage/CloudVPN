@@ -11,23 +11,17 @@
  */
 
 #include "route.h"
-#include "comm.h"
-#include "timestamp.h"
+
 #include "log.h"
-#include "utils.h"
 #include "conf.h"
+#include "network.h"
+#include "timestamp.h"
 
 /*
  * utils
  */
 
 #include <stdlib.h>
-
-#ifndef __WIN32__
-#include <arpa/inet.h> //for net/host endianiness
-#else
-#include <winsock2.h>
-#endif
 
 void init_random()
 {
@@ -46,46 +40,6 @@ uint32_t new_packet_uid()
 	return r;
 }
 
-/*
- * ethernet packets filter - by EtherType
- */
-
-#include <set>
-#include <list>
-using namespace std;
-
-static bool etherfilter_enabled = false;
-set<uint16_t> etherfilter;
-
-static int etherfilter_init ()
-{
-	list<string> c;
-	config_get_list ("broadcast_filter_allow", c);
-	if (!c.size() ) return 0;
-	list<string>::iterator i;
-	uint16_t t;
-	for (i = c.begin();i != c.end();++i) {
-		if (!sscanf (i->c_str(), "%hx", &t) ) {
-			Log_error ("cannot parse hex: `%s', filter disabled", i->c_str() );
-			return 1;
-		}
-		etherfilter.insert (t);
-		Log_info ("ethertype %hx allowed", t);
-	}
-	etherfilter_enabled = true;
-	return 0;
-}
-
-static bool etherfilter_allowed (uint8_t*packet)
-{
-	if (etherfilter_enabled) {
-		if (etherfilter.find
-		        (ntohs (* (uint16_t*) (packet + 2*hwaddr_size) ) )
-		        != etherfilter.end() ) return true;
-		else return false;
-	}
-	return true;
-}
 
 /*
  * ID cache
@@ -258,7 +212,6 @@ void route_init()
 	init_random();
 
 	route_init_multi();
-	etherfilter_init();
 
 	int t;
 
@@ -418,8 +371,6 @@ void route_broadcast_packet (uint32_t id, void*buf, size_t len, int conn)
 
 	if (queue_already_broadcasted (id) ) return; //check duplicates
 	queue_add_id (id);
-
-	if (!etherfilter_allowed ( (uint8_t*) buf) ) return;  //discard filtered
 
 	route_update();
 
