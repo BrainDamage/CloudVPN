@@ -228,6 +228,7 @@ try_more:
 	switch (cached_header_type) {
 	case pt_keepalive:
 		handle_keepalive();
+		cached_header_type = 0;
 		goto try_more;
 	case pt_route:
 	case pt_packet:
