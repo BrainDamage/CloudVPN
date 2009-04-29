@@ -81,7 +81,7 @@ static void poll_handle_event (int fd, int what)
 	/*
 	 * gate&comm lookups have roughly the same frequency, but there's
 	 * usually much smaller set of gates; so they go first.
-	 * 
+	 *
 	 * listener lookups can be solved last, because of low freq.
 	 */
 
