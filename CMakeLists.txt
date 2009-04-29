@@ -15,18 +15,12 @@ file(GLOB commonsources common/*.cpp)
 add_library(common STATIC ${commonsources})
 get_target_property(common common LOCATION)
 
-#main binary
-file(GLOB sources src/*.cpp)
-add_executable(cloudvpn ${sources})
-add_dependencies(cloudvpn common)
-target_link_libraries(cloudvpn gnutls ${common})
-
-#auths and gates
-file(GLOB clients clients/*)
-foreach(i ${clients})
+#binaries
+file(GLOB src src/*)
+foreach(i ${src})
 	get_filename_component(fn ${i} NAME)
 
-	message("Found client: " ${fn})
+	message("Found target: " ${fn})
 
 	#try to build all sources, possibly include local cmake list.
 	#If there are no sources, build depends solely on the list.
