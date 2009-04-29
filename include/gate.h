@@ -87,7 +87,7 @@ int gate_init();
 void gate_shutdown();
 int gate_periodic_update();
 
-void poll_gate_listener (int fd);
+void gate_listener_poll (int fd);
 
 map<int, int>& gate_index();
 map<int, gate>& gate_gates();

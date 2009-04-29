@@ -363,7 +363,7 @@ void gate::poll_write()
  * listener stuff
  */
 
-void poll_gate_listener (int fd)
+void gate_listener_poll (int fd)
 {
 	if (listeners.find (fd) == listeners.end() ) return;
 

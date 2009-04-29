@@ -75,33 +75,34 @@
 static void poll_handle_event (int fd, int what)
 {
 	if (!what) return;
+
+	map<int, int>::iterator id;
+
 	/*
-	 * Let's assume that local interface has the simplest check, so
-	 * try it first. Second try the connections, and then
-	 * the listening sockets, as they probably don't have much traffic.
-	 *
-	 * the time needed is 1+log+log, so pretty good.
+	 * gate&comm lookups have roughly the same frequency, but there's
+	 * usually much smaller set of gates; so they go first.
+	 * 
+	 * listener lookups can be solved last, because of low freq.
 	 */
-	if (fd == iface_get_sockfd() ) {
-		if (what&WRITE_READY)
-			iface_poll_write();
-		if (what& (READ_READY | EXCEPTION_READY) )
-			iface_poll_read();
+
+	id = gate_index().find (fd);
+
+	if (id != gate_index().end() ) {
+		map<int, gate>::iterator g = gate_gates().find (id->second);
+		if (g == gate_gates().end() ) return;
+		if (what&WRITE_READY) g->second.poll_write();
+		if (what& (READ_READY | EXCEPTION_READY) ) g->second.poll_read();
 		return;
 	}
 
-	map<int, int>::iterator cid = comm_connection_index().find (fd);
+	id = comm_connection_index().find (fd);
 
 
-	if (cid != comm_connection_index().end() ) {
+	if (id != comm_connection_index().end() ) {
 		map<int, connection>::iterator
-		con = comm_connections().find (cid->second);
+		con = comm_connections().find (id->second);
 
-		if (con == comm_connections().end() ) {
-			Log_warn ("fd %d indexed to nonexistent connection %d",
-			          cid->first, cid->second);
-			return;
-		}
+		if (con == comm_connections().end() ) return;
 
 		if (what&WRITE_READY)
 			con->second.poll_write();
@@ -110,14 +111,22 @@ static void poll_handle_event (int fd, int what)
 		return;
 	}
 
-	set<int>::iterator lis = comm_listeners().find (fd);
+	set<int>::iterator lis;
+
+	lis = comm_listeners().find (fd);
 
 	if (lis != comm_listeners().end() ) {
 		comm_listener_poll (fd);
 		return;
 	}
 
-	Log_warn ("polled a nonexistent fd %d!", fd);
+	lis = gate_listeners().find (fd);
+	if (lis != gate_listeners().end() ) {
+		gate_listener_poll (fd);
+		return;
+	}
+
+	Log_info ("polled a nonexistent fd %d!", fd);
 }
 
 /*
