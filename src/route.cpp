@@ -14,6 +14,7 @@
 
 #include "log.h"
 #include "conf.h"
+#include "gate.h"
 #include "network.h"
 #include "timestamp.h"
 
@@ -115,7 +116,7 @@ static bool queue_already_broadcasted (uint32_t id)
  * (notice that we don't care about network distances)
  */
 
-static map<hwaddr, map<int, int> > multiroute;
+static map<address, map<int, int> > multiroute;
 
 static int multi_ratio = 2;
 static bool do_multiroute = false;
@@ -136,16 +137,15 @@ static int route_init_multi()
 
 static void route_update_multi()
 {
+	if (!do_multiroute) return;
+
 	multiroute.clear();
 
 	map<int, connection>::iterator i, ie;
 	i = comm_connections().begin();
 	ie = comm_connections().end();
 
-	map<hwaddr, connection::remote_route>::iterator j, je;
-
-	if (iface_get_sockfd() >= 0)
-		multiroute[iface_cached_hwaddr() ][0] = -1;
+	map<address, connection::remote_route>::iterator j, je;
 
 	for (;i != ie;++i) {
 		j = i->second.remote_routes.begin();
@@ -153,7 +153,6 @@ static void route_update_multi()
 		for (;j != je;++j) multiroute[j->first]
 			[i->second.ping+j->second.ping+2] = i->first;
 	}
-
 }
 
 static int route_scatter (const hwaddr&a)
@@ -191,14 +190,11 @@ static int route_scatter (const hwaddr&a)
  * route
  */
 
+static map<address, route_info> route, reported_route, promisc;
+
 static int route_dirty = 0;
 static int route_report_ping_diff = 5000;
 static int route_max_dist = 64;
-static map<hwaddr, route_info> route, reported_route;
-static bool promisc = false;
-static bool broadcast_send = false;
-static bool broadcast_nocopy = false;
-static bool ignore_macs = false;
 
 static void report_route();
 
@@ -222,27 +218,6 @@ void route_init()
 	if (!config_get_int ("route_max_dist", t) ) t = 64;
 	Log_info ("maximal node distance is %d", t);
 	route_max_dist = t;
-
-	if (config_is_true ("bridge_mode") ) {
-		broadcast_send = ignore_macs = promisc = true;
-		Log_info ("bridging mode enabled");
-	}
-
-	if (config_is_set ("broadcast_send") &&
-	        (broadcast_send = config_is_true ("broadcast_send") ) )
-		Log_info ("sending all packets as broadcasts");
-
-	if (config_is_set ("broadcast_nocopy") &&
-	        (broadcast_nocopy = config_is_true ("broadcast_nocopy") ) )
-		Log_info ("not doing multiple copies of broadcast packets");
-
-	if (config_is_set ("ignore_macs") &&
-	        (ignore_macs = config_is_true ("ignore_macs") ) )
-		Log_info ("avoiding collisions with inner mac addresses");
-
-	if (config_is_set ("promisc") &&
-	        (promisc = config_is_true ("promisc") ) )
-		Log_info ("promiscuous mode enabled");
 }
 
 void route_shutdown()
@@ -263,7 +238,10 @@ void route_update()
 
 	map<int, connection>& cons = comm_connections();
 	map<int, connection>::iterator i;
-	map<hwaddr, connection::remote_route>::iterator j;
+	map<address, connection::remote_route>::iterator j;
+	map<int, gate>&gates = gate_gates;
+	map<int, gate>::iterator g;
+	list<address>::iterator k;
 
 	route.clear();
 
@@ -273,7 +251,7 @@ void route_update()
 	 * hints:
 	 * i->first = connection ID
 	 * i->second = connection
-	 * j->first = hwaddr
+	 * j->first = address
 	 * j->second = ping
 	 *
 	 * Note that ping can't have ping 0 cuz it would get deleted.
@@ -282,15 +260,13 @@ void route_update()
 	 * so that local route doesn't get overpwned by some other.
 	 */
 
-	if (iface_get_sockfd() >= 0)
-		route[hwaddr (iface_cached_hwaddr() ) ] = route_info (1, 0, -1);
-
-	/*
-	 * When ignoring MACs, let's dont fill in any route information,
-	 * as we dont need it, and it would only confuse the other guys.
-	 */
-
-	if (ignore_macs) goto end;
+	for (g = gates.begin();g != gates.end();++g) {
+		if (g->second.fd < 0) continue;
+		for (k = g->second.local.begin();
+		        k != g->second.local.end();++k) {
+			route[*k] = route_info (1, 0, - (1 + g->second.id) );
+		}
+	}
 
 	for (i = cons.begin();i != cons.end();++i) {
 		if (i->second.state != cs_active)
@@ -320,22 +296,26 @@ void route_update()
 		}
 	}
 
+	promisc.clear();
+	for (map<address, route_info>::iterator
+	        ri = route.begin();ri != route.end(); ++ri)
+		if (!ri->first.size() )
+			promisc.insert (*ri);
+
 	route_update_multi();
 
 end:
 	report_route();
 }
 
-void route_packet (void*buf, size_t len, int conn)
+void route_packet (uint32_t inst,
+                   uint16_t dof, uint16_t ds,
+                   uint16_t sof, uint16_t ss,
+                   uint16_t s, const uint8_t*buf, int from)
 {
 	if (len < 2 + (2*hwaddr_size) ) return;
-	hwaddr a (buf);
 
-	if ( ignore_macs || (broadcast_send && (conn == -1) )
-	        || is_addr_broadcast (a) ) {
-		route_broadcast_packet (new_packet_uid(), buf, len, conn);
-		return;
-	}
+	address a (buf);
 
 	route_update();
 
@@ -344,7 +324,7 @@ void route_packet (void*buf, size_t len, int conn)
 	if (do_multiroute)
 		res = route_scatter (a);
 	else {
-		map<hwaddr, route_info>::iterator r = route.find (a);
+		map<address, route_info>::iterator r = route.find (a);
 
 		if (r == route.end() ) {
 			//if the destination is unknown, broadcast it
@@ -365,7 +345,10 @@ void route_packet (void*buf, size_t len, int conn)
 	}
 }
 
-void route_broadcast_packet (uint32_t id, void*buf, size_t len, int conn)
+void route_broadcast_packet (uint32_t id, uint32_t ttl, uint32_t inst,
+                             uint16_t dof, uint16_t ds,
+                             uint16_t sof, uint16_t ss,
+                             uint16_t s, const uint8_t*buf, int from)
 {
 	if (len < 2 + (2*hwaddr_size) ) return;
 

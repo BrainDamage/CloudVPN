@@ -123,6 +123,12 @@ and authenticators.
 
 	000100034c00103b83ad
 
+	There is a special address type, a PROMISC address, that tells routing
+	that we want to receive ALL packets of given protocol. This address
+	consists only of instance/proto ID, and is written just like this:
+
+	0001.0003
+
 2] Packet format
 	
 	Packet, in its basic form, incorporates:
