@@ -78,6 +78,7 @@ public:
 	void periodic_update();
 
 	list<address>local;
+	set<address>instances;
 
 	void start();
 	void reset();

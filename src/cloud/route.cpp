@@ -190,7 +190,8 @@ static int route_scatter (const hwaddr&a)
  * route
  */
 
-static map<address, route_info> route, reported_route, promisc;
+static map<address, route_info> route, reported_route;
+static multimap<address, route_info> promisc;
 
 static int route_dirty = 0;
 static int route_report_ping_diff = 5000;
@@ -289,18 +290,15 @@ void route_update()
 				             (1 + j->second.dist) ) ) continue;
 			}
 
-			route[j->first] = route_info
-			                  (2 + j->second.ping + i->second.ping,
-			                   1 + j->second.dist,
-			                   i->first);
+			route_info temp (2 + j->second.ping + i->second.ping,
+			                 1 + j->second.dist,
+			                 i->first);
+			route[j->first] = temp;
+			if (!j->first.addr.size() )
+				promisc.insert (j->first, temp);
+
 		}
 	}
-
-	promisc.clear();
-	for (map<address, route_info>::iterator
-	        ri = route.begin();ri != route.end(); ++ri)
-		if (!ri->first.size() )
-			promisc.insert (*ri);
 
 	route_update_multi();
 
@@ -313,35 +311,31 @@ void route_packet (uint32_t inst,
                    uint16_t sof, uint16_t ss,
                    uint16_t s, const uint8_t*buf, int from)
 {
-	if (len < 2 + (2*hwaddr_size) ) return;
+	if (s < dof + ds ) return; //invalid packet
+	if (!ds) return; //cant do zero destination
 
-	address a (buf);
+	address a (inst, buf + dof, ds);
 
 	route_update();
 
-	int res;
+}
 
-	if (do_multiroute)
-		res = route_scatter (a);
-	else {
-		map<address, route_info>::iterator r = route.find (a);
-
-		if (r == route.end() ) {
-			//if the destination is unknown, broadcast it
-			route_broadcast_packet (new_packet_uid(),
-			                        buf, len, conn);
-			return;
-		}
-		res = r->second.id;
-	}
-
-	if ( (res == -1) || promisc) iface_write (buf, len);
-	if (res >= 0) {
-		map<int, connection>::iterator i;
-		i = comm_connections().find (res);
-		if (i != comm_connections().end() )
-			i->second.write_packet (buf, len);
-		else Log_warn ("dangling route %d", res);
+static void send_broadcast_to_id (int to, uint32_t id, uint32_t ttl, uint32_t inst,
+                                  uint16_t dof, uint16_t ds,
+                                  uint16_t sof, uint16_t ss,
+                                  uint16_t s, const uint8_t*buf)
+{
+	if (to < 0) {
+		map<int, gate>::iterator g =
+		    gate_gates().find (- (to + 1) );
+		if (g == gate_gates().end() ) return;
+		g->second.send_packet (inst, dof, ds, sof, ss, s, buf);
+	} else if (ttl) {
+		map<int, connection>::iterator c =
+		    comm_connections().find (to);
+		if (c == comm_connections().end() ) return;
+		c->second.write_broadcast_packet (id, ttl - 1,
+		                                  inst, dof, ds, sof, ss, s, buf);
 	}
 }
 
@@ -350,65 +344,62 @@ void route_broadcast_packet (uint32_t id, uint32_t ttl, uint32_t inst,
                              uint16_t sof, uint16_t ss,
                              uint16_t s, const uint8_t*buf, int from)
 {
-	if (len < 2 + (2*hwaddr_size) ) return;
+	route_update();
+
+	if (s < dof + ds) return; //invalid one
+	if (!ds) return; //cant do zero destination
 
 	if (queue_already_broadcasted (id) ) return; //check duplicates
 	queue_add_id (id);
 
-	route_update();
+	address a (inst, buf + dof, ds), p (inst, 0, 0);
+	bool nosend = false;
+	int nosendid;
 
-	hwaddr a (buf); //destination
-
-	if ( (!ignore_macs) && (a == iface_cached_hwaddr() ) && (conn >= 0) ) {
-		iface_write (buf, len);
-		return; //it was only for us.
-	}
-
-	if (is_addr_broadcast (a) && (conn >= 0) ) {
-		iface_write (buf, len); //it was also for us
-	}
-
-	map<hwaddr, route_info>::iterator r;
-	if ( !is_addr_broadcast (a) ) {
-		if (promisc && (conn >= 0) ) iface_write (buf, len);
-		if ( (!ignore_macs) &&
-		        (route.end() != (r = route.find (a) ) ) )  {
-
-			/*
-			 * if the packet is broadcast only for not knowing
-			 * the correct destination, let's send it the right way.
-			 * We need to keep it "broadcast", so it doesn't get
-			 * duplicated by multiple hosts.
-			 */
-			if (do_multiroute) {
-				int r = route_scatter (a);
-				if (r >= 0) comm_connections() [r]
-					.write_broadcast_packet (id, buf, len);
-				return;
-			}
-			map<int, connection>::iterator
-			i = comm_connections().find (r->second.id);
-			if (i != comm_connections().end() ) {
-				i->second.write_broadcast_packet (id, buf, len);
-				return;
-			} //if the connection didn't exist, forget about this.
+	if (!a.is_broadcast() ) {
+		//send it to probable destination, if we know it
+		map<address, route_info>::iterator dest = route.find (a);
+		if ( (dest != route.end() ) && (from != dest->second.id) ) {
+			nosendid = dest->second.id;
+			nosend = true;
+			send_broadcast_to_id (dest->second.id, id, ttl,
+			                      inst, dof, ds, sof, ss, s, buf);
 		}
-	}
 
-	//if real broadcast is disabled, select random connection to use
-	if (broadcast_nocopy) {
-		if (conn >= 0) return;
-		//TODO, this works only in connections that are 1:1.
-		//We should weight the ratio accordingly to the pings.
-		int n = comm_connections().size();
-		n = rand() % n; //one random of them
-		map<int, connection>::iterator i = comm_connections().begin();
-		for (;n > 0;--n, ++i) if (i->first == conn) ++n;
-		i->second.write_broadcast_packet (id, buf, len);
+		//send it to all known promiscs
+		multimap<address, route_info>::iterator
+		i = promisc.lower_bound (p),
+		    e = promisc.upper_bound (p);
+
+		//if we don't know any promiscs, broadcast
+		if (i == e) goto broadcast;
+
+		for (;i != e;++i) {
+			if (from == i->second.id) continue;
+			if (nosend && (nosendid == i->second.id) ) continue;
+			send_broadcast_to_id (i->second.id, id, ttl,
+			                      inst, dof, ds, sof, ss, s, buf);
+		}
 		return;
 	}
 
-	//now just broadcast the thing.
+broadcast:
+
+	map<int, gate>::iterator
+	j = gate_gates().begin(),
+	    je = gate_gates().begin();
+
+	for (;j != je;++j) {
+		if (j->first == conn) continue; //dont send back
+		if (i->second.fd < 0) continue; //ready only
+		if (! (j->second.instances.count (address (inst, 0, 0) ) ) )
+			continue;
+
+		j->second.send_packet (inst, dof, ds, sof, ss, s, buf);
+	}
+
+	if (!ttl) return; //don't spread this any further
+
 	map<int, connection>::iterator
 	i = comm_connections().begin(),
 	    e = comm_connections().end();
@@ -416,7 +407,9 @@ void route_broadcast_packet (uint32_t id, uint32_t ttl, uint32_t inst,
 	for (;i != e;++i) {
 		if (i->first == conn) continue; //dont send back
 		if (i->second.state != cs_active) continue; //ready only
-		i->second.write_broadcast_packet (id, buf, len);
+
+		i->second.write_broadcast_packet (id, ttl - 1, inst,
+		                                  dof, ds, sof, ss, s, buf);
 	}
 }
 

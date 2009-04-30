@@ -139,6 +139,7 @@ void gate::handle_route (uint16_t size, const uint8_t*data)
 	uint32_t inst;
 
 	local.clear();
+	instances.clear();
 	route_set_dirty();
 
 try_more:
@@ -152,6 +153,7 @@ try_more:
 
 	local.push_back (address() );
 	local.back().set (inst, data + 6, asize);
+	instances.insert (address (inst, 0, 0) );
 	data += 6 + asize;
 	size -= 6 + asize;
 	goto try_more;
