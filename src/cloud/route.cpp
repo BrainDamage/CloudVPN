@@ -137,8 +137,6 @@ static int route_init_multi()
 
 static void route_update_multi()
 {
-	if (!do_multiroute) return;
-
 	multiroute.clear();
 
 	map<int, connection>::iterator i, ie;
@@ -306,9 +304,8 @@ void route_update()
 		}
 	}
 
-	route_update_multi();
+	if(do_multiroute) route_update_multi();
 
-end:
 	report_route();
 }
 
