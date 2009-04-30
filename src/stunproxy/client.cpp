@@ -17,6 +17,9 @@
 
 #include <stdint.h>
 
+#include <map>
+using namespace std;
+
 int udp_fd, proxy_fd;
 
 class conn
@@ -33,7 +36,7 @@ public:
 	//receiving part
 	uint32_t next_recv_packet;
 	uint64_t last_recv_time;
-	map<uint32_t, puffer>recvd;
+	map<uint32_t, pbuffer>recvd;
 };
 
 map<int, conn>conns;

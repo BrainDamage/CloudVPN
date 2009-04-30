@@ -265,9 +265,9 @@ void connection_delete (int id)
 
 static int try_accept_connection (int sock)
 {
-	sockaddr_type (addr);
-	socklen_t addrsize = sockaddr_type_size;
-	int s = accept (sock, &addr, &addrsize);
+	sockaddr_type addr;
+	socklen_t addrsize = sizeof (sockaddr_type);
+	int s = accept (sock, & (addr.sa), &addrsize);
 	if (s < 0) {
 		if (errno == EAGAIN) return 0;
 		Log_error ("accept(%d) failed with %d", errno);
@@ -276,7 +276,7 @@ static int try_accept_connection (int sock)
 
 	sockoptions_set (s);
 
-	string peer_addr_str = sockaddr_to_str (&addr);
+	string peer_addr_str = sockaddr_to_str (& (addr.sa) );
 	Log_info ("get connection from address %s on socket %d",
 	          peer_addr_str.c_str(), s);
 
@@ -835,12 +835,12 @@ void connection::try_connect()
 
 
 		//print a nice info about who are we connected to
-		sockaddr_type (addr);
-		socklen_t s = sockaddr_type_size;
-		if (getpeername (fd, (sockaddr*) &addr, &s) )
+		sockaddr_type addr;
+		socklen_t s = sizeof (sockaddr_type);
+		if (getpeername (fd, & (addr.sa), &s) )
 			Log_info ("conn %d connected to unknown peer", id);
 		else {
-			peer_addr_str = sockaddr_to_str (&addr);
+			peer_addr_str = sockaddr_to_str (& (addr.sa) );
 			Log_info ("conn %d connected to address %s",
 			          id, peer_addr_str.c_str() );
 		}
@@ -909,7 +909,7 @@ void connection::start_connect()
 {
 	last_retry = timestamp();
 
-	int t = tcp_connect_socket (connect_address);
+	int t = tcp_connect_socket (connect_address.c_str() );
 	if (t < 0) {
 		Log_error ("failed connecting in connection id %d", id);
 		return;
@@ -1157,9 +1157,9 @@ void connection::handle_route_overflow()
 	route_overflow = true;
 	Log_info ("connection %d - route overflow", id);
 
-	vector<hwaddr>to_del;
-	vector<hwaddr>::iterator hi;
-	map<hwaddr, remote_route>::iterator rri, rre;
+	vector<address>to_del;
+	vector<address>::iterator hi;
+	map<address, remote_route>::iterator rri, rre;
 	int max_dist, t;
 
 	while (remote_routes.size() > max_remote_routes) {
@@ -1379,7 +1379,7 @@ static int comm_listeners_init()
 
 	for (i = l.begin();i != l.end();++i) {
 		Log_info ("trying to listen on `%s'", i->c_str() );
-		s = tcp_listen_socket (*i);
+		s = tcp_listen_socket (i->c_str() );
 		if (s >= 0) {
 			listeners.insert (s);
 			poll_set_add_read (s);

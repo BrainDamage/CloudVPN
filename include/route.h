@@ -39,7 +39,7 @@ void route_broadcast_packet (
 
 
 void route_set_dirty();
-//TODO void route_report_to_connection (connection&c);
+void route_report_to_connection (connection&c);
 
 class route_info
 {
