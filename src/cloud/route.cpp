@@ -483,20 +483,27 @@ void route_report_to_connection (connection&c)
 	 * note that route_update is NOT wanted here!
 	 */
 
-	int n = reported_route.size(), i;
-	uint8_t data[n* (hwaddr_size+6) ];
-	uint8_t *datap = data;
-	map<hwaddr, route_info>::iterator r;
-	for (i = 0, r = reported_route.begin();
-	        (i < n) && (r != reported_route.end() );++i, ++r) {
-		r->first.get (datap);
-		* (uint16_t*) (datap + hwaddr_size) =
-		    htons ( (uint16_t) (r->second.dist) );
-		* (uint32_t*) (datap + hwaddr_size + 2) =
+	size_t size = 0;
+	map<address, route_info>::iterator r;
+	for (r = reported_route.begin();r != reported_route.end();++r)
+		size += r->first.addr.size() + 14;
+
+	vector<uint8_t> data (size);
+	uint8_t *datap = data.begin().base();
+
+	for (r = reported_route.begin(); (r != reported_route.end() ); ++r) {
+		* (uint32_t*) (datap) =
 		    htonl ( (uint32_t) (r->second.ping) );
-		datap += hwaddr_size + 6;
+		* (uint32_t*) (datap + 4) =
+		    htonl ( (uint32_t) (r->second.dist) );
+		* (uint32_t*) (datap + 8) =
+		    htonl ( (uint32_t) (r->first.inst) );
+		* (uint16_t*) (datap + 12) =
+		    htons ( (uint16_t) (r->first.addr.size() ) );
+		copy (r->first.addr.begin(), r->first.addr.end(), datap + 14);
+		datap += 14 + r->first.addr.size();
 	}
-	c.write_route_set (data, n);
+	c.write_route_set (data.begin().base(), size);
 }
 
 static void report_route()
