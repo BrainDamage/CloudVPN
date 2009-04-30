@@ -155,17 +155,15 @@ static void route_update_multi()
 	}
 }
 
-static int route_scatter (const hwaddr&a)
+static bool route_scatter (const address&a, int*result)
 {
-	map<hwaddr, map<int, int> >::iterator i;
+	map<address, map<int, int> >::iterator i;
 	map<int, int>::iterator j, je, ts;
 	int maxping, n, r;
 
 	i = multiroute.find (a);
-	if (i == multiroute.end() ) return -2; //not found, drop it.
+	if (i == multiroute.end() ) return false; //not found, drop it.
 	j = i->second.begin();
-
-	if (j->second == -1) return -1; //it was a local route. 100% best
 
 	je = i->second.end();
 	while (j != je) {
@@ -180,10 +178,11 @@ static int route_scatter (const hwaddr&a)
 
 		if (r != n) { //this group of connections won!
 			for (;r > 0;--r, ++ts);
-			return ts->second;
+			*result = ts->second;
+			return true;
 		}
 	}
-	return -3; //no routes. wtf?! We should never get here.
+	return false; //no routes. wtf?! We should never get here.
 }
 
 /*
@@ -196,6 +195,7 @@ static multimap<address, route_info> promisc;
 static int route_dirty = 0;
 static int route_report_ping_diff = 5000;
 static int route_max_dist = 64;
+static int default_broadcast_ttl = 128;
 
 static void report_route();
 
@@ -216,7 +216,12 @@ void route_init()
 	Log_info ("only ping changes above %gmsec will be reported to peers",
 	          0.001*t);
 	route_report_ping_diff = t;
+
 	if (!config_get_int ("route_max_dist", t) ) t = 64;
+	Log_info ("maximal node distance is %d", t);
+	route_max_dist = t;
+
+	if (!config_get_int ("route_broadcast_ttl", t) ) t = 64;
 	Log_info ("maximal node distance is %d", t);
 	route_max_dist = t;
 }
@@ -306,21 +311,72 @@ end:
 	report_route();
 }
 
+static void send_packet_to_id (int to, uint32_t inst,
+                               uint16_t dof, uint16_t ds,
+                               uint16_t sof, uint16_t ss,
+                               uint16_t s, const uint8_t*buf)
+{
+	if (to < 0) {
+		map<int, gate>::iterator g =
+		    gate_gates().find (- (to + 1) );
+		if (g == gate_gates().end() ) return;
+		g->second.send_packet (inst, dof, ds, sof, ss, s, buf);
+	} else {
+		map<int, connection>::iterator c =
+		    comm_connections().find (to);
+		if (c == comm_connections().end() ) return;
+		c->second.write_packet (inst, dof, ds, sof, ss, s, buf);
+	}
+}
+
 void route_packet (uint32_t inst,
                    uint16_t dof, uint16_t ds,
                    uint16_t sof, uint16_t ss,
                    uint16_t s, const uint8_t*buf, int from)
 {
 	if (s < dof + ds ) return; //invalid packet
-	if (!ds) return; //cant do zero destination
+	if (!ds) return; //can't do zero destination
 
-	address a (inst, buf + dof, ds);
+	int result;
+	bool need_send = true;
 
 	route_update();
+	address a (inst, buf + dof, ds);
+	map<address, route_info>::iterator r;
 
+	if (a.is_broadcast() ) goto broadcast;
+
+	if (do_multiroute) { //check for a target
+		if (!multiroute_scatter (a, &result) ) goto broadcast;
+	} else {
+		r = route.find (a);
+		if ( (r == route.end() ) || a.is_broadcast() ) goto broadcast;
+	}
+
+	//send it to local promiscs
+	multimap<address, route_info>::iterator
+	i = promisc.lower_bound (p), e = promisc.upper_bound (p);
+
+	for (;i != e;++i) {
+		if (i->second.id >= 0 ) continue; // not local
+		if (i->second.id == result) need_send = false;
+		if (from == i->second.id) continue;
+		send_packet_to_id (i->second.id, inst, dof, ds, sof, ss, s, buf);
+	}
+
+	//finally, send it to destination
+	if (need_send)
+		send_packet_to_id (result, inst, dof, ds, sof, ss, s, buf);
+
+	return;
+
+broadcast: // in case we fail to find a suitable destination, broadcast.
+	route_broadcast_packet (new_packet_uid(), default_broadcast_ttl,
+	                        inst, dof, ds, sof, ss, s, buf, from);
 }
 
-static void send_broadcast_to_id (int to, uint32_t id, uint32_t ttl, uint32_t inst,
+static void send_broadcast_to_id (int to,
+                                  uint32_t id, uint16_t ttl, uint32_t inst,
                                   uint16_t dof, uint16_t ds,
                                   uint16_t sof, uint16_t ss,
                                   uint16_t s, const uint8_t*buf)
@@ -335,24 +391,26 @@ static void send_broadcast_to_id (int to, uint32_t id, uint32_t ttl, uint32_t in
 		    comm_connections().find (to);
 		if (c == comm_connections().end() ) return;
 		c->second.write_broadcast_packet (id, ttl - 1,
-		                                  inst, dof, ds, sof, ss, s, buf);
+		                                  inst, dof, ds, sof, ss,
+		                                  s, buf);
 	}
 }
 
-void route_broadcast_packet (uint32_t id, uint32_t ttl, uint32_t inst,
+void route_broadcast_packet (uint32_t id, uint16_t ttl, uint32_t inst,
                              uint16_t dof, uint16_t ds,
                              uint16_t sof, uint16_t ss,
                              uint16_t s, const uint8_t*buf, int from)
 {
-	route_update();
-
 	if (s < dof + ds) return; //invalid one
 	if (!ds) return; //cant do zero destination
 
 	if (queue_already_broadcasted (id) ) return; //check duplicates
 	queue_add_id (id);
 
+	route_update();
+
 	address a (inst, buf + dof, ds), p (inst, 0, 0);
+
 	bool nosend = false;
 	int nosendid;
 
@@ -368,8 +426,7 @@ void route_broadcast_packet (uint32_t id, uint32_t ttl, uint32_t inst,
 
 		//send it to all known promiscs
 		multimap<address, route_info>::iterator
-		i = promisc.lower_bound (p),
-		    e = promisc.upper_bound (p);
+		i = promisc.lower_bound (p), e = promisc.upper_bound (p);
 
 		//if we don't know any promiscs, broadcast
 		if (i == e) goto broadcast;
@@ -413,7 +470,7 @@ broadcast:
 	}
 }
 
-map<hwaddr, route_info>& route_get ()
+map<address, route_info>& route_get ()
 {
 	return route;
 }

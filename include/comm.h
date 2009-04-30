@@ -111,7 +111,7 @@ public:
 	                   uint16_t dof, uint16_t ds,
 	                   uint16_t sof, uint16_t ss,
 	                   uint16_t s, const uint8_t*buf);
-	void write_broadcast_packet (uint32_t id, uint32_t ttl, uint32_t inst,
+	void write_broadcast_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 	                             uint16_t dof, uint16_t ds,
 	                             uint16_t sof, uint16_t ss,
 	                             uint16_t s, const uint8_t*buf);
