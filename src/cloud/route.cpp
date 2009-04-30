@@ -514,8 +514,8 @@ static void report_route()
 	 * and sends the diff info to remote connections
 	 */
 
-	map<hwaddr, route_info>::iterator r, oldr;
-	list<pair<hwaddr, route_info> > report;
+	map<address, route_info>::iterator r, oldr;
+	list<pair<address, route_info> > report;
 
 	for (r = route.begin(), oldr = reported_route.begin();
 	        (r != route.end() ) && (oldr != reported_route.end() );) {
@@ -535,7 +535,8 @@ static void report_route()
 			report.push_back (*r);
 			++r;
 		} else { //not in new route
-			report.push_back (pair<hwaddr, route_info> (oldr->first, route_info (0, 0, 0) ) );
+			report.push_back (pair<address, route_info>
+			                  (oldr->first, route_info (0, 0, 0) ) );
 			++oldr;
 		}
 	}
@@ -544,7 +545,7 @@ static void report_route()
 		++r;
 	}
 	while (oldr != reported_route.end() ) {
-		report.push_back (pair<hwaddr, route_info> (oldr->first, route_info (0, 0, 0) ) );
+		report.push_back (pair<address, route_info> (oldr->first, route_info (0, 0, 0) ) );
 		++oldr;
 	}
 
@@ -552,23 +553,32 @@ static void report_route()
 	 * now create the data to report, and apply the changes into rep. r.
 	 */
 
-	if (!report.size() ) return;
+	size_t size = 0;
+	list<pair<address, route_info> >::iterator rep;
+	for (rep = report.begin();rep != report.end();++rep)
+		size += rep->first.addr.size() + 14;
 
-	uint8_t data[report.size() * (hwaddr_size+6) ];
-	uint8_t*datap = data;
-	list<pair<hwaddr, route_info> >::iterator rep;
-	for (rep = report.begin();rep != report.end();++rep) {
+	vector<uint8_t> data (size);
+	uint8_t *datap = data.begin().base();
+
+	for (rep = report.begin();
+	        (rep != report.end() ); ++rep) {
+
 		if (rep->second.ping) reported_route[rep->first] = rep->second;
 		else reported_route.erase (rep->first);
 
-		rep->first.get (datap);
-		* (uint16_t*) (datap + hwaddr_size) =
-		    htons ( (uint16_t) (rep->second.dist) );
-		* (uint32_t*) (datap + hwaddr_size + 2) =
+		* (uint32_t*) (datap) =
 		    htonl ( (uint32_t) (rep->second.ping) );
-		datap += hwaddr_size + 6;
+		* (uint32_t*) (datap + 4) =
+		    htonl ( (uint32_t) (rep->second.dist) );
+		* (uint32_t*) (datap + 8) =
+		    htonl ( (uint32_t) (rep->first.inst) );
+		* (uint16_t*) (datap + 12) =
+		    htons ( (uint16_t) (rep->first.addr.size() ) );
+		copy (rep->first.addr.begin(),
+		      rep->first.addr.end(), datap + 14);
+		datap += 14 + rep->first.addr.size();
 	}
-
-	comm_broadcast_route_update (data, report.size() );
+	comm_broadcast_route_update (data.begin().base(), size);
 }
 
