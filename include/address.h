@@ -44,6 +44,11 @@ public:
 		inst = i;
 	}
 
+	inline bool is_broadcast() {
+		if (addr.size() ) return addr[0]&1;
+		return false;
+	}
+
 
 	/*
 	 * string handling

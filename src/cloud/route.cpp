@@ -155,7 +155,7 @@ static void route_update_multi()
 	}
 }
 
-static bool route_scatter (const address&a, int*result)
+static bool multiroute_scatter (const address&a, int*result)
 {
 	map<address, map<int, int> >::iterator i;
 	map<int, int>::iterator j, je, ts;
@@ -245,7 +245,7 @@ void route_update()
 	map<int, connection>& cons = comm_connections();
 	map<int, connection>::iterator i;
 	map<address, connection::remote_route>::iterator j;
-	map<int, gate>&gates = gate_gates;
+	map<int, gate>&gates = gate_gates();
 	map<int, gate>::iterator g;
 	list<address>::iterator k;
 
@@ -300,7 +300,8 @@ void route_update()
 			                 i->first);
 			route[j->first] = temp;
 			if (!j->first.addr.size() )
-				promisc.insert (j->first, temp);
+				promisc.insert (pair<address, route_info>
+				                (j->first, temp) );
 
 		}
 	}
@@ -341,8 +342,9 @@ void route_packet (uint32_t inst,
 	bool need_send = true;
 
 	route_update();
-	address a (inst, buf + dof, ds);
+	address a (inst, buf + dof, ds), p (inst, 0, 0);
 	map<address, route_info>::iterator r;
+	multimap<address, route_info>::iterator i, e;
 
 	if (a.is_broadcast() ) goto broadcast;
 
@@ -354,8 +356,8 @@ void route_packet (uint32_t inst,
 	}
 
 	//send it to local promiscs
-	multimap<address, route_info>::iterator
-	i = promisc.lower_bound (p), e = promisc.upper_bound (p);
+	i = promisc.lower_bound (p);
+	e = promisc.upper_bound (p);
 
 	for (;i != e;++i) {
 		if (i->second.id >= 0 ) continue; // not local
@@ -447,8 +449,8 @@ broadcast:
 	    je = gate_gates().begin();
 
 	for (;j != je;++j) {
-		if (j->first == conn) continue; //dont send back
-		if (i->second.fd < 0) continue; //ready only
+		if (j->first == from) continue; //dont send back
+		if (j->second.fd < 0) continue; //ready only
 		if (! (j->second.instances.count (address (inst, 0, 0) ) ) )
 			continue;
 
@@ -462,7 +464,7 @@ broadcast:
 	    e = comm_connections().end();
 
 	for (;i != e;++i) {
-		if (i->first == conn) continue; //dont send back
+		if (i->first == from) continue; //dont send back
 		if (i->second.state != cs_active) continue; //ready only
 
 		i->second.write_broadcast_packet (id, ttl - 1, inst,
