@@ -17,9 +17,10 @@
 
 #include <stdint.h>
 
-int udp_fd,proxy_fd;
+int udp_fd, proxy_fd;
 
-class conn {
+class conn
+{
 public:
 	int fd;
 	int id;
@@ -27,15 +28,15 @@ public:
 	//sending part
 	uint32_t next_send_packet;
 	uint64_t last_send_time;
-	map<uint32_t,pbuffer> waiting_acks;
+	map<uint32_t, pbuffer> waiting_acks;
 
 	//receiving part
 	uint32_t next_recv_packet;
 	uint64_t last_recv_time;
-	map<uint32_t,puffer>recvd;
+	map<uint32_t, puffer>recvd;
 };
 
-map<int,conn>conns;
+map<int, conn>conns;
 
 
 int handle_udp()
@@ -78,6 +79,7 @@ int shutdown()
 
 }
 
-int main() {
+int main()
+{
 	return 0;
 }
