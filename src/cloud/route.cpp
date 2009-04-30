@@ -304,7 +304,7 @@ void route_update()
 		}
 	}
 
-	if(do_multiroute) route_update_multi();
+	if (do_multiroute) route_update_multi();
 
 	report_route();
 }

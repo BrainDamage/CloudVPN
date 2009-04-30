@@ -24,16 +24,16 @@
 #include <string>
 using namespace std;
 
-#define sockaddr_type(x) 	\
-union { struct sockaddr x;	\
-struct sockaddr_in x##_4;	\
-struct sockaddr_in6 x##_6;	\
-struct sockaddr_un x##_un; }
+typedef union {
+	struct sockaddr sa;
+	struct sockaddr_in sa_4;
+	struct sockaddr_in6 sa_6;
+	struct sockaddr_un sa_un;
+} sockaddr_type;
 
 #ifdef __WIN32__
 #define close closesocket
 #endif
-
 
 #include <errno.h>
 #ifndef EINPROGRESS

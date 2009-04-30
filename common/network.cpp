@@ -92,9 +92,9 @@ int sockoptions_set (int s)
 
 int tcp_listen_socket (const char* addr)
 {
-	sockaddr_type (sa);
+	sockaddr_type sa;
 	int sa_len, domain;
-	if (!sockaddr_from_str (addr, &sa, &sa_len, &domain) ) {
+	if (!sockaddr_from_str (addr, & (sa.sa), &sa_len, &domain) ) {
 		Log_error ("could not resolve address and port `%s'", addr);
 		return -1;
 	}
@@ -120,7 +120,7 @@ int tcp_listen_socket (const char* addr)
 		return -3;
 	}
 
-	if (bind (s, &sa, sa_len) ) {
+	if (bind (s, & (sa.sa), sa_len) ) {
 		Log_error ("binding socket %d failed with %d", s, errno);
 		close (s);
 		return -4;
@@ -140,9 +140,9 @@ int tcp_listen_socket (const char* addr)
 
 int tcp_connect_socket (const char*addr)
 {
-	sockaddr_type (sa);
+	sockaddr_type sa;
 	int sa_len, domain;
-	if (!sockaddr_from_str (addr, &sa, &sa_len, &domain) ) {
+	if (!sockaddr_from_str (addr, & (sa.sa), &sa_len, &domain) ) {
 		Log_error ("could not resolve address and port `%s'", addr);
 		return -1;
 	}
@@ -162,7 +162,7 @@ int tcp_connect_socket (const char*addr)
 
 	sockoptions_set (s);
 
-	if (connect (s, &sa, sa_len) < 0 ) {
+	if (connect (s, & (sa.sa), sa_len) < 0 ) {
 		int e = errno;
 		if (e != EINPROGRESS) {
 			Log_error ("connect(%d) to `%s' failed with %d",
@@ -176,6 +176,12 @@ int tcp_connect_socket (const char*addr)
 
 int tcp_close_socket (int sock)
 {
+	sockaddr_type sa;
+	socklen_t sa_len = sizeof (sockaddr_type);
+	if (!getsockname (sock, & (sa.sa), &sa_len) ) {
+		if (sa.sa.sa_family == AF_UNIX) //we need to unlink the sockfile
+			unlink (sa.sa_un.sun_path);
+	}
 	if (close (sock) ) {
 		Log_warn ("closing socket %d failed with %d!", sock, errno);
 		return 1;

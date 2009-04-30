@@ -472,5 +472,6 @@ void gate_shutdown()
 {
 	while (gates.size() )
 		gate_delete (gates.begin()->first);
+	stop_listeners();
 }
 
