@@ -20,6 +20,7 @@
 #include "poll.h"
 #include "route.h"
 #include "status.h"
+#include "network.h"
 #include "security.h"
 #include "timestamp.h"
 #include "sighandler.h"
@@ -58,10 +59,9 @@ int run_cloudvpn (int argc, char**argv)
 	timestamp_update(); //get initial timestamp
 
 	status_init();
-
 	route_init();
-
 	squeue_init();
+	network_init();
 
 	if (poll_init() ) {
 		Log_fatal ("poll initialization failed");

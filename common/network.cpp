@@ -50,7 +50,6 @@ int tcp_socket_writeable (int sock)
 	return 0;
 }
 
-//TODO, call this from initialization
 int network_init()
 {
 #ifndef __WIN32__
