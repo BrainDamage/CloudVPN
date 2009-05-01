@@ -429,7 +429,7 @@ static void stop_listeners()
 	Log_info ("closing gates");
 
 	for (i = listeners.begin();i != listeners.end();++i)
-		tcp_close_socket (*i);
+		tcp_close_socket (*i, true);
 
 	listeners.clear();
 }

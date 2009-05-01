@@ -55,7 +55,7 @@ const char* sockaddr_to_str (struct sockaddr*addr);
 bool sock_nonblock (int fd);
 int tcp_listen_socket (const char*);
 int tcp_connect_socket (const char*);
-int tcp_close_socket (int fd);
+int tcp_close_socket (int fd, bool unlink = false);
 
 int network_init();
 int sockoptions_set (int fd);

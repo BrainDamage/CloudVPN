@@ -174,13 +174,15 @@ int tcp_connect_socket (const char*addr)
 	return s;
 }
 
-int tcp_close_socket (int sock)
+int tcp_close_socket (int sock, bool do_unlink)
 {
-	sockaddr_type sa;
-	socklen_t sa_len = sizeof (sockaddr_type);
-	if (!getsockname (sock, & (sa.sa), &sa_len) ) {
-		if (sa.sa.sa_family == AF_UNIX) //we need to unlink the sockfile
-			unlink (sa.sa_un.sun_path);
+	if (do_unlink) { //we need to unlink the sockfile
+		sockaddr_type sa;
+		socklen_t sa_len = sizeof (sockaddr_type);
+		if (!getsockname (sock, & (sa.sa), &sa_len) ) {
+			if (sa.sa.sa_family == AF_UNIX)
+				unlink (sa.sa_un.sun_path);
+		}
 	}
 	if (close (sock) ) {
 		Log_warn ("closing socket %d failed with %d!", sock, errno);
@@ -210,8 +212,7 @@ const char* sockaddr_to_str (struct sockaddr*addr)
 		port = ntohs ( ( (sockaddr_in6*) addr)->sin6_port);
 		break;
 	case AF_UNIX:
-		buf[0] = '\\';
-		strncpy (buf + 1, ( (sockaddr_un*) addr)->sun_path, 254);
+		strcpy (buf, "\\local");
 		return buf;
 	default:
 		return 0;

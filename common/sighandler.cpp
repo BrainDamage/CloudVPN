@@ -20,10 +20,14 @@ int setup_sighandler (void (*func) (int) )
 	sigaction (SIGTERM, &a, 0);
 	sigaction (SIGINT, &a, 0);
 
+	a.sa_handler = SIG_IGN;
+	sigaction (SIGPIPE, &a, 0);
+
 	return 0;
 #else //__WIN32__
 	signal (SIGINT, func);
 	signal (SIGTERM, func);
+	signal (SIGPIPE, SIG_IGN);
 	return 0;
 #endif
 }

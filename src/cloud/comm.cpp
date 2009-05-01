@@ -749,6 +749,7 @@ bool connection::try_read()
 		} else {
 			recv_q.append (r); //confirm read
 			try_parse_input();
+			if (fd < 0) return false; //we got reset
 		}
 	}
 	return true;
@@ -1459,7 +1460,7 @@ static int comm_listeners_close()
 	int ret = 0;
 	for (i = listeners.begin();i != listeners.end();++i) {
 		Log_info ("closing listener %d", *i);
-		if (tcp_close_socket (*i) ) {
+		if (tcp_close_socket (*i, true) ) {
 			Log_warn ("problem closing listener socket %d", *i);
 			++ret;
 		}
