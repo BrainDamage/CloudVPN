@@ -14,7 +14,6 @@
 
 #include "timestamp.h"
 #include "route.h"
-#include "iface.h"
 #include "comm.h"
 #include "conf.h"
 #include "log.h"
@@ -65,16 +64,11 @@ static int status_to_file (const char*fn)
 	output ("cloudvpn status\nuptime: %gs\n\n",
 	        0.000001* (timestamp() - start_time) );
 
-	output ("local interface: %s\n",
-	        (iface_get_sockfd() >= 0) ?
-	        format_hwaddr (iface_cached_hwaddr() ).c_str()
-	        : "disabled");
-
 	output ("listening sockets: %zd\n\n", comm_listeners().size() );
 	output ("connections: %zd\n", comm_connections().size() );
 
 	map<int, connection>::iterator c;
-	map<hwaddr, connection::remote_route>::iterator r;
+	map<address, connection::remote_route>::iterator r;
 	for (c = comm_connections().begin();c != comm_connections().end();++c) {
 		if (c->second.state == cs_active)
 			output ("connection %d \tping %u \troute count %zd \t(fd %d)\n",
@@ -82,9 +76,9 @@ static int status_to_file (const char*fn)
 			        c->second.remote_routes.size(), c->second.fd);
 		else output ("connection %d inactive\n", c->first);
 
-		if (c->second.address.length() )
+		if (c->second.connect_address.length() )
 			output (" * assigned to host `%s'\n",
-			        c->second.address.c_str() );
+			        c->second.connect_address.c_str() );
 		if (c->second.peer_addr_str.length() )
 			output (" = connected to addr `%s'\n",
 			        c->second.peer_addr_str.c_str() );
@@ -112,7 +106,7 @@ static int status_to_file (const char*fn)
 		if (verbose) for (r = c->second.remote_routes.begin();
 			                  r != c->second.remote_routes.end();++r)
 				output (" `--route to %s \tdist %u \tping %u\n",
-				        format_hwaddr (r->first).c_str(),
+				        r->first.format().c_str(),
 				        r->second.dist, r->second.ping);
 	}
 
@@ -133,10 +127,10 @@ static int status_to_file (const char*fn)
 
 	output ("local route count: %zd\n", route_get().size() );
 
-	map<hwaddr, route_info>::iterator i;
+	map<address, route_info>::iterator i;
 	for (i = route_get().begin();i != route_get().end();++i)
 		output ("route to %s \tvia conn %d \tping %u \tdistance %u\n",
-		        format_hwaddr (i->first).c_str(),
+		        i->first.format().c_str(),
 		        i->second.id, i->second.ping, i->second.dist);
 	output ("---\n\n");
 
