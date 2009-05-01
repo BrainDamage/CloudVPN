@@ -101,8 +101,7 @@ public:
 
 	void handle_packet (uint8_t*data, int len);
 	void handle_broadcast_packet (uint8_t*data, int len);
-	void handle_route_set (uint8_t*data, int len);
-	void handle_route_diff (uint8_t*data, int len);
+	void handle_route (bool set, uint8_t*data, int len);
 	void handle_ping (uint8_t id);
 	void handle_pong (uint8_t id);
 	void handle_route_request ();

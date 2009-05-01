@@ -394,60 +394,102 @@ static bool parse_packet_header (squeue&q, uint8_t&type,
  * handlers of incoming information
  */
 
-void connection::handle_packet (void*buf, int len)
+void connection::handle_packet (uint8_t*buf, int len)
 {
 	if (dbl_enabled) {
 		if (dbl_over > (unsigned int) dbl_burst) return;
 		dbl_over += len + 4;
 	}
+
+	uint16_t dof, ds, sof, ss, s;
+	uint32_t inst;
+
+	if (len < 14) goto error;
+
+	inst = ntohl ( * (uint32_t*) buf);
+	dof = ntohs ( * (uint16_t*) (buf + 4) );
+	ds = ntohs ( * (uint16_t*) (buf + 6) );
+	sof = ntohs ( * (uint16_t*) (buf + 8) );
+	ss = ntohs ( * (uint16_t*) (buf + 10) );
+	s = ntohs ( * (uint16_t*) (buf + 12) );
+
+	if ( (len < 14 + (int) s)
+	        || (s < (int) dof + (int) ds)
+	        || (s < (int) sof + (int) ss) )
+		goto error;
+
 	stat_packet (true, len + p_head_size);
-	route_packet (buf, len, id);
+	route_packet (inst, dof, ds, sof, ss, s, buf + 14, id);
+	return;
+error:
+	Log_info ("connection %d packet read corruption", id);
+	reset();
 }
 
-void connection::handle_broadcast_packet (uint32_t ID, void*buf, int len)
+void connection::handle_broadcast_packet (uint8_t*buf, int len)
 {
 	if (dbl_enabled) {
 		if (dbl_over > (unsigned int) dbl_burst) return;
-		dbl_over += len + 8;
+		dbl_over += len + 4;
 	}
-	stat_packet (true, len + p_head_size + 4);
-	route_broadcast_packet (ID, buf, len, id);
+
+	uint16_t dof, ds, sof, ss, s, ttl;
+	uint32_t inst, id;
+
+	if (len < 20) goto error;
+
+	id = ntohl (* (uint32_t*) buf);
+	ttl = ntohs (* (uint16_t*) (buf + 4) );
+	inst = ntohl (* (uint32_t*) (buf + 6) );
+	dof = ntohs (* (uint16_t*) (buf + 10) );
+	ds = ntohs (* (uint16_t*) (buf + 12) );
+	sof = ntohs (* (uint16_t*) (buf + 14) );
+	ss = ntohs (* (uint16_t*) (buf + 16) );
+	s = ntohs (* (uint16_t*) (buf + 18) );
+
+	if ( (len < 20 + (int) s)
+	        || (s < (int) dof + (int) ds)
+	        || (s < (int) sof + (int) ss) )
+		goto error;
+
+	stat_packet (true, len + p_head_size);
+	route_broadcast_packet (id, ttl, inst, dof, ds, sof, ss, s, buf + 20, id);
+	return;
+error:
+	Log_info ("connection %d broadcast read corruption", id);
+	reset();
 }
 
-void connection::handle_route_set (uint8_t*data, int n)
+void connection::handle_route (bool set, uint8_t*data, int n)
 {
-	stat_packet (true, n*route_entry_size + p_head_size);
-	remote_routes.clear();
+	stat_packet (true, n + p_head_size);
+	if (set) remote_routes.clear();
+
 	uint32_t remote_ping;
-	uint16_t remote_dist;
-	for (int i = 0;i < n;++i, data += route_entry_size) {
-		remote_dist = ntohs (* ( (uint16_t*) (data + hwaddr_size) ) );
-		remote_ping = ntohl (* ( (uint32_t*) (data + hwaddr_size + 2) ) );
-		if (remote_ping) remote_routes[hwaddr (data) ] =
+	uint32_t remote_dist;
+	uint32_t instance;
+	uint16_t s;
+
+	while (n) {
+		if (n < 14) goto error;
+		remote_ping = ntohl (* (uint32_t*) data);
+		remote_dist = ntohl (* (uint32_t*) (data + 4) );
+		instance = ntohl (* (uint32_t*) (data + 8) );
+		s = ntohl (* (uint32_t*) (data + 12) );
+		if (n < 14 + (int) s) goto error;
+
+		if (remote_ping) remote_routes
+			[address (instance,data,s) ] =
 			    remote_route (remote_ping, remote_dist);
+		else remote_routes.erase (address (instance, data, s) );
+
 	}
 
 	handle_route_overflow();
 	route_set_dirty();
-}
-
-void connection::handle_route_diff (uint8_t*data, int n)
-{
-	stat_packet (true, n*route_entry_size + p_head_size);
-	if (!n) return;
-
-	uint32_t remote_ping;
-	uint16_t remote_dist;
-	for (int i = 0;i < n;++i, data += route_entry_size) {
-		remote_dist = ntohs (* ( (uint16_t*) (data + hwaddr_size) ) );
-		remote_ping = ntohl (* ( (uint32_t*) (data + hwaddr_size + 2) ) );
-		if (remote_ping) remote_routes[hwaddr (data) ] =
-			    remote_route (remote_ping, remote_dist);
-		else remote_routes.erase (hwaddr (data) );
-	}
-
-	handle_route_overflow();
-	route_set_dirty();
+error:
+	Log_info ("connection %d route read corruption", id);
+	reset();
 }
 
 void connection::handle_ping (uint8_t ID)
@@ -496,58 +538,78 @@ pbuffer& connection::new_proto (size_t size)
 	return proto_q.back();
 }
 
-void connection::write_packet (void*buf, int len)
+void connection::write_packet (uint32_t inst,
+                               uint16_t dof, uint16_t ds,
+                               uint16_t sof, uint16_t ss,
+                               uint16_t s, const uint8_t*buf)
 {
-	size_t size = p_head_size + len;
+	size_t size = p_head_size + 14 + s;
 	if (!can_write_data (size) ) {
 		try_write();
 		return;
 	}
-	if ( (unsigned int) len > mtu) return;
+	if (s > mtu) return;
 	pbuffer& b = new_data (size);
-	add_packet_header (b, pt_eth_frame, 0, len);
-	b.push ( (uint8_t*) buf, len);
+	add_packet_header (b, pt_eth_frame, 0, 14 + s);
+	b.push<uint32_t> (htonl (inst) );
+	b.push<uint16_t> (htons (dof) );
+	b.push<uint16_t> (htons (ds) );
+	b.push<uint16_t> (htons (sof) );
+	b.push<uint16_t> (htons (ss) );
+	b.push<uint16_t> (htons (s) );
+	b.push ( (uint8_t*) buf, s);
 	try_write();
 }
 
-void connection::write_broadcast_packet (uint32_t ID, void*buf, int len)
+void connection::write_broadcast_packet (uint32_t id, uint16_t ttl,
+        uint32_t inst,
+        uint16_t dof, uint16_t ds,
+        uint16_t sof, uint16_t ss,
+        uint16_t s, const uint8_t*buf)
 {
-	size_t size = p_head_size + len + 4;
+	size_t size = p_head_size + 20 + s;
 	if (!can_write_data (size) ) {
 		try_write();
 		return;
 	}
-	if ( (unsigned int) len > mtu) return;
+	if (s > mtu) return;
 	pbuffer& b = new_data (size);
-	add_packet_header (b, pt_broadcast, 0, len);
-	b.push<uint32_t> (htonl (ID) );
-	b.push ( (uint8_t*) buf, len);
+	add_packet_header (b, pt_broadcast, 0, 20 + s);
+	b.push<uint32_t> (htonl (id) );
+	b.push<uint16_t> (htons (ttl) );
+	b.push<uint32_t> (htonl (inst) );
+	b.push<uint16_t> (htons (dof) );
+	b.push<uint16_t> (htons (ds) );
+	b.push<uint16_t> (htons (sof) );
+	b.push<uint16_t> (htons (ss) );
+	b.push<uint16_t> (htons (s) );
+	b.push ( (uint8_t*) buf, s);
 	try_write();
 }
 
 void connection::write_route_set (uint8_t*data, int n)
 {
-	size_t size = p_head_size + n * route_entry_size;
+	size_t size = p_head_size + n;
 	if (!can_write_proto (size) ) {
 		try_write();
 		return;
 	}
 	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_route_set, 0, n);
-	b.push (data, n* route_entry_size );
+	b.push (data, n);
 	try_write();
 }
 
 void connection::write_route_diff (uint8_t*data, int n)
 {
-	size_t size = p_head_size + n * route_entry_size;
+	size_t size = p_head_size + n;
 	if (!can_write_proto (size) ) {
 		try_write();
 		return;
 	}
 	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_route_diff, 0, n);
-	b.push (data, n* route_entry_size );
+	b.push (data, n);
 	try_write();
 }
 
@@ -612,12 +674,12 @@ try_more:
 		        (unsigned int) cached_header.size) {
 			switch (cached_header.type) {
 			case pt_route_set:
-				handle_route_set (recv_q.begin(),
-				                  cached_header.size);
+				handle_route (true, recv_q.begin(),
+				              cached_header.size);
 				break;
 			case pt_route_diff:
-				handle_route_diff (recv_q.begin(),
-				                   cached_header.size);
+				handle_route (false, recv_q.begin(),
+				              cached_header.size);
 				break;
 			case pt_eth_frame:
 				handle_packet (recv_q.begin(),
