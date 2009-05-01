@@ -426,7 +426,7 @@ static void stop_listeners()
 {
 	set<int>::iterator i;
 
-	Log_info ("Closing gates", *i);
+	Log_info ("closing gates");
 
 	for (i = listeners.begin();i != listeners.end();++i)
 		tcp_close_socket (*i);
