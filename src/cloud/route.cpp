@@ -550,6 +550,8 @@ static void report_route()
 	 * now create the data to report, and apply the changes into rep. r.
 	 */
 
+	if (report.begin() == report.end() ) return; //nothing to report
+
 	size_t size = 0;
 	list<pair<address, route_info> >::iterator rep;
 	for (rep = report.begin();rep != report.end();++rep)
