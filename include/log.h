@@ -28,11 +28,15 @@ void log_setlevel (int level);
 #define ERROR 3
 #define FATAL 4
 
-#define Log_debug(fmt,params...) Log_full(DEBUG,__FILE__,__LINE__,fmt,##params)
-#define Log_info(fmt,params...) Log_full(INFO,__FILE__,__LINE__,fmt,##params)
-#define Log_warn(fmt,params...) Log_full(WARN,__FILE__,__LINE__,fmt,##params)
-#define Log_error(fmt,params...) Log_full(ERROR,__FILE__,__LINE__,fmt,##params)
-#define Log_fatal(fmt,params...) Log_full(FATAL,__FILE__,__LINE__,fmt,##params)
+#ifndef LOGNAME
+#define LOGNAME __FILE__
+#endif
+
+#define Log_debug(fmt,params...) Log_full(DEBUG,LOGNAME,__LINE__,fmt,##params)
+#define Log_info(fmt,params...) Log_full(INFO,LOGNAME,__LINE__,fmt,##params)
+#define Log_warn(fmt,params...) Log_full(WARN,LOGNAME,__LINE__,fmt,##params)
+#define Log_error(fmt,params...) Log_full(ERROR,LOGNAME,__LINE__,fmt,##params)
+#define Log_fatal(fmt,params...) Log_full(FATAL,LOGFILE,__LINE__,fmt,##params)
 
 #endif
 
