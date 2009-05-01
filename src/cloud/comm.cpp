@@ -853,9 +853,6 @@ void connection::try_accept()
 	int r = gnutls_handshake (session);
 	if (r == 0) {
 		Log_info ("socket %d accepted SSL connection id %d", fd, id);
-
-		//TODO, check cert here?
-
 		activate();
 
 	} else if (handle_ssl_error (r) ) {
@@ -930,12 +927,6 @@ void connection::try_ssl_connect()
 	int r = gnutls_handshake (session);
 	if (r == 0) {
 		Log_info ("socket %d established SSL connection id %d", fd, id);
-
-		/*
-		 * TODO
-		 * Do gnutls verification here
-		 */
-
 		activate();
 
 	} else if (handle_ssl_error (r) ) {

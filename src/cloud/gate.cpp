@@ -27,6 +27,7 @@ static map<int, int> g_index;
 static map<int, gate> gates;
 static set<int> listeners;
 
+static int max_gates = 64;
 
 map<int, int>& gate_index()
 {
@@ -50,8 +51,6 @@ void gate::deindex()
 {
 	g_index.erase (fd);
 }
-
-#define max_gates 1024 //TODO replace with config var
 
 static int gate_alloc()
 {
@@ -366,7 +365,7 @@ void gate::poll_write()
 		}
 
 		send_q.front().shift (r);
-		//TODO, consider breaking the loop here
+		//TRICKY, consider breaking the loop here
 	}
 
 	poll_set_remove_write (fd);
@@ -474,6 +473,9 @@ int gate_init()
 		Log_error ("couldn't start gate listeners");
 		return 1;
 	}
+
+	config_get_int ("max_gates", max_gates);
+	Log_info ("max gate count is %d", max_gates);
 
 	Log_info ("gate OK");
 	return 0;
