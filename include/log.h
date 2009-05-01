@@ -36,7 +36,7 @@ void log_setlevel (int level);
 #define Log_info(fmt,params...) Log_full(INFO,LOGNAME,__LINE__,fmt,##params)
 #define Log_warn(fmt,params...) Log_full(WARN,LOGNAME,__LINE__,fmt,##params)
 #define Log_error(fmt,params...) Log_full(ERROR,LOGNAME,__LINE__,fmt,##params)
-#define Log_fatal(fmt,params...) Log_full(FATAL,LOGFILE,__LINE__,fmt,##params)
+#define Log_fatal(fmt,params...) Log_full(FATAL,LOGNAME,__LINE__,fmt,##params)
 
 #endif
 
