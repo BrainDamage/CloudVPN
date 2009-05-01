@@ -470,7 +470,7 @@ void connection::handle_route (bool set, uint8_t*data, int n)
 	uint32_t instance;
 	uint16_t s;
 
-	while (n) {
+	while (n > 0) {
 		if (n < 14) goto error;
 		remote_ping = ntohl (* (uint32_t*) data);
 		remote_dist = ntohl (* (uint32_t*) (data + 4) );
@@ -482,11 +482,12 @@ void connection::handle_route (bool set, uint8_t*data, int n)
 			[address (instance,data,s) ] =
 			    remote_route (remote_ping, remote_dist);
 		else remote_routes.erase (address (instance, data, s) );
-
+		n -= 14 + s;
 	}
 
 	handle_route_overflow();
 	route_set_dirty();
+	return;
 error:
 	Log_info ("connection %d route read corruption", id);
 	reset();
