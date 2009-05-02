@@ -10,8 +10,10 @@
  * if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "conf.h"
+#include "sq.h"
 #include "log.h"
+#include "conf.h"
+#include "address.h"
 #include "network.h"
 
 #include <errno.h>
@@ -40,16 +42,14 @@
 
 #define CLEAR(x) memset(&(x),0,sizeof(x))
 
-/*
- * variables
- */
-
 int tun = -1;
 char iface_name[IFNAMSIZ] = "";
+address cached_hwaddr (0, (const uint8_t*) "123456", 6); //no matter it doesnt work.
 
-/*
- * initialization
- */
+int iface_set_hwaddr (uint8_t*hwaddr);
+int iface_retrieve_hwaddr (uint8_t*hwaddr);
+void send_route();
+void send_packet (uint8_t*data, int size);
 
 void iface_command (int which)
 {
@@ -77,11 +77,6 @@ void iface_command (int which)
 
 int iface_create()
 {
-	if (!config_is_true ("iface") ) {
-		Log_info ("not creating local interface");
-		return 0; //no need
-	}
-
 	struct ifreq ifr;
 
 	string tun_dev = "/dev/net/tun";
@@ -89,7 +84,7 @@ int iface_create()
 	config_get ("tunctl", tun_dev);
 
 	if ( (tun = open (tun_dev.c_str(), O_RDWR) ) < 0) {
-		Log_error ("iface: cannot open `%s'", tun_dev.c_str() );
+		Log_error ("cannot open `%s'", tun_dev.c_str() );
 		return 1;
 	}
 
@@ -101,14 +96,14 @@ int iface_create()
 		string d;
 		config_get ("iface_dev", d);
 		strncpy (ifr.ifr_name, d.c_str(), IFNAMSIZ);
-		Log_info ("iface: using interface name `%s'", d.c_str() );
-	} else Log_info ("iface: using default interface name");
+		Log_info ("using interface name `%s'", d.c_str() );
+	} else Log_info ("using default interface name");
 
 	if (
 	    (ioctl (tun, TUNSETIFF, &ifr) < 0) ||
 	    (ioctl (tun, TUNSETPERSIST,
 	            config_is_true ("iface_persist") ? 1 : 0) < 0) ) {
-		Log_error ("iface: cannot configure tap device");
+		Log_error ("cannot configure tap device");
 		close (tun);
 		tun = -1;
 		return 2;
@@ -128,24 +123,23 @@ int iface_create()
 	}
 
 	if (config_is_set ("mac") ) { //set mac address
-		uint8_t hwaddr[hwaddr_size];
+		address new_mac;
 		string mac;
 		config_get ("mac", mac);
+		if (new_mac.scan_addr (mac.c_str() )
+		        && (new_mac.addr.size() == 6) ) {
 
-		if (read_mac_addr (mac.c_str(), hwaddr) ) {
-			Log_info ("iface: setting hwaddr %s",
-			          format_hwaddr (hwaddr).c_str() );
+			Log_info ("setting hwaddr %s",
+			          new_mac.format_addr().c_str() );
 
-			if (iface_set_hwaddr (hwaddr) )
-				Log_error ("iface: setting hwaddr failed, using default");
-		} else Log_warn ("iface: `%s' is not a valid mac address, using default");
+			if (iface_set_hwaddr (new_mac.addr.begin().base() ) )
+				Log_error ("setting hwaddr failed, using default");
+		} else Log_warn ("`%s' is not a valid mac address, using default");
 	} else iface_retrieve_hwaddr (0); //only cache the mac
 
-	Log_info ("iface: initialized OK");
+	Log_info ("iface initialized OK");
 
-	poll_set_add_read (tun);
-
-	route_set_dirty();
+	send_route();
 
 	iface_command (1);
 
@@ -186,24 +180,23 @@ int iface_create()
 	//from here it's just similar to linux.
 
 	if (config_is_set ("mac") ) { //set mac address
-		uint8_t hwaddr[hwaddr_size];
+		address new_mac;
 		string mac;
 		config_get ("mac", mac);
+		if (new_mac.scan_addr (mac.c_str() )
+		        && (new_mac.addr.size() == 6) ) {
 
-		if (read_mac_addr (mac.c_str(), hwaddr) ) {
-			Log_info ("iface: setting hwaddr %s",
-			          format_hwaddr (hwaddr).c_str() );
+			Log_info ("setting hwaddr %s",
+			          new_mac.format_addr().c_str() );
 
-			if (iface_set_hwaddr (hwaddr) )
-				Log_error ("iface: setting hwaddr failed, using default");
-		} else Log_warn ("iface: `%s' is not a valid mac address, using default");
+			if (iface_set_hwaddr (new_mac.addr.begin().base() ) )
+				Log_error ("setting hwaddr failed, using default");
+		} else Log_warn ("`%s' is not a valid mac address, using default");
 	} else iface_retrieve_hwaddr (0); //only cache the mac
 
 	Log_info ("iface: initialized OK");
 
-	poll_set_add_read (tun);
-
-	route_set_dirty();
+	send_route();
 
 	iface_command (1);
 
@@ -233,7 +226,7 @@ int iface_set_hwaddr (uint8_t*hwaddr)
 
 	strncpy (ifr.ifr_name, iface_name, IFNAMSIZ);
 
-	for (int i = 0;i < hwaddr_size;++i)
+	for (int i = 0;i < 6;++i)
 		ifr.ifr_hwaddr.sa_data[i] = hwaddr[i];
 
 	int ret = ioctl (ctl, SIOCSIFHWADDR, &ifr);
@@ -275,20 +268,14 @@ int iface_retrieve_hwaddr (uint8_t*hwaddr)
 		return 2;
 	}
 
-	for (int i = 0;i < hwaddr_size;++i)
-		cached_hwaddr[i] = ifr.ifr_hwaddr.sa_data[i];
+	for (int i = 0;i < 6;++i)
+		cached_hwaddr.addr[i] = ifr.ifr_hwaddr.sa_data[i];
 
-	Log_info ("iface has mac address %02x:%02x:%02x:%02x:%02x:%02x",
-	          cached_hwaddr[0],
-	          cached_hwaddr[1],
-	          cached_hwaddr[2],
-	          cached_hwaddr[3],
-	          cached_hwaddr[4],
-	          cached_hwaddr[5]);
+	Log_info ("iface has mac address %s", cached_hwaddr.format_addr().c_str() );
 
 	if (!hwaddr) return 0;
 
-	for (int i = 0;i < hwaddr_size;++i)
+	for (int i = 0;i < 6;++i)
 		hwaddr[i] = ifr.ifr_hwaddr.sa_data[i];
 
 	return 0;
@@ -321,7 +308,7 @@ int iface_set_hwaddr (uint8_t*addr)
 	ifr.ifr_addr.sa_len = ETHER_ADDR_LEN;
 	ifr.ifr_addr.sa_family = AF_LINK;
 
-	for (int i = 0;i < hwaddr_size;++i)
+	for (int i = 0;i < 6;++i)
 #ifndef __OpenBSD__
 		e.octet[i]
 #else
@@ -359,21 +346,15 @@ int iface_retrieve_hwaddr (uint8_t*hwaddr)
 		if ( (p->ifa_addr->sa_family == AF_LINK) &&
 		        (!strncmp (p->ifa_name, iface_name, IFNAMSIZ) ) ) {
 
-			struct sockaddr_dl *sdp =
-						    (struct sockaddr_dl*) (p->ifa_addr);
+			struct sockaddr_dl *sdp;
+			sdp = (struct sockaddr_dl*) (p->ifa_addr);
 
-			memcpy (cached_hwaddr, sdp->sdl_data + sdp->sdl_nlen, 6);
+			cached_hwaddr.set (0, sdp->sdl_data + sdp->sdl_nlen, 6);
 
-			Log_info ("iface has mac address %02x:%02x:%02x:%02x:%02x:%02x",
-			          cached_hwaddr[0],
-			          cached_hwaddr[1],
-			          cached_hwaddr[2],
-			          cached_hwaddr[3],
-			          cached_hwaddr[4],
-			          cached_hwaddr[5]);
+			Log_info ("iface has mac address %s", cached_hwaddr.format_addr().c_str() );
 
-			if (hwaddr) memcpy (hwaddr,
-				                    sdp->sdl_data + sdp->sdl_nlen, 6);
+			if (hwaddr)
+				memcpy (hwaddr, sdp->sdl_data + sdp->sdl_nlen, 6);
 
 			freeifaddrs (ifap);
 			return 0;
@@ -462,12 +443,12 @@ void iface_poll_read()
 
 		if (ret <= 0) return;
 
-		if (ret <= 2 + (2*hwaddr_size) ) {
+		if (ret <= 2 + (2*6) ) {
 			Log_debug ("iface_update: discarding packet too short for Ethernet");
 			continue;
 		}
 
-		//TODO route_packet (buffer, ret);
+		send_packet ( (uint8_t*) buffer, ret);
 	}
 }
 
@@ -476,20 +457,98 @@ void iface_poll_read()
  */
 
 int gate = -1;
+bool promisc = false;
+uint16_t inst = 0xDEFA;
+#define proto 0xE78A
+
+squeue recv_q;
+squeue send_q;
+#define send_q_max 1024*1024 //let this be enough for everyone
+
+void send_route();
+int gate_poll_write();
+
+void gate_init()
+{
+	int t;
+	if (config_get_int ("instance", t) ) inst = t;
+	if (config_is_true ("promisc") ) promisc = true;
+}
 
 int gate_connect()
 {
+	string s;
+	if (!config_get ("gate", s) ) {
+		Log_fatal ("please specify a gate");
+		return -1;
+	}
 
+	gate = tcp_connect_socket (s.c_str() );
+	if (gate < 0) {
+		Log_fatal ("cannot open a connection to gate");
+		return 1;
+	}
+
+	send_route(); //announce our wishes
+
+	return 0;
 }
 
 int gate_disconnect()
 {
+	tcp_close_socket (gate);
+	gate = -1;
+}
 
+void send_route()
+{
+	if (gate < 0) return;
+	if (send_q.len() > send_q_max) return;
+	if (cached_hwaddr.addr.size() != 6) return;
+
+	uint8_t*b = send_q.get_buffer (3);
+	*b = 2;
+	* (uint16_t*) (b + 1) = htons (12 + (promisc ? 6 : 0) );
+	b = send_q.get_buffer (12 + (promisc ? 6 : 0) );
+	* (uint16_t*) (b) = htons (6);
+	* (uint32_t*) (b + 2) = htonl ( (proto << 16) | inst);
+	copy (cached_hwaddr.addr.begin(),
+	      cached_hwaddr.addr.end(), b + 6);
+	if (promisc) {
+		b += 12;
+		* (uint16_t*) (b) = htons (0);
+		* (uint32_t*) (b + 2) = htonl ( (proto << 16) | inst);
+	}
+	gate_poll_write();
 }
 
 void send_keepalive()
 {
+	if (gate < 0) return;
+	if (send_q.len() > send_q_max) return;
+	uint8_t*b = send_q.get_buffer (3);
+	*b = 1;
+	* (uint16_t*) (b + 1) = 0;
+	gate_poll_write();
+}
 
+void send_packet (uint8_t*data, int size)
+{
+	if (gate < 0) return;
+	if (send_q.len() > send_q_max) return;
+	if (size < 14) return;
+	uint8_t*b = send_q.get_buffer (3 + 14 + size);
+	*b = 3;
+	* (uint16_t*) (b + 1) = 14 + size;
+	b += 3;
+	* (uint32_t*) (b) = htonl ( (proto << 16) | inst);
+	* (uint16_t*) (b + 4) = htons (0);//dof
+	* (uint16_t*) (b + 6) = htons (6);//ds
+	* (uint16_t*) (b + 8) = htons (6);//sof
+	* (uint16_t*) (b + 10) = htons (6);//ss
+	* (uint16_t*) (b + 12) = htons (size);
+	memcpy (b + 14, data, size);
+	gate_poll_write();
 }
 
 void handle_keepalive()
@@ -497,12 +556,12 @@ void handle_keepalive()
 	send_keepalive();
 }
 
-void handle_packet()
+void handle_packet (uint8_t*data, int size)
 {
 
 }
 
-void send_packet()
+void try_parse_input()
 {
 }
 
