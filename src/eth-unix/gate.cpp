@@ -458,8 +458,13 @@ void iface_poll_read()
 
 int gate = -1;
 bool promisc = false;
+
 uint16_t inst = 0xDEFA;
 #define proto 0xE78A
+
+uint8_t cached_header_type = 0;
+uint16_t cached_header_size = 0;
+
 
 squeue recv_q;
 squeue send_q;
@@ -489,6 +494,8 @@ int gate_connect()
 		return 1;
 	}
 
+	sock_nonblock (gate);
+
 	send_route(); //announce our wishes
 
 	return 0;
@@ -498,6 +505,9 @@ int gate_disconnect()
 {
 	tcp_close_socket (gate);
 	gate = -1;
+	cached_header_type=0;
+	send_q.clear();
+	recv_q.clear();
 }
 
 void send_route()
@@ -558,21 +568,93 @@ void handle_keepalive()
 
 void handle_packet (uint8_t*data, int size)
 {
+	uint32_t instance;
+	uint16_t dof, ds, sof, ss, s;
+	if (size < 28) return;
+	instance = ntohl (* (uint32_t*) (data) );
+	dof = ntohs (* (uint16_t*) (data + 4) );
+	ds = ntohs (* (uint16_t*) (data + 6) );
+	sof = ntohs (* (uint16_t*) (data + 8) );
+	ss = ntohs (* (uint16_t*) (data + 10) );
+	s = ntohs (* (uint16_t*) (data + 12) );
 
+	if (instance != (proto << 16) | inst) return;
+	if ( (dof != 0) || (ds != 6) || (sof != 6) || (ss != 6) ) return;
+	if (s < 14) return;
+	iface_write (data + 14, s);
 }
 
 void try_parse_input()
 {
+	while (1) {
+		if (!cached_header_type) {
+			if (recv_q.len() < 3) return;
+			recv_q.pop<uint8_t> (cached_header_type);
+			recv_q.pop<uint16_t> (cached_header_size);
+			cached_header_size = ntohs (cached_header_size);
+		}
+		switch (cached_header_type) {
+		case 1: //keepalive
+			handle_keepalive();
+			recv_q.read (cached_header_size);
+			cached_header_type = 0;
+			break;
+		case 3: //packet
+			if (recv_q.len() < cached_header_size) //need more
+				return;
+			handle_packet (recv_q.begin(), cached_header_size);
+			recv_q.read (cached_header_size);
+			cached_header_type = 0;
+			break;
+		default:
+			Log_error ("received invalid packet");
+			gate_disconnect();
+			return;
+		}
+	}
 }
 
 int gate_poll_read()
 {
+	int r;
+	uint8_t*b;
+	while (1) {
+		if (gate < 0) return 1;
 
+		b = recv_q.get_buffer (8192);
+		if (!b) return 0; //out of memory, just wait with receiving.
+		r = recv (gate, b, 8192, 0);
+		if (r == 0) {
+			gate_disconnect();
+			return 1;
+		}
+		if (r < 0) {
+			if (errno == EAGAIN) return 0;
+			gate_disconnect();
+			return 1;
+		}
+		recv_q.append (r);
+		try_parse_input();
+	}
 }
 
 int gate_poll_write()
 {
-
+	int r;
+	while (send_q.len() ) {
+		r = send (gate, send_q.begin(), send_q.len(), 0);
+		if (r == 0) {
+			gate_disconnect();
+			return 1;
+		}
+		if (r < 0) {
+			if (errno == EAGAIN) return 0;
+			gate_disconnect();
+			return 1;
+		}
+		send_q.read (r);
+	}
+	return 0;
 }
 
 /*
