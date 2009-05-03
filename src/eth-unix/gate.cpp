@@ -604,7 +604,7 @@ void handle_packet (uint8_t*data, int size)
 	ss = ntohs (* (uint16_t*) (data + 10) );
 	s = ntohs (* (uint16_t*) (data + 12) );
 
-	if (instance != (proto << 16) | inst) return;
+	if (instance != ( (proto << 16) | inst) ) return;
 	if ( (dof != 0) || (ds != 6) || (sof != 6) || (ss != 6) ) return;
 	if (s < 14) return;
 	iface_write (data + 14, s);
@@ -702,7 +702,6 @@ int do_poll()
 	FD_ZERO (&e);
 	FD_SET (gate, &r);
 	if (send_q.len() ) FD_SET (gate, &w);
-	Log_info ("send_q.len is %d", send_q.len() );
 	FD_SET (gate, &e);
 	FD_SET (tun, &r);
 	FD_SET (tun, &e);

@@ -434,11 +434,11 @@ void connection::handle_broadcast_packet (uint8_t*buf, int len)
 	}
 
 	uint16_t dof, ds, sof, ss, s, ttl;
-	uint32_t inst, id;
+	uint32_t inst, ID;
 
 	if (len < 20) goto error;
 
-	id = ntohl (* (uint32_t*) buf);
+	ID = ntohl (* (uint32_t*) buf);
 	ttl = ntohs (* (uint16_t*) (buf + 4) );
 	inst = ntohl (* (uint32_t*) (buf + 6) );
 	dof = ntohs (* (uint16_t*) (buf + 10) );
@@ -453,7 +453,7 @@ void connection::handle_broadcast_packet (uint8_t*buf, int len)
 		goto error;
 
 	stat_packet (true, len + p_head_size);
-	route_broadcast_packet (id, ttl, inst, dof, ds, sof, ss, s, buf + 20, id);
+	route_broadcast_packet (ID, ttl, inst, dof, ds, sof, ss, s, buf + 20, id);
 	return;
 error:
 	Log_info ("connection %d broadcast read corruption", id);

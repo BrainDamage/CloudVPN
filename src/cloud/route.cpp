@@ -339,9 +339,6 @@ void route_packet (uint32_t inst,
 	if (s < dof + ds ) return; //invalid packet
 	if (!ds) return; //can't do zero destination
 
-	Log_info ("routing packet: %d %d %d %d %d %d from %d",
-	          inst, dof, ds, sof, ss, s, from);
-
 	int result;
 	bool need_send = true;
 
@@ -357,6 +354,7 @@ void route_packet (uint32_t inst,
 	} else {
 		r = route.find (a);
 		if ( (r == route.end() ) || a.is_broadcast() ) goto broadcast;
+		result = r->second.id;
 	}
 
 	//send it to local promiscs
@@ -410,9 +408,6 @@ void route_broadcast_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 	if (s < dof + ds) return; //invalid one
 	if (!ds) return; //cant do zero destination
 
-	Log_info ("routing broadcast: %d %d %d %d %d %d %d %d from %d",
-	          id, ttl, inst, dof, ds, sof, ss, s, from);
-
 	if (queue_already_broadcasted (id) ) return; //check duplicates
 	queue_add_id (id);
 
@@ -453,12 +448,12 @@ broadcast:
 
 	map<int, gate>::iterator
 	j = gate_gates().begin(),
-	    je = gate_gates().begin();
+	    je = gate_gates().end();
 
 	for (;j != je;++j) {
-		if (j->first == from) continue; //dont send back
+		if (j->first == - (from + 1) ) continue; //dont send back
 		if (j->second.fd < 0) continue; //ready only
-		if (! (j->second.instances.count (address (inst, 0, 0) ) ) )
+		if (! (j->second.instances.count (p) ) )
 			continue;
 
 		j->second.send_packet (inst, dof, ds, sof, ss, s, buf);
