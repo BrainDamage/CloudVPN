@@ -266,6 +266,87 @@ Should be achievable on Win64, though not tested.
 This section lists all configuration options available for running CloudVPN
 core and some of the most important CloudVPN gates/auth daemons.
 
-heh. todo.
+Options consist of pairs name/value, which can be specified on commandline
+(using 'program -name value -name value' syntax), or using config files, where
+name/value pairs are written line-by-line, first word of each line being name,
+rest value. #-beginning lines are comments.
+
+There's a special @include option, which loads the config file. So, to start
+something with a config file, you can use 'program -@include /etc/program.conf'
+
+Boolean values are used with 'yes' or 'no'. Also, note that multiple options of
+same name can be specified and valid. If program needs only one of given
+options, then the last specified one is valid.
+
+	COMMON
+user
+group
+chroot
+mlockall	--security options
+
+max_input_queue_size   --memory limit
+
+tcp_nodelay
+ip_tos
+listen_backlog	--socket parameters
 
 
+	ETH-UNIX
+
+instance
+promisc		--usuable for bridging
+
+tunctl		--TAP configuration
+iface_dev	--dev name
+iface_persist	--persistent bool
+iface_device	--for BSDs, pathname to /dev/tunX or something
+
+gate		--cloud connection point
+
+	CLOUD
+
+heartbeat
+poll_interval
+
+ca
+key
+cert
+crl
+dh
+
+comm_close_timeout
+conn-mtu
+conn_keepalive
+conn_retry
+conn_timeout
+max_connections
+max_remote_routes
+max_waiting_data_size
+max_waiting_proto_size
+max_gates
+
+connect
+gate
+listen
+
+br_id_cache_size
+route_broadcast_ttl
+route_max_dist
+report_ping_changes_above
+multipath
+multipath_ratio
+
+status-file
+status-interval
+status-verbose
+
+tls_loglevel
+tls_prio_str
+
+red-ratio
+uplimit-burst
+uplimit-conn
+uplimit-total
+downlimit-burst
+downlimit-conn
+downlimit-total
