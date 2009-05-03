@@ -288,4 +288,18 @@ bool sockaddr_from_str (const char *str,
 	return true;
 }
 
+int sock_get_error (int fd)
+{
+	int e;
+	socklen_t e_len = sizeof (e);
+	if (getsockopt (fd, SOL_SOCKET, SO_ERROR,
+#ifdef __WIN32__
+	                (char*)
+#endif
+	                & e, &e_len) ) return -666;
+	if (e == EINPROGRESS) return 1;
+	if (!e) return 0;
+	Log_warn ("socket %d error %d", fd, e);
+	return -e;
+}
 

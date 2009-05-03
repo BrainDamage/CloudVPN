@@ -140,7 +140,6 @@ void gate::add_packet_header (pbuffer&b, uint8_t type, uint16_t size)
 
 void gate::handle_keepalive()
 {
-	Log_info ("handling keepalive");
 	last_activity = timestamp();
 }
 
@@ -210,7 +209,6 @@ error:
 void gate::send_keepalive()
 {
 	if (!can_send() ) return;
-	Log_info ("sending keepalive");
 	pbuffer& p = new_send();
 	add_packet_header (p, pt_keepalive, 0);
 	poll_write();
@@ -241,12 +239,8 @@ void gate::try_parse_input()
 try_more:
 	if (fd < 0) return;
 
-	Log_info ("trying to parse");
-
 	if (!cached_header_type)
 		if (!parse_packet_header() ) return;
-
-	Log_info ("packet input (%d/%d)", cached_header_type, cached_header_size);
 
 	switch (cached_header_type) {
 	case pt_keepalive:
@@ -358,7 +352,7 @@ void gate::poll_write()
 
 		if (r < 0) {
 			if (errno != EAGAIN) {
-				Log_info ("gate %d write error", id);
+				Log_error ("gate %d write error", id);
 				reset();
 			} else poll_set_add_write (fd);
 			return;
@@ -370,8 +364,8 @@ void gate::poll_write()
 		}
 
 		if (n < r) {
-			Log_error ("something strange at %d with send(%d)",
-			           id, fd);
+			Log_warn ("something strange at %d with send(%d)",
+			          id, fd);
 			return;
 		}
 
@@ -390,17 +384,13 @@ void gate_listener_poll (int fd)
 {
 	if (listeners.find (fd) == listeners.end() ) return;
 
-	Log_info ("trying to accept a gate");
-
 	int r = accept (fd, 0, 0);
 	if (r < 0)
 		if (errno == EAGAIN) {
-			Log_info ("lol, no connection");
 			return;
 		} else Log_warn ("gate accept(%d) failed with %d (%s)",
 			                 fd, errno, strerror (errno) );
 	else {
-		Log_info ("gate accepted on fd %d", r);
 		if (!sock_nonblock (r) ) {
 			Log_error ("cannot set gate socket %d to nonblocking mode", r);
 			close (r);

@@ -475,13 +475,13 @@ void connection::handle_route (bool set, uint8_t*data, int n)
 		remote_ping = ntohl (* (uint32_t*) data);
 		remote_dist = ntohl (* (uint32_t*) (data + 4) );
 		instance = ntohl (* (uint32_t*) (data + 8) );
-		s = ntohl (* (uint32_t*) (data + 12) );
+		s = ntohs (* (uint16_t*) (data + 12) );
 		if (n < 14 + (int) s) goto error;
 
 		if (remote_ping) remote_routes
-			[address (instance,data,s) ] =
+			[address (instance,data+14,s) ] =
 			    remote_route (remote_ping, remote_dist);
-		else remote_routes.erase (address (instance, data, s) );
+		else remote_routes.erase (address (instance, data + 14, s) );
 		n -= 14 + s;
 	}
 
@@ -867,22 +867,8 @@ void connection::try_accept()
 
 void connection::try_connect()
 {
-	int e = -1, t;
-	socklen_t e_len = sizeof (e);
-
-	t = getsockopt (fd, SOL_SOCKET, SO_ERROR,
-#ifdef __WIN32__
-	                (char*)
-#endif
-	                & e, &e_len);
-
-	if (t) {
-		Log_error ("getsockopt(%d) failed with errno %d", fd, errno);
-		reset();
-		return;
-	}
-
-	if (e == EINPROGRESS) {
+	//test if the socket is writeable, otherwise still in progress
+	if (!tcp_socket_writeable (fd) ) {
 		if ( (timestamp() - last_ping) > (unsigned int) timeout) {
 			Log_error ("timeout connecting %d", fd);
 			reset();
@@ -890,36 +876,43 @@ void connection::try_connect()
 		} else return;
 	}
 
-	if (e == 0) {
-		//test if the socket is writeable, otherwise still in progress
-		if (!tcp_socket_writeable (fd) ) return;
+	int e = sock_get_error (fd);
 
-
-		//print a nice info about who are we connected to
-		sockaddr_type addr;
-		socklen_t s = sizeof (sockaddr_type);
-		if (getpeername (fd, & (addr.sa), &s) )
-			Log_info ("conn %d connected to unknown peer", id);
-		else {
-			peer_addr_str = sockaddr_to_str (& (addr.sa) );
-			Log_info ("conn %d connected to address %s",
-			          id, peer_addr_str.c_str() );
-		}
-
-		peer_connected_since = timestamp();
-
-		poll_set_remove_write (fd);
-		poll_set_add_read (fd); //always needed
-		state = cs_ssl_connecting;
-		if (alloc_ssl (false) ) {
-			Log_error ("conn %d failed to allocate SSL stuff", id);
-			reset();
-		} else try_ssl_connect();
+	if (e < 0) {
+		Log_error ("connecting %d failed with errno %d", id, -e);
+		reset();
 		return;
 	}
 
-	Log_error ("connecting %d failed with %d", fd, e);
-	reset();
+	if (e > 0) {
+		if ( (timestamp() - last_ping) > (unsigned int) timeout) {
+			Log_error ("timeout connecting %d", fd);
+			reset();
+			return;
+		} else return;
+	}
+
+	//print a nice info about who are we connected to
+	sockaddr_type addr;
+	socklen_t s = sizeof (sockaddr_type);
+	if (getpeername (fd, & (addr.sa), &s) )
+		Log_info ("conn %d connected to unknown peer", id);
+	else {
+		peer_addr_str = sockaddr_to_str (& (addr.sa) );
+		Log_info ("conn %d connected to address %s",
+		          id, peer_addr_str.c_str() );
+	}
+
+	peer_connected_since = timestamp();
+
+	poll_set_remove_write (fd);
+	poll_set_add_read (fd); //always needed
+	state = cs_ssl_connecting;
+	if (alloc_ssl (false) ) {
+		Log_error ("conn %d failed to allocate SSL stuff", id);
+		reset();
+	} else try_ssl_connect();
+	return;
 }
 
 void connection::try_ssl_connect()

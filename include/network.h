@@ -71,6 +71,7 @@ int tcp_close_socket (int fd, bool unlink = false);
 int network_init();
 int sockoptions_set (int fd);
 int tcp_socket_writeable (int fd);
+int sock_get_error (int fd);
 
 #endif
 

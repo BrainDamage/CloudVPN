@@ -473,6 +473,7 @@ squeue send_q;
 
 void send_route();
 int gate_poll_write();
+int gate_disconnect();
 
 void gate_init()
 {
@@ -496,23 +497,31 @@ int gate_connect()
 		return 1;
 	}
 
-	fd_set set;
-	FD_ZERO (&set);
-	FD_SET (gate, &set);
+	fd_set w;
+	FD_ZERO (&w);
+	FD_SET (gate, &w);
 	struct timeval to;
 	to.tv_sec = 30;
 	to.tv_usec = 0;
 
-	if (select (gate + 1, 0, &set, &set, &to) <= 0) {
+	int r;
+
+	if ( (r = select (gate + 1, 0, &w, 0, &to) ) <= 0) {
 		Log_fatal ("Connection to gate timed out");
-		tcp_close_socket (gate);
-		gate = -1;
+		gate_disconnect();
 		return 2;
+	}
+
+	int err;
+	if ( (err = sock_get_error (gate) ) != 0) {
+		Log_fatal ("Connection to fd failed with %d", -err);
+		gate_disconnect();
+		return 3;
 	}
 
 	send_route(); //announce our wishes
 
-	return 0;
+	return (gate > 0) ? 0 : 4;
 }
 
 int gate_disconnect()
@@ -580,7 +589,6 @@ void send_packet (uint8_t*data, int size)
 
 void handle_keepalive()
 {
-	Log_info ("keepalive handled");
 	send_keepalive();
 }
 
@@ -634,7 +642,6 @@ void try_parse_input()
 
 int gate_poll_read()
 {
-	Log_info ("gate_poll_read");
 	int r;
 	uint8_t*b;
 	while (1) {
@@ -659,11 +666,9 @@ int gate_poll_read()
 
 int gate_poll_write()
 {
-	Log_info ("poll_write");
 	int r;
 	while (send_q.len() ) {
 		r = send (gate, send_q.begin(), send_q.len(), 0);
-		Log_info ("send() returned %d", r);
 		if (r == 0) {
 			gate_disconnect();
 			return 1;
@@ -697,6 +702,7 @@ int do_poll()
 	FD_ZERO (&e);
 	FD_SET (gate, &r);
 	if (send_q.len() ) FD_SET (gate, &w);
+	Log_info ("send_q.len is %d", send_q.len() );
 	FD_SET (gate, &e);
 	FD_SET (tun, &r);
 	FD_SET (tun, &e);
@@ -738,12 +744,13 @@ int main (int argc, char**argv)
 
 	while (!g_terminate) {
 		if (gate < 0) { //try connection
-			if (gate_connect() && (!g_terminate) ) {
+			if (gate_connect() ) {
+				if (g_terminate) break;
 				Log_info ("gate reconnection in 10s");
 				struct timeval to = {10, 0};
 				select (0, 0, 0, 0, &to); //reconnection timeout
 			}
-		} else { //try some working shit
+		} else { //try some work
 			do_poll();
 		}
 	}

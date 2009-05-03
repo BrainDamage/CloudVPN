@@ -273,7 +273,6 @@ void route_update()
 			if (!k->addr.size() )
 				promisc.insert (pair<address, route_info>
 				                (*k, temp) );
-			Log_info ("added a gate route");
 		}
 	}
 
@@ -339,6 +338,9 @@ void route_packet (uint32_t inst,
 {
 	if (s < dof + ds ) return; //invalid packet
 	if (!ds) return; //can't do zero destination
+
+	Log_info ("routing packet: %d %d %d %d %d %d from %d",
+	          inst, dof, ds, sof, ss, s, from);
 
 	int result;
 	bool need_send = true;
@@ -407,6 +409,9 @@ void route_broadcast_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 {
 	if (s < dof + ds) return; //invalid one
 	if (!ds) return; //cant do zero destination
+
+	Log_info ("routing broadcast: %d %d %d %d %d %d %d %d from %d",
+	          id, ttl, inst, dof, ds, sof, ss, s, from);
 
 	if (queue_already_broadcasted (id) ) return; //check duplicates
 	queue_add_id (id);
