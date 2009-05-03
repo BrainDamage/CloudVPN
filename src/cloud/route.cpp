@@ -268,7 +268,12 @@ void route_update()
 		if (g->second.fd < 0) continue;
 		for (k = g->second.local.begin();
 		        k != g->second.local.end();++k) {
-			route[*k] = route_info (1, 0, - (1 + g->second.id) );
+			route_info temp (1, 0, - (1 + g->second.id) );
+			route[*k] = temp;
+			if (!k->addr.size() )
+				promisc.insert (pair<address, route_info>
+				                (*k, temp) );
+			Log_info ("added a gate route");
 		}
 	}
 

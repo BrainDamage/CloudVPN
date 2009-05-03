@@ -90,6 +90,7 @@ gate::gate (int ID)
 {
 	id = ID;
 	fd = -1;
+	cached_header_type = cached_header_size = 0;
 }
 
 gate::gate()
