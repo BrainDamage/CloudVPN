@@ -34,7 +34,7 @@ static char hexc (int i)
 {
 	if ( (i < 0) || (i >= 16) ) return '?';
 	if (i < 10) return '0' + i;
-	return 'a' + i; //There I Selected Lowercase Lol!
+	return 'a' + i - 10; //There I Selected Lowercase Lol!
 }
 
 string address::format_addr() const
@@ -42,11 +42,11 @@ string address::format_addr() const
 	if (!addr.size() ) return string ("null");
 	string t;
 	vector<uint8_t>::const_iterator i;
-	t.reserve (addr.size() - 1);
+	t.reserve (3*addr.size() - 1);
 	for (i = addr.begin();i < addr.end();
-	        ( { if ( (++i) != addr.end() ) t.append (':', 1); }) ) {
-			t.append (hexc (*i / 0x10), 1);
-			t.append (hexc (*i % 0x10), 1);
+	        ( { if ( (++i) != addr.end() ) t.append (1, ':'); }) ) {
+			t.append (1, hexc (*i / 0x10) );
+			t.append (1, hexc (*i % 0x10) );
 		}
 
 	return t;
@@ -56,7 +56,7 @@ string address::format() const
 {
 	string t = "        ." + format_addr();
 	int i;
-	for (i = 0;i < 8;++i) t[i] = hexc ( (inst >> (4 * i) ) & 0xF);
+	for (i = 0;i < 8;++i) t[7-i] = hexc ( (inst >> (4 * i) ) % 16);
 	return t;
 }
 

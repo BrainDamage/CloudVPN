@@ -139,6 +139,7 @@ void gate::add_packet_header (pbuffer&b, uint8_t type, uint16_t size)
 
 void gate::handle_keepalive()
 {
+	Log_info ("handling keepalive");
 	last_activity = timestamp();
 }
 
@@ -164,6 +165,8 @@ try_more:
 	local.push_back (address() );
 	local.back().set (inst, data + 6, asize);
 	instances.insert (address (inst, 0, 0) );
+	Log_info ("gate %d handling address %s",
+	          id, local.back().format().c_str() );
 	data += 6 + asize;
 	size -= 6 + asize;
 	goto try_more;
@@ -206,8 +209,10 @@ error:
 void gate::send_keepalive()
 {
 	if (!can_send() ) return;
+	Log_info ("sending keepalive");
 	pbuffer& p = new_send();
 	add_packet_header (p, pt_keepalive, 0);
+	poll_write();
 }
 
 void gate::send_packet (uint32_t inst,
@@ -227,6 +232,7 @@ void gate::send_packet (uint32_t inst,
 	p.push<uint16_t> (htons (ss) );
 	p.push<uint16_t> (htons (size) );
 	p.push (data, size);
+	poll_write();
 }
 
 void gate::try_parse_input()
@@ -234,8 +240,12 @@ void gate::try_parse_input()
 try_more:
 	if (fd < 0) return;
 
+	Log_info ("trying to parse");
+
 	if (!cached_header_type)
 		if (!parse_packet_header() ) return;
+
+	Log_info ("packet input (%d/%d)", cached_header_type, cached_header_size);
 
 	switch (cached_header_type) {
 	case pt_keepalive:
@@ -279,6 +289,7 @@ void gate::periodic_update()
 void gate::start()
 {
 	poll_set_add_read (fd);
+	send_keepalive();
 }
 
 void gate::reset()
@@ -322,10 +333,9 @@ void gate::poll_read()
 				reset();
 			}
 			return;
-		} else {
-			recv_q.append (r);
-			try_parse_input();
 		}
+		recv_q.append (r);
+		try_parse_input();
 	}
 }
 
@@ -379,27 +389,32 @@ void gate_listener_poll (int fd)
 {
 	if (listeners.find (fd) == listeners.end() ) return;
 
+	Log_info ("trying to accept a gate");
+
 	int r = accept (fd, 0, 0);
 	if (r < 0)
-		if (errno == EAGAIN) return;
-		else Log_warn ("gate accept(%d) failed with %d (%s)",
-			               fd, errno, strerror (errno) );
+		if (errno == EAGAIN) {
+			Log_info ("lol, no connection");
+			return;
+		} else Log_warn ("gate accept(%d) failed with %d (%s)",
+			                 fd, errno, strerror (errno) );
 	else {
-		sockoptions_set (fd);
-		if (!sock_nonblock (fd) ) {
-			Log_error ("cannot set gate socket %d to nonblocking mode", fd);
-			close (fd);
+		Log_info ("gate accepted on fd %d", r);
+		if (!sock_nonblock (r) ) {
+			Log_error ("cannot set gate socket %d to nonblocking mode", r);
+			close (r);
 			return;
 		}
+		sockoptions_set (r);
 		int i = gate_alloc();
 		if (i < 0) {
 			Log_error ("too many gates already open");
-			close (fd);
+			close (r);
 			return;
 		}
 
 		gate&g = gates[i];
-		g.set_fd (fd);
+		g.set_fd (r);
 		g.last_activity = timestamp();
 		g.start();
 	}

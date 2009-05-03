@@ -15,6 +15,7 @@
 #include "conf.h"
 #include "address.h"
 #include "network.h"
+#include "sighandler.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -491,10 +492,23 @@ int gate_connect()
 	gate = tcp_connect_socket (s.c_str() );
 	if (gate < 0) {
 		Log_fatal ("cannot open a connection to gate");
+		gate = -1;
 		return 1;
 	}
 
-	sock_nonblock (gate);
+	fd_set set;
+	FD_ZERO (&set);
+	FD_SET (gate, &set);
+	struct timeval to;
+	to.tv_sec = 30;
+	to.tv_usec = 0;
+
+	if (select (gate + 1, 0, &set, &set, &to) <= 0) {
+		Log_fatal ("Connection to gate timed out");
+		tcp_close_socket (gate);
+		gate = -1;
+		return 2;
+	}
 
 	send_route(); //announce our wishes
 
@@ -505,7 +519,7 @@ int gate_disconnect()
 {
 	tcp_close_socket (gate);
 	gate = -1;
-	cached_header_type=0;
+	cached_header_type = 0;
 	send_q.clear();
 	recv_q.clear();
 }
@@ -514,12 +528,15 @@ void send_route()
 {
 	if (gate < 0) return;
 	if (send_q.len() > send_q_max) return;
-	if (cached_hwaddr.addr.size() != 6) return;
+	if (cached_hwaddr.addr.size() != 6) {
+		Log_info ("bad hwaddr");
+		return;
+	}
 
-	uint8_t*b = send_q.get_buffer (3);
+	uint8_t*b = send_q.append_buffer (3);
 	*b = 2;
 	* (uint16_t*) (b + 1) = htons (12 + (promisc ? 6 : 0) );
-	b = send_q.get_buffer (12 + (promisc ? 6 : 0) );
+	b = send_q.append_buffer (12 + (promisc ? 6 : 0) );
 	* (uint16_t*) (b) = htons (6);
 	* (uint32_t*) (b + 2) = htonl ( (proto << 16) | inst);
 	copy (cached_hwaddr.addr.begin(),
@@ -536,7 +553,7 @@ void send_keepalive()
 {
 	if (gate < 0) return;
 	if (send_q.len() > send_q_max) return;
-	uint8_t*b = send_q.get_buffer (3);
+	uint8_t*b = send_q.append_buffer (3);
 	*b = 1;
 	* (uint16_t*) (b + 1) = 0;
 	gate_poll_write();
@@ -547,9 +564,9 @@ void send_packet (uint8_t*data, int size)
 	if (gate < 0) return;
 	if (send_q.len() > send_q_max) return;
 	if (size < 14) return;
-	uint8_t*b = send_q.get_buffer (3 + 14 + size);
+	uint8_t*b = send_q.append_buffer (3 + 14 + size);
 	*b = 3;
-	* (uint16_t*) (b + 1) = 14 + size;
+	* (uint16_t*) (b + 1) = htons (14 + size);
 	b += 3;
 	* (uint32_t*) (b) = htonl ( (proto << 16) | inst);
 	* (uint16_t*) (b + 4) = htons (0);//dof
@@ -563,6 +580,7 @@ void send_packet (uint8_t*data, int size)
 
 void handle_keepalive()
 {
+	Log_info ("keepalive handled");
 	send_keepalive();
 }
 
@@ -616,6 +634,7 @@ void try_parse_input()
 
 int gate_poll_read()
 {
+	Log_info ("gate_poll_read");
 	int r;
 	uint8_t*b;
 	while (1) {
@@ -640,9 +659,11 @@ int gate_poll_read()
 
 int gate_poll_write()
 {
+	Log_info ("poll_write");
 	int r;
 	while (send_q.len() ) {
 		r = send (gate, send_q.begin(), send_q.len(), 0);
+		Log_info ("send() returned %d", r);
 		if (r == 0) {
 			gate_disconnect();
 			return 1;
@@ -663,11 +684,72 @@ int gate_poll_write()
 
 int do_poll()
 {
+	if (gate < 0) return 1;
+
+	fd_set r, w, e;
+	struct timeval to;
+
+	to.tv_sec = 3;
+	to.tv_usec = 141592;
+
+	FD_ZERO (&r);
+	FD_ZERO (&w);
+	FD_ZERO (&e);
+	FD_SET (gate, &r);
+	if (send_q.len() ) FD_SET (gate, &w);
+	FD_SET (gate, &e);
+	FD_SET (tun, &r);
+	FD_SET (tun, &e);
+
+	int res = select (gate > tun ? gate + 1 : tun + 1, &r, &w, &e, &to);
+	if (res <= 0) return res ? 1 : 0;
+
+	if (FD_ISSET (tun, &r) ) iface_poll_read();
+	if (FD_ISSET (gate, &w) ) gate_poll_write();
+	if (FD_ISSET (gate, &r) || FD_ISSET (gate, &e) ) gate_poll_read();
+
 	return 0;
 }
 
-int main()
+int g_terminate = 0;
+void kill_gate (int signum)
 {
+	Log_info ("killed by signal %d, will terminate", signum);
+	g_terminate = 1;
+}
+
+int main (int argc, char**argv)
+{
+	setup_sighandler (kill_gate);
+
+	if (!config_parse (argc, argv) ) {
+		Log_error ("failed to parse config");
+		return 1;
+	}
+
+	squeue_init();
+	network_init();
+	gate_init();
+
+	if (iface_create() ) {
+		Log_fatal ("cannot create tun/tap iface");
+		return 2;
+	}
+
+	while (!g_terminate) {
+		if (gate < 0) { //try connection
+			if (gate_connect() && (!g_terminate) ) {
+				Log_info ("gate reconnection in 10s");
+				struct timeval to = {10, 0};
+				select (0, 0, 0, 0, &to); //reconnection timeout
+			}
+		} else { //try some working shit
+			do_poll();
+		}
+	}
+
+	iface_destroy();
+
 	return 0;
 }
 

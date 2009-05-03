@@ -83,6 +83,12 @@ public:
 		if (back > d.size() ) back = d.size();
 	};
 
+	inline uint8_t* append_buffer (size_t size) {
+		uint8_t*res = get_buffer (size);
+		append (size);
+		return res;
+	}
+
 	void realloc (size_t reserve_size = 0);
 
 	template<class T> inline void pop (T&t) {

@@ -35,7 +35,7 @@ int run_cloudvpn (int argc, char**argv)
 	int heartbeat_usec = 50000; //20Hz is ok by default
 	uint64_t last_beat = 0;
 
-	Log_info ("cloudvpn: starting");
+	Log_info ("cloudvpn starting");
 	Log (FATAL + 1, "You are using CloudVPN, which is Free software.");
 	Log (FATAL + 1, "For more information please see the GNU GPL license,");
 	Log (FATAL + 1, "which you should have received along with this program.");
@@ -144,14 +144,14 @@ failed_gate:
 
 failed_poll:
 failed_config:
-	if (!ret) Log_info ("cloudvpn: exiting gracefully");
-	else Log_error ("cloudvpn: exiting with code %d", ret);
+	if (!ret) Log_info ("cloudvpn exiting gracefully");
+	else Log_error ("cloudvpn exiting with code %d", ret);
 	return ret;
 }
 
 void kill_cloudvpn (int signum)
 {
-	Log_info ("cloudvpn: killed by signal %d, will terminate", signum);
+	Log_info ("cloudvpn killed by signal %d, will terminate", signum);
 	g_terminate = 1;
 }
 

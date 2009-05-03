@@ -177,6 +177,7 @@ int tcp_connect_socket (const char*addr)
 		if (e != EINPROGRESS) {
 			Log_error ("connect(%d) to `%s' failed with %d",
 			           s, addr, e);
+			close (s);
 			return -4;
 		}
 	}
