@@ -462,7 +462,7 @@ int gate = -1;
 bool promisc = false;
 
 uint16_t inst = 0xDEFA;
-#define proto 0xE78A
+uint16_t proto 0xE78A;
 
 uint8_t cached_header_type = 0;
 uint16_t cached_header_size = 0;
@@ -474,12 +474,13 @@ squeue send_q;
 
 void send_route();
 int gate_poll_write();
-int gate_disconnect();
+void gate_disconnect();
 
 void gate_init()
 {
 	int t;
 	if (config_get_int ("instance", t) ) inst = t;
+	if (config_get_int ("proto", t) ) proto = t;
 	if (config_is_true ("promisc") ) promisc = true;
 }
 
@@ -525,7 +526,7 @@ int gate_connect()
 	return (gate > 0) ? 0 : 4;
 }
 
-int gate_disconnect()
+void gate_disconnect()
 {
 	tcp_close_socket (gate);
 	gate = -1;
@@ -605,7 +606,7 @@ void handle_packet (uint8_t*data, int size)
 	ss = ntohs (* (uint16_t*) (data + 10) );
 	s = ntohs (* (uint16_t*) (data + 12) );
 
-	if (instance != ( (proto << 16) | inst) ) return;
+	if (instance != (uint32_t) ( (proto << 16) | inst) ) return;
 	if ( (dof != 0) || (ds != 6) || (sof != 6) || (ss != 6) ) return;
 	if (s < 14) return;
 	iface_write (data + 14, s);

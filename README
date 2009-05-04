@@ -304,6 +304,7 @@ listen_backlog	--socket parameters
 	ETH-UNIX
 
 instance
+proto		--dont set this, its good as it is.
 promisc		--usuable for bridging
 
 tunctl		--TAP configuration
