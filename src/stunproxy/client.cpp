@@ -30,6 +30,7 @@
 #include <stdint.h>
 
 #include <map>
+#include <set>
 using namespace std;
 
 bool forwarder; //false if we are listener
@@ -52,7 +53,7 @@ void reset()
 	udp_fd = -1;
 	local_fd = -1;
 	local_up = tunnel_up = waiting_for_connect = false;
-	tunnel_activity = 0;
+	last_tunnel_activity = 0;
 	sent_parts.clear();
 	recvd_parts.clear();
 	acks_to_send.clear();
