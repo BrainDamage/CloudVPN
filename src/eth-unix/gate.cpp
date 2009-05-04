@@ -462,7 +462,7 @@ int gate = -1;
 bool promisc = false;
 
 uint16_t inst = 0xDEFA;
-uint16_t proto 0xE78A;
+uint16_t proto = 0xE78A;
 
 uint8_t cached_header_type = 0;
 uint16_t cached_header_size = 0;
