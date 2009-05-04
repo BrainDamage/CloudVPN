@@ -70,7 +70,13 @@ bool config_get_int (const string&name, int&val)
 {
 	string t;
 	if (config_get (name, t) ) {
-		if (1 == sscanf (t.c_str(), "%d", &val) )
+		if (!t.length() ) {
+			Log_warn ("config string `%s'empty", name.c_str() );
+		}
+
+		bool hex = (t[0] == 'x') || (t[0] == 'X');
+
+		if (1 == sscanf (t.c_str() + (hex ? 1 : 0), hex ? "%x" : "%d", &val) )
 			return true;
 		else Log_warn ("could not parse value `%s' of `%s' to integer",
 			               t.c_str(), name.c_str() );

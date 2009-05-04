@@ -286,7 +286,8 @@ something with a config file, you can use 'program -@include /etc/program.conf'
 
 Boolean values are used with 'yes' or 'no'. Also, note that multiple options of
 same name can be specified and valid. If program needs only one of given
-options, then the last specified one is valid.
+options, then the last specified one is valid. When setting a number, start
+with 'x' character to set a hexadecimal value.
 
 	COMMON
 user
