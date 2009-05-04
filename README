@@ -335,6 +335,7 @@ route_max_dist
 report_ping_changes_above
 multipath
 multipath_ratio
+shared_uplink
 
 status-file
 status-interval

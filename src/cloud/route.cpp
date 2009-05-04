@@ -195,6 +195,8 @@ static int route_report_ping_diff = 5000;
 static int route_max_dist = 64;
 static int default_broadcast_ttl = 128;
 
+static bool shared_uplink = false;
+
 static void report_route();
 
 void route_init()
@@ -222,6 +224,9 @@ void route_init()
 	if (!config_get_int ("route_broadcast_ttl", t) ) t = 64;
 	Log_info ("maximal node distance is %d", t);
 	route_max_dist = t;
+
+	if (shared_uplink = config_is_true ("shared_uplink") )
+		Log_info ("sharing uplink for broadcasts");
 }
 
 void route_shutdown()
@@ -400,6 +405,15 @@ static void send_broadcast_to_id (int to,
 	}
 }
 
+template<class iter> static iter random_select (iter s, iter e)
+{	//OMG. STL can't have SGI extensions everywhere!
+	int n;
+	for (n = 0;e != s;--e, ++n);
+	n = rand() % n;
+	for (;n > 0;++s, --n);
+	return s;
+}
+
 void route_broadcast_packet (uint32_t id, uint16_t ttl, uint32_t inst,
                              uint16_t dof, uint16_t ds,
                              uint16_t sof, uint16_t ss,
@@ -435,6 +449,14 @@ void route_broadcast_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 		//if we don't know any promiscs, broadcast
 		if (i == e) goto broadcast;
 
+		if (shared_uplink) { //in this case, select random promisc
+			send_broadcast_to_id (random_select (i, e)->second.id,
+			                      id, ttl,
+			                      inst, dof, ds, sof, ss, s, buf);
+			return;
+		}
+
+		//else feed them all
 		for (;i != e;++i) {
 			if (from == i->second.id) continue;
 			if (nosend && (nosendid == i->second.id) ) continue;
@@ -465,6 +487,13 @@ broadcast:
 	i = comm_connections().begin(),
 	    e = comm_connections().end();
 
+	if (shared_uplink) {
+		random_select (i, e)->second
+		.write_broadcast_packet (id, ttl - 1, inst,
+		                         dof, ds, sof, ss, s, buf);
+		return;
+
+	}
 	for (;i != e;++i) {
 		if (i->first == from) continue; //dont send back
 		if (i->second.state != cs_active) continue; //ready only
