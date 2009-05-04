@@ -15,7 +15,7 @@
  *
  * configuration:
  *
- * listen, forward: local addresses to connect
+ * listen, forward: local addresses to listen/connect. Pick only one.
  * key: shared key to use for stunconn
  * stunconn: some address to stunconn server.
  */
@@ -32,40 +32,39 @@
 #include <map>
 using namespace std;
 
-int udp_fd, proxy_fd;
+bool forwarder; //false if we are listener
 
-class conn
+int udp_fd = -1, local_fd = -1;
+bool waiting_for_connect;
+bool tunnel_up;
+bool local_up; //otherwise local listening
+
+sockaddr_type tunnel_addr;
+uint64_t last_tunnel_activity;
+
+map<uint32_t, pbuffer>sent_parts;
+map<uint32_t, pbuffer>recvd_parts;
+set<uint32_t>acks_to_send;
+uint32_t send_head, recv_head;
+
+void reset()
 {
-public:
-	int fd;
-	int id;
+	udp_fd = -1;
+	local_fd = -1;
+	local_up = tunnel_up = waiting_for_connect = false;
+	tunnel_activity = 0;
+	sent_parts.clear();
+	recvd_parts.clear();
+	acks_to_send.clear();
+	send_head = recv_head = 0;
+}
 
-	//sending part
-	uint32_t next_send_packet;
-	uint64_t last_send_time;
-	map<uint32_t, pbuffer> waiting_acks;
-
-	//receiving part
-	uint32_t next_recv_packet;
-	uint64_t last_recv_time;
-	map<uint32_t, pbuffer>recvd;
-};
-
-map<uint32_t, conn>conns;
-
-uint64_t last_udp_received;
-
-int handle_udp()
+void tunnel_establish()
 {
 
 }
 
-int handle_connect()
-{
-
-}
-
-int handle_accept()
+void tunnel_send_keepalive()
 {
 
 }
@@ -80,6 +79,31 @@ int get_peer_ip()
 
 }
 
+void start_local_accept()
+{
+
+}
+
+void accept_local()
+{
+
+}
+
+void connect_local()
+{
+
+}
+
+void tunnel_try_start_transfer()
+{
+
+}
+
+void process_data()
+{
+
+}
+
 int wait_and_poll()
 {
 
@@ -87,12 +111,12 @@ int wait_and_poll()
 
 int init()
 {
-
+	reset();
 }
 
 int shutdown()
 {
-
+	reset();
 }
 
 int main()
