@@ -14,6 +14,7 @@
 
 #ifndef __WIN32__
 #include "conf.h"
+#define LOGNAME "common/security"
 #include "log.h"
 
 #include <unistd.h>

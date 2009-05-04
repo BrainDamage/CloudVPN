@@ -12,6 +12,7 @@
 
 #include "gate.h"
 
+#define LOGNAME "cloud/gate"
 #include "log.h"
 #include "conf.h"
 #include "poll.h"

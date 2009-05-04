@@ -16,6 +16,7 @@
 #include "route.h"
 #include "comm.h"
 #include "conf.h"
+#define LOGNAME "cloud/status"
 #include "log.h"
 
 #include <string>

@@ -10,9 +10,10 @@
  * if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "cloudvpn.h"
+#include "cloud.h"
 
 #include "sq.h"
+#define LOGNAME "cloud"
 #include "log.h"
 #include "comm.h"
 #include "conf.h"
@@ -29,7 +30,7 @@
 
 int g_terminate = 0;
 
-int run_cloudvpn (int argc, char**argv)
+int main (int argc, char**argv)
 {
 	int ret = 0;
 	int heartbeat_usec = 50000; //20Hz is ok by default

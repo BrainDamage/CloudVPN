@@ -44,13 +44,15 @@ static const char* loglevel_mark (int level)
 	}
 }
 
+#define DATEFORMAT "%Y-%m-%d %H:%M:%S: "
+
 void Log (int lvl, const char*fmt, ...)
 {
 	if (lvl < log_level) return;
 	char date_buf[65];
 	time_t t = time (0);
 
-	strftime (date_buf, 64, "%c: ", localtime (&t) );
+	strftime (date_buf, 64, DATEFORMAT, localtime (&t) );
 	fputs (date_buf, output_file);
 	fputs (loglevel_mark (lvl), output_file);
 
@@ -70,10 +72,10 @@ void Log_full (int lvl, const char*file, int line,
 	char date_buf[65];
 	time_t t = time (0);
 
-	strftime (date_buf, 64, "%c: ", localtime (&t) );
+	strftime (date_buf, 64, DATEFORMAT, localtime (&t) );
 	fputs (date_buf, output_file);
 	fputs (loglevel_mark (lvl), output_file);
-	fprintf (output_file, "in `%s' line %d:\t", file, line);
+	fprintf (output_file, "%s@%d:\t", file, line);
 
 	va_list ap;
 	va_start (ap, fmt);

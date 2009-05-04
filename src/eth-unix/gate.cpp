@@ -11,6 +11,7 @@
  */
 
 #include "sq.h"
+#define LOGNAME "eth-unix"
 #include "log.h"
 #include "conf.h"
 #include "address.h"

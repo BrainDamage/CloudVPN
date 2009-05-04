@@ -12,7 +12,7 @@
 
 #include "poll.h"
 
-
+#define LOGNAME "cloud/poll"
 #include "log.h"
 #include "timestamp.h"
 

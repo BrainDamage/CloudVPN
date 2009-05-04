@@ -12,6 +12,7 @@
 
 #include "route.h"
 
+#define LOGNAME "cloud/route"
 #include "log.h"
 #include "conf.h"
 #include "gate.h"

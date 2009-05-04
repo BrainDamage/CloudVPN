@@ -11,6 +11,7 @@
  */
 
 #include "conf.h"
+#define LOGNAME "common/conf"
 #include "log.h"
 
 #include <iostream>

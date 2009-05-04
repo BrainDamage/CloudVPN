@@ -11,6 +11,7 @@
  */
 
 #include "network.h"
+#define LOGNAME "common/network"
 #include "log.h"
 #include "conf.h"
 

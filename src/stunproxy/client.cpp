@@ -21,6 +21,7 @@
  */
 
 #include "sq.h"
+#define LOGNAME "stunproxy"
 #include "log.h"
 #include "conf.h"
 #include "network.h"
@@ -50,8 +51,9 @@ public:
 	map<uint32_t, pbuffer>recvd;
 };
 
-map<int, conn>conns;
+map<uint32_t, conn>conns;
 
+uint64_t last_udp_received;
 
 int handle_udp()
 {
@@ -68,12 +70,12 @@ int handle_accept()
 
 }
 
-int stun_request()
+int get_external_ip()
 {
 
 }
 
-int http_request()
+int get_peer_ip()
 {
 
 }

@@ -11,6 +11,7 @@
  */
 
 #include "sq.h"
+#define LOGNAME "common/sq"
 #include "log.h"
 #include "conf.h"
 

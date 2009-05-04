@@ -13,6 +13,7 @@
 #include "comm.h"
 
 #include "conf.h"
+#define LOGNAME "cloud/comm"
 #include "log.h"
 #include "poll.h"
 #include "route.h"

@@ -11,7 +11,7 @@
  */
 
 #include "sighandler.h"
-
+#define LOGNAME "common/sighandler"
 #include "log.h"
 
 
