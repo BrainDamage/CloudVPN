@@ -195,6 +195,7 @@ static int route_dirty = 0;
 static int route_report_ping_diff = 5000;
 static int route_max_dist = 64;
 static int default_broadcast_ttl = 128;
+static int hop_penalization = 100;
 
 static bool shared_uplink = false;
 
@@ -225,6 +226,10 @@ void route_init()
 	if (!config_get_int ("route_broadcast_ttl", t) ) t = 64;
 	Log_info ("maximal node distance is %d", t);
 	route_max_dist = t;
+
+	if (!config_get_int ("route_hop_penalization", t) ) t = 100;
+	Log_info ("hop penalization is %d%%", t);
+	hop_penalization = t;
 
 	if (shared_uplink = config_is_true ("shared_uplink") )
 		Log_info ("sharing uplink for broadcasts");
@@ -282,6 +287,8 @@ void route_update()
 		}
 	}
 
+	int pp = 0;
+
 	for (i = cons.begin();i != cons.end();++i) {
 		if (i->second.state != cs_active)
 			continue;
@@ -294,11 +301,16 @@ void route_update()
 				continue;
 
 			if (route.count (j->first) ) {
-				if (route[j->first].ping <
-				        (2 + j->second.ping + i->second.ping) )
+
+				pp = route[j->first].ping
+				     * (100 + hop_penalization)
+				     * route[j->first].dist
+				     / 100;
+
+				if (pp < (2 + j->second.ping + i->second.ping) )
 					continue;
-				if ( (route[j->first].ping ==
-				        (2 + j->second.ping + i->second.ping) )
+				if ( (pp == (2 + j->second.ping
+				             + i->second.ping) )
 				        && ( route[j->first].dist <
 				             (1 + j->second.dist) ) ) continue;
 			}

@@ -344,6 +344,7 @@ listen
 br_id_cache_size
 route_broadcast_ttl
 route_max_dist
+route_hop_penalization
 report_ping_changes_above
 multipath
 multipath_ratio
