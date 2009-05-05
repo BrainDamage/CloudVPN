@@ -71,19 +71,15 @@ This section describes all the hacks used in how routing works.
 Every node in the network handles packets, pings, and route information.
 
 Packet is an unified datagram with source address, destination address, and
-data.
+data, that comes also with a broadcast packet ID and TTL entry.
 
-Broadcast packet comes also with a broadcast packet ID and TTL entry.
+TTL and packet ID exist only for avoiding packet duplication.
 
 Route information is an address-destination info shared among nodes. Route
 entry consists of address, measured ping to given address, and distance of
 address.
 
 Route entries are sent as a block, but, better, as a "diff" from last state.
-
-Address, that is meant as a broadcast address, is distinguished by having least
-significant bit of the first byte set to 1. Broadcast-mark of address doesn't
-anyhow relate with broadcast-type packet.
 
 All route entries from all connections are merged to a table, which provides
 fast packet-routing-direction lookup.
@@ -143,6 +139,8 @@ and authenticators.
 	those are indexed from the packet payload:
 
 		PACKET---
+		32b packet ID
+		16b packet TTL
 		32b instance ID
 		16b dest offset
 		16b dest size
@@ -151,7 +149,7 @@ and authenticators.
 		16b payload size
 		payload
 
-	This adds 14 bytes header to each packet, which is acceptable.
+	This adds 20 bytes header to each packet, which is acceptable.
 
 3] Route entry format
 	
@@ -186,10 +184,9 @@ and authenticators.
 	1 - route-set         -- used to report state of routes
 	2 - route-diff        -- used to update state of routes
 	3 - packet            -- used to send packets
-	4 - broadcast-packet  -- used to send broadcast packets
-	5 - echo-request      -- ping
-	6 - echo-reply        -- pong
-	7 - route-request     -- used to request complete route-set packet
+	4 - echo-request      -- ping
+	5 - echo-reply        -- pong
+	6 - route-request     -- used to request complete route-set packet
 
 	Special field is used for ID-ing the pings, otherwise it should be zero.
 
@@ -197,7 +194,6 @@ and authenticators.
 
 	Payload can contain:
 	- packet structure, in case we transfer packet
-	- broadcast ID, TTL and packet structure, in case we transfer broadcast
 	- list of route entries when we report or update route informaton
 	
 	When handling route-diff, and remote ping is equal to zero, it means
@@ -341,7 +337,7 @@ connect
 gate
 listen
 
-br_id_cache_size
+packet_id_cache_size
 route_broadcast_ttl
 route_max_dist
 route_hop_penalization

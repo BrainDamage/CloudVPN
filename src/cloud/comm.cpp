@@ -359,11 +359,10 @@ void connection::deindex()
 //packet header numbers
 #define pt_route_set 1
 #define pt_route_diff 2
-#define pt_eth_frame 3
-#define pt_broadcast 4
-#define pt_echo_request 5
-#define pt_echo_reply 6
-#define pt_route_request 7
+#define pt_packet 3
+#define pt_echo_request 4
+#define pt_echo_reply 5
+#define pt_route_request 6
 
 //sizes
 #define p_head_size 4
@@ -403,38 +402,6 @@ void connection::handle_packet (uint8_t*buf, int len)
 		dbl_over += len + 4;
 	}
 
-	uint16_t dof, ds, sof, ss, s;
-	uint32_t inst;
-
-	if (len < 14) goto error;
-
-	inst = ntohl ( * (uint32_t*) buf);
-	dof = ntohs ( * (uint16_t*) (buf + 4) );
-	ds = ntohs ( * (uint16_t*) (buf + 6) );
-	sof = ntohs ( * (uint16_t*) (buf + 8) );
-	ss = ntohs ( * (uint16_t*) (buf + 10) );
-	s = ntohs ( * (uint16_t*) (buf + 12) );
-
-	if ( (len < 14 + (int) s)
-	        || (s < (int) dof + (int) ds)
-	        || (s < (int) sof + (int) ss) )
-		goto error;
-
-	stat_packet (true, len + p_head_size);
-	route_packet (inst, dof, ds, sof, ss, s, buf + 14, id);
-	return;
-error:
-	Log_info ("connection %d packet read corruption", id);
-	reset();
-}
-
-void connection::handle_broadcast_packet (uint8_t*buf, int len)
-{
-	if (dbl_enabled) {
-		if (dbl_over > (unsigned int) dbl_burst) return;
-		dbl_over += len + 4;
-	}
-
 	uint16_t dof, ds, sof, ss, s, ttl;
 	uint32_t inst, ID;
 
@@ -455,7 +422,7 @@ void connection::handle_broadcast_packet (uint8_t*buf, int len)
 		goto error;
 
 	stat_packet (true, len + p_head_size);
-	route_broadcast_packet (ID, ttl, inst, dof, ds, sof, ss, s, buf + 20, id);
+	route_packet (ID, ttl, inst, dof, ds, sof, ss, s, buf + 20, id);
 	return;
 error:
 	Log_info ("connection %d broadcast read corruption", id);
@@ -541,34 +508,11 @@ pbuffer& connection::new_proto (size_t size)
 	return proto_q.back();
 }
 
-void connection::write_packet (uint32_t inst,
+void connection::write_packet (uint32_t id, uint16_t ttl,
+                               uint32_t inst,
                                uint16_t dof, uint16_t ds,
                                uint16_t sof, uint16_t ss,
                                uint16_t s, const uint8_t*buf)
-{
-	size_t size = p_head_size + 14 + s;
-	if (!can_write_data (size) ) {
-		try_write();
-		return;
-	}
-	if (s > mtu) return;
-	pbuffer& b = new_data (size);
-	add_packet_header (b, pt_eth_frame, 0, 14 + s);
-	b.push<uint32_t> (htonl (inst) );
-	b.push<uint16_t> (htons (dof) );
-	b.push<uint16_t> (htons (ds) );
-	b.push<uint16_t> (htons (sof) );
-	b.push<uint16_t> (htons (ss) );
-	b.push<uint16_t> (htons (s) );
-	b.push ( (uint8_t*) buf, s);
-	try_write();
-}
-
-void connection::write_broadcast_packet (uint32_t id, uint16_t ttl,
-        uint32_t inst,
-        uint16_t dof, uint16_t ds,
-        uint16_t sof, uint16_t ss,
-        uint16_t s, const uint8_t*buf)
 {
 	size_t size = p_head_size + 20 + s;
 	if (!can_write_data (size) ) {
@@ -577,7 +521,7 @@ void connection::write_broadcast_packet (uint32_t id, uint16_t ttl,
 	}
 	if (s > mtu) return;
 	pbuffer& b = new_data (size);
-	add_packet_header (b, pt_broadcast, 0, 20 + s);
+	add_packet_header (b, pt_packet, 0, 20 + s);
 	b.push<uint32_t> (htonl (id) );
 	b.push<uint16_t> (htons (ttl) );
 	b.push<uint32_t> (htonl (inst) );
@@ -671,8 +615,7 @@ try_more:
 	switch (cached_header.type) {
 	case pt_route_set:
 	case pt_route_diff:
-	case pt_eth_frame:
-	case pt_broadcast:
+	case pt_packet:
 		if (recv_q.len() >=
 		        (unsigned int) cached_header.size) {
 			switch (cached_header.type) {
@@ -684,13 +627,9 @@ try_more:
 				handle_route (false, recv_q.begin(),
 				              cached_header.size);
 				break;
-			case pt_eth_frame:
+			case pt_packet:
 				handle_packet (recv_q.begin(),
 				               cached_header.size);
-				break;
-			case pt_broadcast:
-				handle_broadcast_packet (recv_q.begin(),
-				                         cached_header.size);
 				break;
 			}
 			recv_q.read (cached_header.size);

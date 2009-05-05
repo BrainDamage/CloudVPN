@@ -58,7 +58,7 @@ static size_t queue_max_size = 1024;
 static void queue_init()
 {
 	int t;
-	if (!config_get_int ("br_id_cache_size", t) ) t = 1024;
+	if (!config_get_int ("packet_id_cache_size", t) ) t = 1024;
 	Log_info ("broadcast ID cache size is %d", t);
 	queue_max_size = t;
 }
@@ -77,7 +77,7 @@ static void queue_add_id (uint32_t id)
 	queue_age.push (id);
 }
 
-static bool queue_already_broadcasted (uint32_t id)
+static bool queue_already_sent (uint32_t id)
 {
 	if (queue_items.count (id) ) return true;
 	return false;
@@ -198,7 +198,13 @@ static int route_max_dist = 64;
 static int default_broadcast_ttl = 128;
 static int hop_penalization = 100;
 
+
 static bool shared_uplink = false;
+
+uint16_t new_packet_ttl()
+{
+	return default_broadcast_ttl;
+}
 
 static void report_route();
 
@@ -332,20 +338,11 @@ void route_update()
 	report_route();
 }
 
-void route_packet (uint32_t inst,
-                   uint16_t dof, uint16_t ds,
-                   uint16_t sof, uint16_t ss,
-                   uint16_t s, const uint8_t*buf, int from)
-{
-	route_broadcast_packet (new_packet_uid(), default_broadcast_ttl,
-	                        inst, dof, ds, sof, ss, s, buf, from);
-}
-
-static void send_broadcast_to_id (int to,
-                                  uint32_t id, uint16_t ttl, uint32_t inst,
-                                  uint16_t dof, uint16_t ds,
-                                  uint16_t sof, uint16_t ss,
-                                  uint16_t s, const uint8_t*buf)
+static void send_packet_to_id (int to,
+                               uint32_t id, uint16_t ttl, uint32_t inst,
+                               uint16_t dof, uint16_t ds,
+                               uint16_t sof, uint16_t ss,
+                               uint16_t s, const uint8_t*buf)
 {
 	if (to < 0) {
 		map<int, gate>::iterator g =
@@ -356,9 +353,9 @@ static void send_broadcast_to_id (int to,
 		map<int, connection>::iterator c =
 		    comm_connections().find (to);
 		if (c == comm_connections().end() ) return;
-		c->second.write_broadcast_packet (id, ttl - 1,
-		                                  inst, dof, ds, sof, ss,
-		                                  s, buf);
+		c->second.write_packet (id, ttl - 1,
+		                        inst, dof, ds, sof, ss,
+		                        s, buf);
 	}
 }
 
@@ -371,15 +368,15 @@ template<class iter> static iter random_select (iter s, iter e)
 	return s;
 }
 
-void route_broadcast_packet (uint32_t id, uint16_t ttl, uint32_t inst,
-                             uint16_t dof, uint16_t ds,
-                             uint16_t sof, uint16_t ss,
-                             uint16_t s, const uint8_t*buf, int from)
+void route_packet (uint32_t id, uint16_t ttl, uint32_t inst,
+                   uint16_t dof, uint16_t ds,
+                   uint16_t sof, uint16_t ss,
+                   uint16_t s, const uint8_t*buf, int from)
 {
 	if (s < dof + ds) return; //invalid one
 	if (!ds) return; //cant do zero destination
 
-	if (queue_already_broadcasted (id) ) return; //check duplicates
+	if (queue_already_sent (id) ) return; //check duplicates
 	queue_add_id (id);
 
 	route_update();
@@ -394,9 +391,9 @@ void route_broadcast_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 		if (do_multiroute) {
 			if (multiroute_scatter (a, from, &nosendid) ) {
 				nosend = true;
-				send_broadcast_to_id (nosendid, id, ttl,
-				                      inst, dof, ds,
-				                      sof, ss, s, buf);
+				send_packet_to_id (nosendid, id, ttl,
+				                   inst, dof, ds,
+				                   sof, ss, s, buf);
 			}
 		} else {
 			map<address, route_info>::iterator dest
@@ -405,9 +402,9 @@ void route_broadcast_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 			        && (from != dest->second.id) ) {
 				nosendid = dest->second.id;
 				nosend = true;
-				send_broadcast_to_id (dest->second.id, id, ttl,
-				                      inst, dof, ds,
-				                      sof, ss, s, buf);
+				send_packet_to_id (dest->second.id, id, ttl,
+				                   inst, dof, ds,
+				                   sof, ss, s, buf);
 			}
 		}
 
@@ -421,8 +418,8 @@ void route_broadcast_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 		if (shared_uplink) { //in this case, select random promisc
 			int t = random_select (i, e)->second.id;
 			if ( (t == from) || (nosend && (t == nosendid) ) ) return;
-			send_broadcast_to_id ( t, id, ttl,
-			                       inst, dof, ds, sof, ss, s, buf);
+			send_packet_to_id ( t, id, ttl,
+			                    inst, dof, ds, sof, ss, s, buf);
 			return;
 		}
 
@@ -435,8 +432,8 @@ void route_broadcast_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 			if (nosend && ( (i->second.id >= 0)
 			                || (nosendid == i->second.id) ) ) continue;
 
-			send_broadcast_to_id (i->second.id, id, ttl,
-			                      inst, dof, ds, sof, ss, s, buf);
+			send_packet_to_id (i->second.id, id, ttl,
+			                   inst, dof, ds, sof, ss, s, buf);
 		}
 		return;
 	}
@@ -464,8 +461,8 @@ broadcast:
 
 	if (shared_uplink) {
 		random_select (i, e)->second
-		.write_broadcast_packet (id, ttl - 1, inst,
-		                         dof, ds, sof, ss, s, buf);
+		.write_packet (id, ttl - 1, inst,
+		               dof, ds, sof, ss, s, buf);
 		return;
 
 	}
@@ -473,8 +470,8 @@ broadcast:
 		if (i->first == from) continue; //dont send back
 		if (i->second.state != cs_active) continue; //ready only
 
-		i->second.write_broadcast_packet (id, ttl - 1, inst,
-		                                  dof, ds, sof, ss, s, buf);
+		i->second.write_packet (id, ttl - 1, inst,
+		                        dof, ds, sof, ss, s, buf);
 	}
 }
 

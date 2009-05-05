@@ -100,20 +100,15 @@ public:
 	 */
 
 	void handle_packet (uint8_t*data, int len);
-	void handle_broadcast_packet (uint8_t*data, int len);
 	void handle_route (bool set, uint8_t*data, int len);
 	void handle_ping (uint8_t id);
 	void handle_pong (uint8_t id);
 	void handle_route_request ();
 
-	void write_packet (uint32_t inst,
+	void write_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 	                   uint16_t dof, uint16_t ds,
 	                   uint16_t sof, uint16_t ss,
 	                   uint16_t s, const uint8_t*buf);
-	void write_broadcast_packet (uint32_t id, uint16_t ttl, uint32_t inst,
-	                             uint16_t dof, uint16_t ds,
-	                             uint16_t sof, uint16_t ss,
-	                             uint16_t s, const uint8_t*buf);
 	void write_route_set (uint8_t*data, int n);
 	void write_route_diff (uint8_t*data, int n);
 	void write_ping (uint8_t id);

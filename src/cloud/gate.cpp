@@ -199,7 +199,7 @@ void gate::handle_packet (uint16_t size, const uint8_t*data)
 	if ( (int) sof + (int) ss + 14 > (int) size) goto error;
 	if ( (int) dof + (int) ds + 14 > (int) size) goto error;
 
-	route_packet (inst, dof, ds, sof, ss, s, data + 14, - (id + 1) );
+	route_new_packet (inst, dof, ds, sof, ss, s, data + 14, - (id + 1) );
 
 	return;
 error:
