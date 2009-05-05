@@ -118,7 +118,7 @@ int iface_create()
 	//set nonblocking mode. Please note that failing this IS fatal.
 
 	if (!sock_nonblock (tun) ) {
-		Log_fatal ("iface: sock_nonblock failed on fd %d, probably terminating.");
+		Log_fatal ("iface: sock_nonblock failed on fd %d, probably terminating.", tun);
 		close (tun);
 		tun = -1;
 		return 3;
@@ -136,7 +136,7 @@ int iface_create()
 
 			if (iface_set_hwaddr (new_mac.addr.begin().base() ) )
 				Log_error ("setting hwaddr failed, using default");
-		} else Log_warn ("`%s' is not a valid mac address, using default");
+		} else Log_warn ("`%s' is not a valid mac address, using default", mac.c_str() );
 	} else iface_retrieve_hwaddr (0); //only cache the mac
 
 	Log_info ("iface initialized OK");
@@ -193,7 +193,7 @@ int iface_create()
 
 			if (iface_set_hwaddr (new_mac.addr.begin().base() ) )
 				Log_error ("setting hwaddr failed, using default");
-		} else Log_warn ("`%s' is not a valid mac address, using default");
+		} else Log_warn ("`%s' is not a valid mac address, using default", mac.c_str() );
 	} else iface_retrieve_hwaddr (0); //only cache the mac
 
 	Log_info ("iface: initialized OK");

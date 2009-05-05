@@ -310,7 +310,8 @@ static int connect_connection (const string&addr)
 {
 	int cid = connection_alloc();
 	if (cid < 0) {
-		Log_warn ("connection limit %d hit, will NOT connect to `%s'");
+		Log_warn ("connection limit %d hit, will NOT connect to `%s'",
+		          max_connections, addr.c_str() );
 		Log_info ("consider increasing the limit");
 		return 1;
 	}
@@ -731,7 +732,7 @@ bool connection::try_read()
 		buf = recv_q.get_buffer (4096); //alloc a buffer
 
 		if (!buf) {
-			Log_error ("cannot allocate enough buffer space for connection %d");
+			Log_error ("cannot allocate enough buffer space for connection %d", id);
 			disconnect();
 			return false;
 		}
@@ -1478,7 +1479,8 @@ static int comm_connections_init()
 
 	for (i = c.begin();i != c.end();++i)
 		if (connect_connection (*i) ) {
-			Log_error ("couldn't start connection to `%s'");
+			Log_error ("couldn't start connection to `%s'",
+			           i->c_str() );
 			return 1;
 		}
 

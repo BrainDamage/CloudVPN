@@ -101,7 +101,7 @@ gate::gate()
 	fd = -1; //at least kill it asap.
 
 #ifdef CVPN_SEGV_ON_HARD_FAULT
-	Log_fatal ("quiz: only thing that can help now is a s-----t");
+	Log_fatal ("quiz: only thing that can help now is a s------t");
 	* ( (int*) 0) = 0x1337;
 #endif
 }
@@ -325,7 +325,7 @@ void gate::poll_read()
 			return;
 		} else if (r < 0) {
 			if (errno != EAGAIN) {
-				Log_warn ("gate %d read error");
+				Log_warn ("gate %d read error", id);
 				reset();
 			}
 			return;
