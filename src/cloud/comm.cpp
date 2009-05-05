@@ -271,7 +271,7 @@ static int try_accept_connection (int sock)
 	int s = accept (sock, & (addr.sa), &addrsize);
 	if (s < 0) {
 		if ( (errno == EAGAIN) || (!errno) ) return 0;
-		Log_error ("accept(%d) failed with %d", errno);
+		Log_error ("accept(%d) failed with %d", sock, errno);
 		return 1;
 	}
 
