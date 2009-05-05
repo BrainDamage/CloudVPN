@@ -37,9 +37,9 @@ int main (int argc, char**argv)
 	uint64_t last_beat = 0;
 
 	Log_info ("cloudvpn starting");
-	Log (FATAL + 1, "You are using CloudVPN, which is Free software.");
-	Log (FATAL + 1, "For more information please see the GNU GPL license,");
-	Log (FATAL + 1, "which you should have received along with this program.");
+	Log (0, "You are using CloudVPN, which is Free software.");
+	Log (0, "For more information please see the GNU GPL license,");
+	Log (0, "which you should have received along with this program.");
 
 	setup_sighandler (kill_cloudvpn);
 

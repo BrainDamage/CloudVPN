@@ -19,7 +19,7 @@
 /*
  * Log_info is verbose enough by default. Debug not shown.
  */
-static int log_level = 1;
+static int log_level = LOG_INFO;
 
 void log_setlevel (int l)
 {
@@ -29,15 +29,15 @@ void log_setlevel (int l)
 static const char* loglevel_mark (int level)
 {
 	switch (level) {
-	case DEBUG:
+	case LOG_DEBUG:
 		return "debug ";
-	case INFO:
+	case LOG_INFO:
 		return "(info) ";
-	case WARN:
+	case LOG_WARN:
 		return "* warning ";
-	case ERROR:
+	case LOG_ERROR:
 		return "*** Error ";
-	case FATAL:
+	case LOG_FATAL:
 		return "FATAL ";
 	default:
 		return "";
@@ -48,7 +48,7 @@ static const char* loglevel_mark (int level)
 
 void Log (int lvl, const char*fmt, ...)
 {
-	if (lvl < log_level) return;
+	if (lvl > log_level) return;
 	char date_buf[65];
 	time_t t = time (0);
 
@@ -68,7 +68,7 @@ void Log (int lvl, const char*fmt, ...)
 void Log_full (int lvl, const char*file, int line,
                const char*fmt, ...)
 {
-	if (lvl < log_level) return;
+	if (lvl > log_level) return;
 	char date_buf[65];
 	time_t t = time (0);
 

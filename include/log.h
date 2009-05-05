@@ -22,21 +22,21 @@ void Log_full (int level, const char*file, int line,
                const char*fmt, ...);
 void log_setlevel (int level);
 
-#define DEBUG 0
-#define INFO 1
-#define WARN 2
-#define ERROR 3
-#define FATAL 4
+#define LOG_FATAL 1
+#define LOG_ERROR 2
+#define LOG_WARN 3
+#define LOG_INFO 4
+#define LOG_DEBUG 5
 
 #ifndef LOGNAME
 #define LOGNAME __FILE__
 #endif
 
-#define Log_debug(fmt,params...) Log_full(DEBUG,LOGNAME,__LINE__,fmt,##params)
-#define Log_info(fmt,params...) Log_full(INFO,LOGNAME,__LINE__,fmt,##params)
-#define Log_warn(fmt,params...) Log_full(WARN,LOGNAME,__LINE__,fmt,##params)
-#define Log_error(fmt,params...) Log_full(ERROR,LOGNAME,__LINE__,fmt,##params)
-#define Log_fatal(fmt,params...) Log_full(FATAL,LOGNAME,__LINE__,fmt,##params)
+#define Log_debug(fmt,params...) Log_full(LOG_DEBUG,LOGNAME,__LINE__,fmt,##params)
+#define Log_info(fmt,params...) Log_full(LOG_INFO,LOGNAME,__LINE__,fmt,##params)
+#define Log_warn(fmt,params...) Log_full(LOG_WARN,LOGNAME,__LINE__,fmt,##params)
+#define Log_error(fmt,params...) Log_full(LOG_ERROR,LOGNAME,__LINE__,fmt,##params)
+#define Log_fatal(fmt,params...) Log_full(LOG_FATAL,LOGNAME,__LINE__,fmt,##params)
 
 #endif
 
