@@ -386,7 +386,7 @@ static bool parse_packet_header (squeue&q, uint8_t&type,
 	type = t;
 	q.pop<uint8_t> (t);
 	special = t;
-	uint16_t t2;
+	uint16_t t2 = 0;
 	q.pop<uint16_t> (t2);
 	size = ntohs (t2);
 	return true;

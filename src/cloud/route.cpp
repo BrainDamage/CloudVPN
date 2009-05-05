@@ -287,7 +287,7 @@ void route_update()
 		}
 	}
 
-	int pp = 0;
+	uint64_t pp = 0;
 
 	for (i = cons.begin();i != cons.end();++i) {
 		if (i->second.state != cs_active)
@@ -302,7 +302,7 @@ void route_update()
 
 			if (route.count (j->first) ) {
 
-				pp = route[j->first].ping
+				pp = (uint64_t) (route[j->first].ping)
 				     * (100 + hop_penalization)
 				     * route[j->first].dist
 				     / 100;
@@ -443,7 +443,7 @@ void route_broadcast_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 	address a (inst, buf + dof, ds), p (inst, 0, 0);
 
 	bool nosend = false;
-	int nosendid;
+	int nosendid = 666;
 
 	if (!a.is_broadcast() ) {
 		//send it to probable destination, if we know it
