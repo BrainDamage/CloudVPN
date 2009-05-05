@@ -22,10 +22,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#ifdef __WIN32__
-#pragma comment(lib,"ws2_32.lib")
-#endif
-
 
 static bool tcp_nodelay = false;
 static int ip_tos = 0;
@@ -310,3 +306,17 @@ int sock_get_error (int fd)
 	return -e;
 }
 
+
+#ifdef __WIN32__
+//WSA initializator
+static struct wsa_init {
+	WSADATA wd;
+	wsa_init() {
+		if (WSAStartup (0, &wd) )
+			Log_warn ("WSAStartup somehow failed");
+	}
+	~wsa_init() {
+		WSACleanup();
+	}
+} _WSA_initializator_;
+#endif

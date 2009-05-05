@@ -1,2 +1,2 @@
 
-target_link_libraries(cloud gnutls gcrypt)
+target_link_libraries(${tname} gnutls gcrypt)
