@@ -18,16 +18,18 @@
 
 #ifndef __WIN32__
 #include <arpa/inet.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/select.h>
-#include <sys/un.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <netinet/in_systm.h>  //required on some platforms for n_time
 #include <netinet/ip.h>
-#include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/un.h>
 #else
 #define _WIN32_WINNT 0x0501 //for mingw's addrinfo
+#define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #endif
@@ -39,7 +41,9 @@ typedef union {
 	struct sockaddr sa;
 	struct sockaddr_in sa_4;
 	struct sockaddr_in6 sa_6;
+#ifndef __WIN32__
 	struct sockaddr_un sa_un;
+#endif
 } sockaddr_type;
 
 #ifdef __WIN32__

@@ -270,7 +270,7 @@ static int try_accept_connection (int sock)
 	socklen_t addrsize = sizeof (sockaddr_type);
 	int s = accept (sock, & (addr.sa), &addrsize);
 	if (s < 0) {
-		if (errno == EAGAIN) return 0;
+		if ( (errno == EAGAIN) || (!errno) ) return 0;
 		Log_error ("accept(%d) failed with %d", errno);
 		return 1;
 	}

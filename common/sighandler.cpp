@@ -38,7 +38,7 @@ int setup_sighandler (void (*func) (int) )
 #else //__WIN32__
 	signal (SIGINT, func);
 	signal (SIGTERM, func);
-	signal (SIGPIPE, SIG_IGN);
+	//signal (SIGPIPE, SIG_IGN); How comes?
 	return 0;
 #endif
 }

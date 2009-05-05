@@ -318,7 +318,7 @@ void gate::poll_read()
 			return;
 		}
 
-		r = recv (fd, buf, 4096, 0);
+		r = recv (fd, (char*) buf, 4096, 0);
 		if (!r) {
 			Log_info ("gate %d closed by peer", id);
 			reset();
@@ -344,7 +344,7 @@ void gate::poll_write()
 		n = send_q.front().b.size();
 
 		r = 0;
-		if (n > 0)	r = send (fd, buf, n, 0);
+		if (n > 0) r = send (fd, (char*) buf, n, 0);
 
 		if (r == 0) {
 			send_q.pop_front();
@@ -387,7 +387,7 @@ void gate_listener_poll (int fd)
 
 	int r = accept (fd, 0, 0);
 	if (r < 0)
-		if (errno == EAGAIN) {
+		if ( (errno == EAGAIN) || (!errno) ) {
 			return;
 		} else Log_warn ("gate accept(%d) failed with %d (%s)",
 			                 fd, errno, strerror (errno) );

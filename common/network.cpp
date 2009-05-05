@@ -22,8 +22,10 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <arpa/inet.h>
-#include <netdb.h>
+#ifdef __WIN32__
+#pragma comment(lib,"ws2_32.lib")
+#endif
+
 
 static bool tcp_nodelay = false;
 static int ip_tos = 0;
@@ -188,6 +190,7 @@ int tcp_connect_socket (const char*addr)
 
 int tcp_close_socket (int sock, bool do_unlink)
 {
+#ifndef __WIN32__
 	if (do_unlink) { //we need to unlink the sockfile
 		sockaddr_type sa;
 		socklen_t sa_len = sizeof (sockaddr_type);
@@ -196,6 +199,7 @@ int tcp_close_socket (int sock, bool do_unlink)
 				unlink (sa.sa_un.sun_path);
 		}
 	}
+#endif
 	if (close (sock) ) {
 		Log_warn ("closing socket %d failed with %d!", sock, errno);
 		return 1;
@@ -244,6 +248,7 @@ bool sockaddr_from_str (const char *str,
 {
 	if (!str) return false;
 
+#ifndef __WIN32__
 	//check for AF_UNIX prefix, which is '\'
 	//TODO: UNIX_MAX_PATH is here hardcoded to 108
 
@@ -261,6 +266,7 @@ bool sockaddr_from_str (const char *str,
 		          str + 1, 107);
 		return true;
 	}
+#endif
 
 	char ip_buf[1025], port_buf[65]; //which should be enough for everyone.
 
