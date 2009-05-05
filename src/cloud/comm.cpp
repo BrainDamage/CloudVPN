@@ -466,6 +466,7 @@ void connection::handle_route (bool set, uint8_t*data, int n)
 {
 	stat_packet (true, n + p_head_size);
 	if (set) remote_routes.clear();
+	route_set_dirty();
 
 	uint32_t remote_ping;
 	uint32_t remote_dist;
@@ -488,7 +489,6 @@ void connection::handle_route (bool set, uint8_t*data, int n)
 	}
 
 	handle_route_overflow();
-	route_set_dirty();
 	return;
 error:
 	Log_info ("connection %d route read corruption", id);
@@ -997,8 +997,8 @@ void connection::activate()
 {
 	state = cs_active;
 	sending_from_data_q = false;
-	send_ping();
 	route_report_to_connection (*this);
+	send_ping();
 }
 
 void connection::disconnect()

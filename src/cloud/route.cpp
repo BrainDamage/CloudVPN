@@ -154,7 +154,7 @@ static void route_update_multi()
 	}
 }
 
-static bool multiroute_scatter (const address&a, int*result)
+static bool multiroute_scatter (const address&a, int from, int*result)
 {
 	map<address, map<int, int> >::iterator i;
 	map<int, int>::iterator j, je, ts;
@@ -177,6 +177,7 @@ static bool multiroute_scatter (const address&a, int*result)
 
 		if (r != n) { //this group of connections won!
 			for (;r > 0;--r, ++ts);
+			if (ts->second == from) continue; //never send back
 			*result = ts->second;
 			return true;
 		}
@@ -368,7 +369,7 @@ void route_packet (uint32_t inst,
 	if (a.is_broadcast() ) goto broadcast;
 
 	if (do_multiroute) { //check for a target
-		if (!multiroute_scatter (a, &result) ) goto broadcast;
+		if (!multiroute_scatter (a, from, &result) ) goto broadcast;
 	} else {
 		r = route.find (a);
 		if ( (r == route.end() ) || a.is_broadcast() ) goto broadcast;
@@ -387,8 +388,9 @@ void route_packet (uint32_t inst,
 	}
 
 	//finally, send it to destination
-	if (need_send)
-		send_packet_to_id (result, inst, dof, ds, sof, ss, s, buf);
+	if (!need_send) return;
+	if (from == result) goto broadcast;
+	send_packet_to_id (result, inst, dof, ds, sof, ss, s, buf);
 
 	return;
 
@@ -443,16 +445,28 @@ void route_broadcast_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 	address a (inst, buf + dof, ds), p (inst, 0, 0);
 
 	bool nosend = false;
-	int nosendid = 666;
+	int nosendid = 0x666; //neo-satanism.
 
 	if (!a.is_broadcast() ) {
 		//send it to probable destination, if we know it
-		map<address, route_info>::iterator dest = route.find (a);
-		if ( (dest != route.end() ) && (from != dest->second.id) ) {
-			nosendid = dest->second.id;
-			nosend = true;
-			send_broadcast_to_id (dest->second.id, id, ttl,
-			                      inst, dof, ds, sof, ss, s, buf);
+		if (do_multiroute) {
+			if (multiroute_scatter (a, from, &nosendid) ) {
+				nosend = true;
+				send_broadcast_to_id (nosendid, id, ttl,
+				                      inst, dof, ds,
+				                      sof, ss, s, buf);
+			}
+		} else {
+			map<address, route_info>::iterator dest
+			= route.find (a);
+			if ( (dest != route.end() )
+			        && (from != dest->second.id) ) {
+				nosendid = dest->second.id;
+				nosend = true;
+				send_broadcast_to_id (dest->second.id, id, ttl,
+				                      inst, dof, ds,
+				                      sof, ss, s, buf);
+			}
 		}
 
 		//send it to all known promiscs
@@ -472,7 +486,12 @@ void route_broadcast_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 		//else feed them all
 		for (;i != e;++i) {
 			if (from == i->second.id) continue;
-			if (nosend && (nosendid == i->second.id) ) continue;
+
+			//if we already tried to route it,
+			//don't send it to more connections
+			if (nosend && ( (i->second.id >= 0)
+			                || (nosendid == i->second.id) ) ) continue;
+
 			send_broadcast_to_id (i->second.id, id, ttl,
 			                      inst, dof, ds, sof, ss, s, buf);
 		}
