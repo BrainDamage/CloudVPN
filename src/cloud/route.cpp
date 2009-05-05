@@ -332,69 +332,11 @@ void route_update()
 	report_route();
 }
 
-static void send_packet_to_id (int to, uint32_t inst,
-                               uint16_t dof, uint16_t ds,
-                               uint16_t sof, uint16_t ss,
-                               uint16_t s, const uint8_t*buf)
-{
-	if (to < 0) {
-		map<int, gate>::iterator g =
-		    gate_gates().find (- (to + 1) );
-		if (g == gate_gates().end() ) return;
-		g->second.send_packet (inst, dof, ds, sof, ss, s, buf);
-	} else {
-		map<int, connection>::iterator c =
-		    comm_connections().find (to);
-		if (c == comm_connections().end() ) return;
-		c->second.write_packet (inst, dof, ds, sof, ss, s, buf);
-	}
-}
-
 void route_packet (uint32_t inst,
                    uint16_t dof, uint16_t ds,
                    uint16_t sof, uint16_t ss,
                    uint16_t s, const uint8_t*buf, int from)
 {
-	if (s < dof + ds ) return; //invalid packet
-	if (!ds) return; //can't do zero destination
-
-	int result;
-	bool need_send = true;
-
-	route_update();
-	address a (inst, buf + dof, ds), p (inst, 0, 0);
-	map<address, route_info>::iterator r;
-	multimap<address, route_info>::iterator i, e;
-
-	if (a.is_broadcast() ) goto broadcast;
-
-	if (do_multiroute) { //check for a target
-		if (!multiroute_scatter (a, from, &result) ) goto broadcast;
-	} else {
-		r = route.find (a);
-		if ( (r == route.end() ) || a.is_broadcast() ) goto broadcast;
-		result = r->second.id;
-	}
-
-	//send it to local promiscs
-	i = promisc.lower_bound (p);
-	e = promisc.upper_bound (p);
-
-	for (;i != e;++i) {
-		if (i->second.id >= 0 ) continue; // not local
-		if (i->second.id == result) need_send = false;
-		if (from == i->second.id) continue;
-		send_packet_to_id (i->second.id, inst, dof, ds, sof, ss, s, buf);
-	}
-
-	//finally, send it to destination
-	if (!need_send) return;
-	if (from == result) goto broadcast;
-	send_packet_to_id (result, inst, dof, ds, sof, ss, s, buf);
-
-	return;
-
-broadcast: // in case we fail to find a suitable destination, broadcast.
 	route_broadcast_packet (new_packet_uid(), default_broadcast_ttl,
 	                        inst, dof, ds, sof, ss, s, buf, from);
 }
@@ -477,9 +419,10 @@ void route_broadcast_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 		if (i == e) goto broadcast;
 
 		if (shared_uplink) { //in this case, select random promisc
-			send_broadcast_to_id (random_select (i, e)->second.id,
-			                      id, ttl,
-			                      inst, dof, ds, sof, ss, s, buf);
+			int t = random_select (i, e)->second.id;
+			if ( (t == from) || (nosend && (t == nosendid) ) ) return;
+			send_broadcast_to_id ( t, id, ttl,
+			                       inst, dof, ds, sof, ss, s, buf);
 			return;
 		}
 
