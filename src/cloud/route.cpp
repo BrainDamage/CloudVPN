@@ -409,31 +409,40 @@ void route_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 		}
 
 		//send it to all known promiscs
-		multimap<address, route_info>::iterator
-		i = promisc.lower_bound (p), e = promisc.upper_bound (p);
+		if (!nosend) {
+			multimap<address, route_info>::iterator i,e;
+			i = promisc.lower_bound (p);
+			e = promisc.upper_bound (p);
 
-		//if we don't know any promiscs, broadcast
-		if (i == e) goto broadcast;
+			//if we don't know any promiscs, broadcast
+			if (i == e) goto broadcast;
 
-		if (shared_uplink) { //in this case, select random promisc
-			int t = random_select (i, e)->second.id;
-			if ( (t == from) || (nosend && (t == nosendid) ) ) return;
-			send_packet_to_id ( t, id, ttl,
-			                    inst, dof, ds, sof, ss, s, buf);
-			return;
-		}
+			if (shared_uplink) {
+				//in this case, select random promisc
+				int t = random_select (i, e)->second.id;
+				if ( (t == from) ||
+				        (nosend && (t == nosendid) ) ) return;
+				send_packet_to_id ( t, id, ttl,
+				                    inst, dof, ds,
+				                    sof, ss, s, buf);
+				return;
+			}
 
-		//else feed them all
-		for (;i != e;++i) {
-			if (from == i->second.id) continue;
+			//else feed them all
+			for (;i != e;++i) {
+				if (from == i->second.id) continue;
 
-			//if we already tried to route it,
-			//don't send it to more connections
-			if (nosend && ( (i->second.id >= 0)
-			                || (nosendid == i->second.id) ) ) continue;
+				//if we already tried to route it,
+				//don't send it to more connections
+				if (nosend &&
+				        ( (i->second.id >= 0)
+				          || (nosendid == i->second.id) ) )
+					continue;
 
-			send_packet_to_id (i->second.id, id, ttl,
-			                   inst, dof, ds, sof, ss, s, buf);
+				send_packet_to_id (i->second.id, id, ttl,
+				                   inst, dof, ds,
+				                   sof, ss, s, buf);
+			}
 		}
 		return;
 	}
