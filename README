@@ -272,10 +272,46 @@ If you hit compile errors, be sure to check that following things are available:
 This section lists all configuration options available for running CloudVPN
 core and some of the most important CloudVPN gates/auth daemons.
 
-Options consist of pairs name/value, which can be specified on commandline
-(using 'program -name value -name value' syntax), or using config files, where
-name/value pairs are written line-by-line, first word of each line being name,
-rest value. #-beginning lines are comments.
+First off, you will most probably need some keys. To generate some, you can use
+any openssl or gnutls howto available on the net, or just follow simple
+GnuTLS's certtool instructions here:
+
+
+	GENERATING KEYS AND CERTIFICATES
+
+First, generate a CA key (DSA, 3072 bits):
+$ certtool -p --outfile ca.key --dsa --bits 3072
+(remember to keep this key for yourself)
+
+Then, make a self-signed certificate of that authority:
+$ certtool -s --load-privkey ca.key --outfile ca.crt
+(now you must fill in several options - be sure to check that this key can be
+used for signing certificates, and as a certificate authority)
+
+Now we need a private key for encryption. Let's use RSA one:
+$ certtool -p --outfile ssl.key --bits 4096
+(you should check whether using RSA key of given size is legal in your country)
+
+Now, sign the certificate using the generated CA:
+$ certtool -c --outfile ssl.crt --load-privkey ssl.key \
+    --load-ca-privkey ca.key --load-ca-certificate ca.crt
+(you will be asked the same questions as those from CA self-signing - you
+should now disable signing of certificates, but instead enable TLS server and
+client purposes.)
+
+Also, you might need some generated DH parameters - this can be done easily:
+$ certtool --generate-dh-params --bits 1024 --outfile dh1024.pem
+(you will need to remove extra lines from the .pem, so GnuTLS can read it
+properly. Just make sure that the very first line of the .pem file looks
+exactly like "-----BEGIN DH PARAMETERS-----")
+
+
+	PROGRAM CONFIGURATION
+
+Program options consist of pairs name/value, which can be specified on
+commandline (using 'program -name value -name value' syntax), or using config
+files, where name/value pairs are written line-by-line, first word of each line
+being name, rest value. #-beginning lines are comments.
 
 There's a special @include option, which loads the config file. So, to start
 something with a config file, you can use 'program -@include /etc/program.conf'
@@ -285,7 +321,8 @@ same name can be specified and valid. If program needs only one of given
 options, then the last specified one is valid. When setting a number, start
 with 'x' character to set a hexadecimal value.
 
-	COMMON
+
+	COMMON among all programs
 user
 group
 chroot
