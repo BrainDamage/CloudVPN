@@ -429,7 +429,7 @@ void route_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 		k = sendlist.begin();
 		ke = sendlist.end();
 		for (;k != ke;++k) if ( (*k < 0) || (ttl > 0) )
-				send_packet_to_id (*k, id, ttl, inst,
+				send_packet_to_id (*k, id, ttl - 1, inst,
 				                   dof, ds, sof, ss, s, buf);
 		return;
 	}
