@@ -453,6 +453,7 @@ void connection::handle_route (bool set, uint8_t*data, int n)
 			    remote_route (remote_ping, remote_dist);
 		else remote_routes.erase (address (instance, data + 14, s) );
 		n -= 14 + s;
+		data += 14 + s;
 	}
 
 	handle_route_overflow();

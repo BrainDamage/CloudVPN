@@ -154,23 +154,22 @@ void gate::handle_route (uint16_t size, const uint8_t*data)
 	instances.clear();
 	route_set_dirty();
 
-try_more:
-	if (!size) return;
+	while (size) {
+		if (size < 6) goto error;
 
-	if (size < 6) goto error;
+		asize = ntohs (* (uint16_t*) data);
+		inst = ntohl (* (uint32_t*) (data + 2) );
+		if (asize + 6 > size) goto error;
 
-	asize = ntohs (* (uint16_t*) data);
-	inst = ntohl (* (uint32_t*) (data + 2) );
-	if (asize + 6 > size) goto error;
-
-	local.push_back (address() );
-	local.back().set (inst, data + 6, asize);
-	instances.insert (address (inst, 0, 0) );
-	Log_info ("gate %d handling address %s",
-	          id, local.back().format().c_str() );
-	data += 6 + asize;
-	size -= 6 + asize;
-	goto try_more;
+		local.push_back (address() );
+		local.back().set (inst, data + 6, asize);
+		instances.insert (address (inst, 0, 0) );
+		Log_info ("gate %d handling address %s",
+		          id, local.back().format().c_str() );
+		data += 6 + asize;
+		size -= 6 + asize;
+	}
+	return;
 
 error:
 	Log_error ("invalid route packet received from gate %d", id);
