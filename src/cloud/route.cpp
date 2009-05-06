@@ -253,6 +253,13 @@ void route_set_dirty()
 	++route_dirty;
 }
 
+inline uint64_t penalized_ping (uint64_t ping, uint64_t dist)
+{
+	if (hop_penalization)
+		return ping* (100 + (dist*hop_penalization) ) / 100;
+	else	return ping;
+}
+
 void route_update()
 {
 	if (!route_dirty) return;
@@ -294,7 +301,7 @@ void route_update()
 		}
 	}
 
-	uint64_t pp = 0;
+	uint64_t pp = 0, np = 0;
 
 	for (i = cons.begin();i != cons.end();++i) {
 		if (i->second.state != cs_active)
@@ -309,17 +316,15 @@ void route_update()
 
 			if (route.count (j->first) ) {
 
-				pp = (uint64_t) (route[j->first].ping)
-				     * (100 + (hop_penalization
-				               * route[j->first].dist) )
-				     / 100;
+				pp = penalized_ping (route[j->first].ping,
+				                     route[j->first].dist);
+				np = penalized_ping (j->second.ping + 2,
+				                     j->second.dist + 1);
 
-				if (pp < (2 + j->second.ping + i->second.ping) )
-					continue;
-				if ( (pp == (2 + j->second.ping
-				             + i->second.ping) )
-				        && ( route[j->first].dist <
-				             (1 + j->second.dist) ) ) continue;
+				if (pp < np) continue;
+				if ( (pp == np ) &&
+				        ( route[j->first].dist <
+				          (1 + j->second.dist) ) ) continue;
 			}
 
 			route_info temp (2 + j->second.ping + i->second.ping,
