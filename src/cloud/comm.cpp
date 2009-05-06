@@ -1489,7 +1489,7 @@ bool connection::dbl_enabled = false;
 int connection::dbl_total = 0;
 int connection::dbl_conn = 0;
 int connection::dbl_burst = 20480;
-bool connection::red_enabled = false;
+bool connection::red_enabled = true;
 int connection::red_threshold = 50;
 
 int comm_init()
@@ -1576,9 +1576,12 @@ int comm_init()
 	if (connection::dbl_enabled)
 		Log_info ("burst download size is %dB", t);
 
+	connection::red_enabled = true; //it's better on by default
+	connection::red_threshold = 50;
 	if (config_get_int ("red-ratio", t) ) {
-		connection::red_enabled = true;
 		connection::red_threshold = t % 100;
+		if (t == 100)
+			connection::red_enabled = false;
 		Log_info ("RED enabled with ratio %d%%",
 		          connection::red_threshold);
 	}
