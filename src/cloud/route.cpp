@@ -383,67 +383,49 @@ void route_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 
 	address a (inst, buf + dof, ds), p (inst, 0, 0);
 
-	bool nosend = false;
-	int nosendid = 0x666; //neo-satanism.
-
 	if (!a.is_broadcast() ) {
+		set<int> sendlist;
+		int t = 0x666; //neo-satanism.
+
 		//send it to probable destination, if we know it
 		if (do_multiroute) {
-			if (multiroute_scatter (a, from, &nosendid) ) {
-				nosend = true;
-				send_packet_to_id (nosendid, id, ttl,
-				                   inst, dof, ds,
-				                   sof, ss, s, buf);
-			}
+			if (multiroute_scatter (a, from, &t) )
+				sendlist.insert (t);
 		} else {
-			map<address, route_info>::iterator dest
-			= route.find (a);
-			if ( (dest != route.end() )
-			        && (from != dest->second.id) ) {
-				nosendid = dest->second.id;
-				nosend = true;
-				send_packet_to_id (dest->second.id, id, ttl,
-				                   inst, dof, ds,
-				                   sof, ss, s, buf);
-			}
+			map<address, route_info>::iterator
+			dest = route.find (a);
+
+			if (dest != route.end() )
+				sendlist.insert (dest->second.id);
 		}
 
 		//send it to all known promiscs
-		if (!nosend) {
-			multimap<address, route_info>::iterator i, e;
-			i = promisc.lower_bound (p);
-			e = promisc.upper_bound (p);
+		multimap<address, route_info>::iterator i, e;
+		i = promisc.lower_bound (p);
+		e = promisc.upper_bound (p);
 
-			//if we don't know any promiscs, broadcast
-			if (i == e) goto broadcast;
+		//if we don't know any promiscs, and no dest to send, broadcast
+		if ( (i == e) && (!sendlist.size() ) ) goto broadcast;
 
-			if (shared_uplink) {
-				//in this case, select random promisc
-				int t = random_select (i, e)->second.id;
-				if ( (t == from) ||
-				        (nosend && (t == nosendid) ) ) return;
-				send_packet_to_id ( t, id, ttl,
-				                    inst, dof, ds,
-				                    sof, ss, s, buf);
-				return;
-			}
+		if (shared_uplink) //in this case, select random promisc
+			sendlist.insert (random_select (i, e)->second.id);
 
-			//else feed them all
-			for (;i != e;++i) {
-				if (from == i->second.id) continue;
+		/*
+		 * now feed it to all promiscs, or only
+		 * to gates when uplink is shared.
+		 */
+		for (;i != e;++i)
+			if ( (!shared_uplink) || (i->second.id < 0) )
+				sendlist.insert (i->second.id);
 
-				//if we already tried to route it,
-				//don't send it to more connections
-				if (nosend &&
-				        ( (i->second.id >= 0)
-				          || (nosendid == i->second.id) ) )
-					continue;
+		sendlist.erase (from); //never send backwards
 
-				send_packet_to_id (i->second.id, id, ttl,
-				                   inst, dof, ds,
-				                   sof, ss, s, buf);
-			}
-		}
+		set<int>::iterator k, ke; //now send to all destinations
+		k = sendlist.begin();
+		ke = sendlist.end();
+		for (;k != ke;++k) if ( (*k < 0) || (ttl > 0) )
+				send_packet_to_id (*k, id, ttl, inst,
+				                   dof, ds, sof, ss, s, buf);
 		return;
 	}
 
