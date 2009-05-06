@@ -196,7 +196,7 @@ static int route_dirty = 0;
 static int route_report_ping_diff = 5000;
 static int route_max_dist = 64;
 static int default_broadcast_ttl = 128;
-static int hop_penalization = 100;
+static int hop_penalization = 0;
 
 
 static bool shared_uplink = false;
@@ -234,7 +234,7 @@ void route_init()
 	Log_info ("maximal node distance is %d", t);
 	route_max_dist = t;
 
-	if (!config_get_int ("route_hop_penalization", t) ) t = 100;
+	if (!config_get_int ("route_hop_penalization", t) ) t = 0;
 	Log_info ("hop penalization is %d%%", t);
 	hop_penalization = t;
 
@@ -310,8 +310,8 @@ void route_update()
 			if (route.count (j->first) ) {
 
 				pp = (uint64_t) (route[j->first].ping)
-				     * (100 + hop_penalization)
-				     * route[j->first].dist
+				     * (100 + (hop_penalization
+				               * route[j->first].dist) )
 				     / 100;
 
 				if (pp < (2 + j->second.ping + i->second.ping) )
@@ -410,7 +410,7 @@ void route_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 
 		//send it to all known promiscs
 		if (!nosend) {
-			multimap<address, route_info>::iterator i,e;
+			multimap<address, route_info>::iterator i, e;
 			i = promisc.lower_bound (p);
 			e = promisc.upper_bound (p);
 
