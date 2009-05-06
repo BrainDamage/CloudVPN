@@ -521,6 +521,7 @@ int gate_connect()
 		return 3;
 	}
 
+	Log_info ("gate connected OK");
 	send_route(); //announce our wishes
 
 	return (gate > 0) ? 0 : 4;
@@ -528,6 +529,7 @@ int gate_connect()
 
 void gate_disconnect()
 {
+	Log_info ("disconnecting gate");
 	tcp_close_socket (gate);
 	gate = -1;
 	cached_header_type = 0;
@@ -752,7 +754,10 @@ int main (int argc, char**argv)
 				select (0, 0, 0, 0, &to); //reconnection timeout
 			}
 		} else { //try some work
-			do_poll();
+			if (do_poll() ) {
+				Log_error ("polling failed, reconnecting gate.");
+				gate_disconnect();
+			}
 		}
 	}
 
