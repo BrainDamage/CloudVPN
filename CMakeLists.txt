@@ -27,7 +27,7 @@ set(CMAKE_LINK_FLAGS $ENV{LDFLAGS})
 include_directories(include/)
 message("CFLAGS are set to '" ${CMAKE_C_FLAGS} "'")
 message("CXXFLAGS are set to '" ${CMAKE_CXX_FLAGS} "'")
-message("LDFLAGS are set to '" ${CMAKE_CXX_FLAGS} "'")
+message("LDFLAGS are set to '" ${CMAKE_LINK_FLAGS} "'")
 
 #first, make common sources
 
