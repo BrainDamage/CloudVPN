@@ -351,7 +351,8 @@ int iface_retrieve_hwaddr (uint8_t*hwaddr)
 			struct sockaddr_dl *sdp;
 			sdp = (struct sockaddr_dl*) (p->ifa_addr);
 
-			cached_hwaddr.set (0, sdp->sdl_data + sdp->sdl_nlen, 6);
+			cached_hwaddr.set (0,
+				(uint8_t*) (sdp->sdl_data + sdp->sdl_nlen), 6);
 
 			Log_info ("iface has mac address %s", cached_hwaddr.format_addr().c_str() );
 
