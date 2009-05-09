@@ -344,7 +344,6 @@ promisc		--usuable for bridging
 tunctl		--TAP configuration
 iface_dev	--dev name
 iface_persist	--persistent bool
-iface_device	--for BSDs, pathname to /dev/tunX or something
 
 gate		--cloud connection point
 
