@@ -153,7 +153,7 @@ int iface_create()
 int iface_create()
 {
 	string device = "tap0";
-	config_get ("iface_device", device);
+	config_get ("iface_dev", device);
 	Log_info ("using `%s' as interface", device.c_str() );
 
 	tun = open ( ("/dev/" + device).c_str(), O_RDWR | O_NONBLOCK);
