@@ -152,11 +152,6 @@ int iface_create()
 
 int iface_create()
 {
-	if (!config_is_true ("iface") ) {
-		Log_info ("not creating local interface");
-		return 0; //no need
-	}
-
 	string device = "tap0";
 	config_get ("iface_device", device);
 	Log_info ("using `%s' as interface", device.c_str() );
