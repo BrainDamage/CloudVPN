@@ -22,3 +22,4 @@ for i in $PROGS ; do
 		done < src/$i/Makefile.am.extra
 done
 
+aclocal && autoconf && automake --add-missing
