@@ -400,7 +400,13 @@ void route_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 			map<address, route_info>::iterator
 			dest = route.find (a);
 
-			if (dest != route.end() )
+			/*
+			 * second condition is here because of possible
+			 * temporary route misconfigurations. It triggers
+			 * a broadcast, so the packet isn't just discarded.
+			 */
+			if ( (dest != route.end() ) &&
+			        (dest->second.id != from) )
 				sendlist.insert (dest->second.id);
 		}
 
