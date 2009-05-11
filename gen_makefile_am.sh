@@ -1,5 +1,6 @@
 #!/bin/sh
 OUT=Makefile.am
+touch NEWS AUTHORS ChangeLog
 echo > $OUT
 cd src
 PROGS=`echo *`
