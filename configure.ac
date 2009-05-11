@@ -1,0 +1,19 @@
+
+AC_INIT(cloudvpn, 0.1)
+AC_PREREQ(2.5)
+AM_INIT_AUTOMAKE()
+
+AC_PROG_CC
+AC_PROG_CXX
+AC_PROG_INSTALL
+AC_PROG_LN_S
+AC_PROG_RANLIB
+
+AC_C_CONST
+AC_C_INLINE
+
+AC_HEADER_STDC
+AC_CHECK_HEADERS([gnutls/gnutls.h gcrypt.h stdio.h string.h])
+
+AC_OUTPUT(Makefile)
+
