@@ -247,16 +247,17 @@ and authenticators.
 
 ************************************************************* COMPILING *******
 
-Use CMake. You might want to configure the build with CFLAGS, or TARGET:
+We use standard GNU Autotools scheme, with script-generated Makefile.am.
+Because of simplicity, all auto* stuff is wrapped in single shell script now,
+called autogen.sh (but it's not classical autogen.sh!).
 
-$ export CFLAGS="-O3 -march=prescott"
-$ export CXFLAGS="$CFLAGS"
-$ export TARGET="i686-pc-linux-gnu"  --you probably won't need this
-$ cmake .
-$ make -j5
+Therefore, compile like with any other autotools project:
 
-Please remember to add -Ox optimization. CloudVPN makes heavy usage of STL
-routines, which, unoptimized, are REALLY slow.
+$ ./autogen.sh
+$ ./configure && make && make install
+
+Please remember to add -Ox optimization to CXXFLAGS. CloudVPN makes heavy usage
+of STL routines, which, unoptimized, are REALLY slow.
 
 If you hit compile errors, be sure to check that following things are available:
 
