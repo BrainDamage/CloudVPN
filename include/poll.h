@@ -22,5 +22,11 @@ int poll_set_remove_write (int fd);
 int poll_set_clear();
 int poll_wait_for_event (int timeout_usec);
 
+#define READ_READY (1<<0)
+#define WRITE_READY (1<<1)
+#define EXCEPTION_READY (1<<2)
+
+void poll_handle_event (int fd, int what);
+
 #endif
 
