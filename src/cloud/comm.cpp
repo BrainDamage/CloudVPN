@@ -270,7 +270,7 @@ static int try_accept_connection (int sock)
 	socklen_t addrsize = sizeof (sockaddr_type);
 	int s = accept (sock, & (addr.sa), &addrsize);
 	if (s < 0) {
-		if ( (errno == EAGAIN) || (!errno) ) return 0;
+		if ( (errno == EWOULDBLOCK) || (!errno) ) return 0;
 		Log_error ("accept(%d) failed with %d", sock, errno);
 		return 1;
 	}
@@ -1509,13 +1509,13 @@ int comm_init()
 	if (!config_get_int ("max_waiting_data_size", t) )
 		connection::max_waiting_data_size = 262144;
 	else connection::max_waiting_data_size = t;
-	Log_info ("max %d pending data packets",
+	Log_info ("max %d pending data bytes",
 	          connection::max_waiting_data_size);
 
 	if (!config_get_int ("max_waiting_proto_size", t) )
 		connection::max_waiting_proto_size = 65536;
 	else connection::max_waiting_proto_size = t;
-	Log_info ("max %d pending proto packets",
+	Log_info ("max %d pending proto bytes",
 	          connection::max_waiting_proto_size);
 
 	if (!config_get_int ("max_remote_routes", t) )

@@ -28,9 +28,6 @@
 #include <sys/types.h>
 #include <sys/un.h>
 #include <errno.h>
-#ifndef EINPROGRESS
-#define EINPROGRESS EAGAIN
-#endif
 #else
 #define _WIN32_WINNT 0x0501 //for mingw's addrinfo
 #define WIN32_LEAN_AND_MEAN
@@ -39,7 +36,11 @@
 #undef errno
 #define errno (WSAGetLastError())
 #undef EAGAIN
-#define EAGAIN WSAEWOULDBLOCK
+#define EAGAIN WSAEINPROGRESS
+#define EWOULDBLOCK WSAEWOULDBLOCK
+#endif
+
+#ifndef EINPROGRESS
 #define EINPROGRESS EAGAIN
 #endif
 

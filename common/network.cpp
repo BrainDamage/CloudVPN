@@ -69,6 +69,7 @@ no_tos:
 	int i;
 	if (config_get_int ("listen_backlog", i) ) listen_backlog_size = i;
 	Log_info ("listen backlog size is %d", listen_backlog_size);
+
 	return 0;
 }
 
@@ -171,9 +172,13 @@ int tcp_connect_socket (const char*addr)
 
 	sockoptions_set (s);
 
-	if (connect (s, & (sa.sa), sa_len) < 0 ) {
+	if (connect (s, & (sa.sa), sa_len) < 0) {
 		int e = errno;
-		if (e != EINPROGRESS) {
+		if ( (e != EINPROGRESS)
+#ifdef __WIN32__
+		        && (e != 2)
+#endif
+		   ) {
 			Log_error ("connect(%d) to `%s' failed with %d",
 			           s, addr, e);
 			close (s);

@@ -386,7 +386,7 @@ void gate_listener_poll (int fd)
 
 	int r = accept (fd, 0, 0);
 	if (r < 0)
-		if ( (errno == EAGAIN) || (!errno) ) {
+		if ( (errno == EWOULDBLOCK) || (!errno) ) {
 			return;
 		} else Log_warn ("gate accept(%d) failed with %d (%s)",
 			                 fd, errno, strerror (errno) );
