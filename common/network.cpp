@@ -177,13 +177,13 @@ int tcp_connect_socket (const char*addr)
 		if ( (e != EINPROGRESS)
 
 #ifdef __WIN32__
-/* 
- * Win32 developer poem about the forgotten ifdef:
- *
- * To anyone who first explains
- * this Win-Thirty-Two wonder of the year,
- * I owe a beer.
- */
+		        /*
+		         * Win32 developer poem about the forgotten ifdef:
+		         *
+		         * To anyone who first explains
+		         * this Win-Thirty-Two wonder of the year,
+		         * I owe a beer.
+		         */
 		        && (e != 2) //also, it works now.
 #endif
 
@@ -260,12 +260,13 @@ bool sockaddr_from_str (const char *str,
 	if (!str) return false;
 
 #ifndef __WIN32__
-	//check for AF_UNIX prefix, which is '\'
+	//Local socket is distinguished by having a '/' in name.
+	//For sockets without '/' please use ./some.sock
 	//TODO: UNIX_MAX_PATH is here hardcoded to 108
 
-	if (str[0] == '\\') {
-		if ( (1 + strlen (str + 1) ) > 108) {
-			Log_error ("path too long for unix socket: %s", str + 1);
+	if (strchr (str, '/') ) {
+		if (strlen (str) > 108) {
+			Log_error ("path too long for unix socket: %s", str);
 			return false;
 		}
 
@@ -274,7 +275,7 @@ bool sockaddr_from_str (const char *str,
 		addr->sa_family = AF_UNIX;
 		( (sockaddr_un*) addr)->sun_family = AF_UNIX;
 		strncpy ( ( (sockaddr_un*) addr)->sun_path,
-		          str + 1, 107);
+		          str, 108);
 		return true;
 	}
 #endif
