@@ -1,5 +1,5 @@
 
-AC_INIT(cloudvpn, 0.1)
+AC_INIT(cloudvpn, 2)
 AC_PREREQ(2.5)
 AM_INIT_AUTOMAKE()
 
