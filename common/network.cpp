@@ -175,9 +175,19 @@ int tcp_connect_socket (const char*addr)
 	if (connect (s, & (sa.sa), sa_len) < 0) {
 		int e = errno;
 		if ( (e != EINPROGRESS)
+
 #ifdef __WIN32__
-		        && (e != 2)
+/* 
+ * Win32 developer poem about the forgotten ifdef:
+ *
+ * To anyone who first explains
+ * this Win-Thirty-Two wonder of the year,
+ * I owe a beer.
+ */
+		        && (e != 2) //also, it works now.
 #endif
+
+
 		   ) {
 			Log_error ("connect(%d) to `%s' failed with %d",
 			           s, addr, e);
