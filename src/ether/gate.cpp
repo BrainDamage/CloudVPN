@@ -11,12 +11,16 @@
  */
 
 #include "sq.h"
-#define LOGNAME "eth-unix"
+#define LOGNAME "ether"
 #include "log.h"
 #include "conf.h"
 #include "address.h"
 #include "network.h"
 #include "sighandler.h"
+
+address cached_hwaddr (0, (const uint8_t*)"012345", 6);
+
+#ifndef _WIN32_
 
 #include <errno.h>
 #include <fcntl.h>
@@ -46,7 +50,6 @@
 
 int tun = -1;
 char iface_name[IFNAMSIZ] = "";
-address cached_hwaddr (0, (const uint8_t*) "123456", 6); //no matter it doesnt work.
 
 int iface_set_hwaddr (uint8_t*hwaddr);
 int iface_retrieve_hwaddr (uint8_t*hwaddr);
@@ -449,6 +452,79 @@ void iface_poll_read()
 		send_packet ( (uint8_t*) buffer, ret);
 	}
 }
+
+#else // _WIN32_
+
+/*
+ * Win32 part
+ *
+ * 99.9% respectfully taken from the P2PVPN, thanks to Wolfgang Ginolas.
+ */
+
+
+#include <windows.h>
+#include <objbase.h>
+#include <winioctl.h>
+
+
+#define ADAPTER_KEY "SYSTEM\\CurrentControlSet\\Control\\Class\\{4D36E972-E325-11CE-BFC1-08002BE10318}"
+#define NETWORK_CONNECTIONS_KEY "SYSTEM\\CurrentControlSet\\Control\\Network\\{4D36E972-E325-11CE-BFC1-08002BE10318}"
+#define TAP_COMPONENT_ID "tap0801"
+
+#define USERMODEDEVICEDIR "\\\\.\\Global\\"
+#define TAPSUFFIX         ".tap"
+
+#define TAP_CONTROL_CODE(request,method) \
+  CTL_CODE (FILE_DEVICE_UNKNOWN, request, method, FILE_ANY_ACCESS)
+
+#define TAP_IOCTL_GET_MAC               TAP_CONTROL_CODE (1, METHOD_BUFFERED)
+#define TAP_IOCTL_GET_VERSION           TAP_CONTROL_CODE (2, METHOD_BUFFERED)
+#define TAP_IOCTL_GET_MTU               TAP_CONTROL_CODE (3, METHOD_BUFFERED)
+#define TAP_IOCTL_GET_INFO              TAP_CONTROL_CODE (4, METHOD_BUFFERED)
+#define TAP_IOCTL_CONFIG_POINT_TO_POINT TAP_CONTROL_CODE (5, METHOD_BUFFERED)
+#define TAP_IOCTL_SET_MEDIA_STATUS      TAP_CONTROL_CODE (6, METHOD_BUFFERED)
+#define TAP_IOCTL_CONFIG_DHCP_MASQ      TAP_CONTROL_CODE (7, METHOD_BUFFERED)
+#define TAP_IOCTL_GET_LOG_LINE          TAP_CONTROL_CODE (8, METHOD_BUFFERED)
+#define TAP_IOCTL_CONFIG_DHCP_SET_OPT   TAP_CONTROL_CODE (9, METHOD_BUFFERED)
+
+HANDLE fd;
+
+int iface_create()
+{
+
+}
+
+int iface_destroy()
+{
+
+}
+
+int iface_retrieve_hwaddr(uint8_t*d)
+{
+
+}
+
+int iface_set_hwaddr(uint8_t*d)
+{
+
+}
+
+int iface_write()
+{
+
+}
+
+int iface_read()
+{
+
+}
+
+int iface_poll_read()
+{
+
+}
+
+#endif
 
 /*
  * CloudVPN GATE part
