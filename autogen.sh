@@ -16,6 +16,7 @@ for i in $PROGS ; do
 	echo "${i}_SOURCES = $SOURCES" >>$OUT
 	echo "${i}_CPPFLAGS = -Isrc/$i/ -Iinclude/" >>$OUT
 	echo "${i}_LDADD = libcommon.a" >>$OUT
+	echo "${i}_LDFLAGS = " >>$OUT #empty for future use.
 	[ -f src/$i/Makefile.am.extra ] &&
 		while read l ; do
 			[ "$l" ] && echo "${i}_${l}" >>$OUT
