@@ -85,7 +85,9 @@
 #endif
 
 #include <set>
+#include <vector>
 using std::set;
+using std::vector;
 set<int>read_set, write_set;
 
 static int interval = 5000;
