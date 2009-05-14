@@ -323,7 +323,7 @@ void gate::poll_read()
 			reset();
 			return;
 		} else if (r < 0) {
-			if (errno != EAGAIN) {
+			if (errno != EWOULDBLOCK) {
 				Log_warn ("gate %d read error", id);
 				reset();
 			}
@@ -351,7 +351,7 @@ void gate::poll_write()
 		}
 
 		if (r < 0) {
-			if (errno != EAGAIN) {
+			if (errno != EWOULDBLOCK) {
 				Log_error ("gate %d write error", id);
 				reset();
 			} else poll_set_add_write (fd);

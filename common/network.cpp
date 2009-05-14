@@ -174,7 +174,7 @@ int tcp_connect_socket (const char*addr)
 
 	if (connect (s, & (sa.sa), sa_len) < 0) {
 		int e = errno;
-		if ( (e != EINPROGRESS)
+		if ( e && (e != EINPROGRESS)
 
 #ifdef __WIN32__
 		        /*
@@ -328,8 +328,10 @@ int sock_get_error (int fd)
 static struct wsa_init {
 	WSADATA wd;
 	wsa_init() {
-		if (WSAStartup (0, &wd) )
-			Log_warn ("WSAStartup somehow failed");
+		if (WSAStartup (MAKEWORD (2, 0), &wd) ) {
+			Log_error ("WSAStartup somehow failed!");
+			Log_error ("WSAError is: %d", WSAGetLastError() );
+		}
 	}
 	~wsa_init() {
 		WSACleanup();

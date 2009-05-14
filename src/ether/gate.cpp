@@ -18,9 +18,11 @@
 #include "network.h"
 #include "sighandler.h"
 
-address cached_hwaddr (0, (const uint8_t*)"012345", 6);
+address cached_hwaddr (0, (const uint8_t*) "012345", 6);
+void send_packet (uint8_t*data, int size);
+void send_route();
 
-#ifndef _WIN32_
+#ifndef __WIN32__
 
 #include <errno.h>
 #include <fcntl.h>
@@ -53,8 +55,6 @@ char iface_name[IFNAMSIZ] = "";
 
 int iface_set_hwaddr (uint8_t*hwaddr);
 int iface_retrieve_hwaddr (uint8_t*hwaddr);
-void send_route();
-void send_packet (uint8_t*data, int size);
 
 void iface_command (int which)
 {
@@ -401,7 +401,7 @@ int iface_write (void*buf, size_t len)
 	int res = write (tun, buf, len);
 
 	if (res < 0) {
-		if (errno == EAGAIN) return 0;
+		if (errno == EWOULDBLOCK) return 0;
 		else {
 			Log_warn ("iface: write failure %d (%s)",
 			          errno, strerror (errno) );
@@ -417,7 +417,7 @@ int iface_read (void*buf, size_t len)
 	int res = read (tun, buf, len);
 
 	if (res < 0) {
-		if (errno == EAGAIN) return 0;
+		if (errno == EWOULDBLOCK) return 0;
 		else {
 			Log_error ("iface: read failure %d (%s)",
 			           errno, strerror (errno) );
@@ -431,24 +431,21 @@ int iface_read (void*buf, size_t len)
 void iface_poll_read()
 {
 	if (tun < 0) {
-		Log_error ("iface_update: tun not configured");
+		Log_error ("tun not configured");
 		return;
 	}
 
 	char buffer[4096];
-
 	int ret;
 
 	while (1) {
 		ret = iface_read (buffer, 4096);
 
 		if (ret <= 0) return;
-
 		if (ret <= 2 + (2*6) ) {
-			Log_debug ("iface_update: discarding packet too short for Ethernet");
+			Log_debug ("discarding packet too short for Ethernet");
 			continue;
 		}
-
 		send_packet ( (uint8_t*) buffer, ret);
 	}
 }
@@ -467,9 +464,15 @@ void iface_poll_read()
 #include <winioctl.h>
 
 
-#define ADAPTER_KEY "SYSTEM\\CurrentControlSet\\Control\\Class\\{4D36E972-E325-11CE-BFC1-08002BE10318}"
-#define NETWORK_CONNECTIONS_KEY "SYSTEM\\CurrentControlSet\\Control\\Network\\{4D36E972-E325-11CE-BFC1-08002BE10318}"
-#define TAP_COMPONENT_ID "tap0801"
+#define ADAPTER_KEY \
+  "SYSTEM\\CurrentControlSet\\Control\\Class\\"\
+  "{4D36E972-E325-11CE-BFC1-08002BE10318}"
+
+#define NETWORK_CONNECTIONS_KEY \
+  "SYSTEM\\CurrentControlSet\\Control\\Network\\"\
+  "{4D36E972-E325-11CE-BFC1-08002BE10318}"
+
+#define TAP_COMPONENT_ID "tap0901"
 
 #define USERMODEDEVICEDIR "\\\\.\\Global\\"
 #define TAPSUFFIX         ".tap"
@@ -478,53 +481,219 @@ void iface_poll_read()
   CTL_CODE (FILE_DEVICE_UNKNOWN, request, method, FILE_ANY_ACCESS)
 
 #define TAP_IOCTL_GET_MAC               TAP_CONTROL_CODE (1, METHOD_BUFFERED)
-#define TAP_IOCTL_GET_VERSION           TAP_CONTROL_CODE (2, METHOD_BUFFERED)
-#define TAP_IOCTL_GET_MTU               TAP_CONTROL_CODE (3, METHOD_BUFFERED)
-#define TAP_IOCTL_GET_INFO              TAP_CONTROL_CODE (4, METHOD_BUFFERED)
-#define TAP_IOCTL_CONFIG_POINT_TO_POINT TAP_CONTROL_CODE (5, METHOD_BUFFERED)
 #define TAP_IOCTL_SET_MEDIA_STATUS      TAP_CONTROL_CODE (6, METHOD_BUFFERED)
-#define TAP_IOCTL_CONFIG_DHCP_MASQ      TAP_CONTROL_CODE (7, METHOD_BUFFERED)
-#define TAP_IOCTL_GET_LOG_LINE          TAP_CONTROL_CODE (8, METHOD_BUFFERED)
-#define TAP_IOCTL_CONFIG_DHCP_SET_OPT   TAP_CONTROL_CODE (9, METHOD_BUFFERED)
 
 HANDLE fd;
 
+OVERLAPPED o_read, o_write;
+
+int findTapDevice (char *deviceID,
+                   int deviceIDLen,
+                   char *deviceName,
+                   int deviceNameLen)
+{
+	HKEY adapterKey;
+	int i;
+	LONG status;
+	DWORD len;
+	char keyI[1024];
+	char keyName[1024];
+	HKEY key;
+
+	string tap_id = TAP_COMPONENT_ID;
+	config_get ("tap_component_id", tap_id);
+
+	status = RegOpenKeyEx (HKEY_LOCAL_MACHINE, ADAPTER_KEY, 0,
+	                       KEY_READ, &adapterKey);
+
+	if (status != ERROR_SUCCESS) {
+		Log_info ("Could not open key '%s'!", ADAPTER_KEY);
+		return 1;
+	}
+
+	strncpy (deviceID, "", deviceIDLen);
+
+	for (i = 0;
+	        deviceID[0] == '\0' &&
+	        ERROR_SUCCESS == RegEnumKey (adapterKey,
+	                                     i, keyI, sizeof (keyI) );
+	        i++) {
+		char componentId[256];
+
+		snprintf (keyName, sizeof (keyName), "%s\\%s",
+		          ADAPTER_KEY, keyI);
+		status = RegOpenKeyEx (HKEY_LOCAL_MACHINE, keyName, 0,
+		                       KEY_READ, &key);
+		if (status != ERROR_SUCCESS) {
+			Log_info ("Could not open key '%s'!", keyName);
+			return 1;
+		}
+
+		len = sizeof (componentId);
+		status = RegQueryValueEx (key, "ComponentId", NULL, NULL,
+		                          (BYTE*) componentId, &len);
+		if (status == ERROR_SUCCESS &&
+		        strcmp (componentId, TAP_COMPONENT_ID) == 0) {
+			len = deviceIDLen;
+			RegQueryValueEx (key, "NetCfgInstanceId", NULL, NULL,
+			                 (BYTE*) deviceID, &len);
+		}
+
+		RegCloseKey (key);
+	}
+
+	RegCloseKey (adapterKey);
+
+	if (deviceID[0] == 0) return 1;
+
+	snprintf (keyName, sizeof (keyName), "%s\\%s\\Connection",
+	          NETWORK_CONNECTIONS_KEY, deviceID);
+	status = RegOpenKeyEx (HKEY_LOCAL_MACHINE, keyName, 0, KEY_READ, &key);
+	if (status != ERROR_SUCCESS) return 1;
+
+	len = deviceNameLen;
+	status = RegQueryValueEx (key, "Name", NULL, NULL,
+	                          (BYTE*) deviceName, &len);
+	RegCloseKey (key);
+	if (status != ERROR_SUCCESS) return 1;
+
+	return 0;
+}
+
+int iface_retrieve_hwaddr (uint8_t*);
+
 int iface_create()
 {
+	char deviceId[256];
+	char deviceName[256];
+	char tapPath[256];
+	unsigned long len = 0;
+	int status;
 
+	if (findTapDevice (deviceId, sizeof (deviceId), deviceName, sizeof (deviceName) ) ) {
+		Log_info ("Couldn't find tapwin32 device!");
+		return 1;
+	}
+
+	Log_info ("deviceID: `%s'", deviceId);
+	Log_info ("deviceName: `%s'", deviceName);
+
+	snprintf (tapPath, sizeof (tapPath), "%s%s%s", USERMODEDEVICEDIR, deviceId, TAPSUFFIX);
+
+	fd = CreateFile (
+	         tapPath,
+	         GENERIC_READ | GENERIC_WRITE,
+	         0, 0,
+	         OPEN_EXISTING,
+	         FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED,
+	         0 );
+
+	if (fd == INVALID_HANDLE_VALUE) {
+		Log_error ("Could not open `%s'!", tapPath);
+		return 2;
+	}
+
+	status = TRUE;
+	DeviceIoControl (fd, TAP_IOCTL_SET_MEDIA_STATUS,
+	                 &status, sizeof (status),
+	                 &status, sizeof (status), &len, NULL);
+
+	if (iface_retrieve_hwaddr (0) ) {
+		Log_fatal ("couldn't retrieve iface MAC address");
+	}
+
+
+	o_read.Offset = 0;
+	o_read.OffsetHigh = 0;
+	o_write.Offset = 0;
+	o_write.OffsetHigh = 0;
+
+	Log_info ("tapwin32 device opened OK");
+
+	return 0;
 }
 
 int iface_destroy()
 {
-
+	int status = FALSE; //disconnect
+	DWORD len = 0;
+	Log_info ("disconnecting media");
+	DeviceIoControl (fd, TAP_IOCTL_SET_MEDIA_STATUS,
+	                 &status, sizeof (status),
+	                 &status, sizeof (status), &len, NULL);
+	Log_info ("closing tapwin32 device");
+	CloseHandle (fd);
+	return 0;
 }
 
-int iface_retrieve_hwaddr(uint8_t*d)
+int iface_retrieve_hwaddr (uint8_t*x)
 {
-
+	DWORD len = 0;
+	DeviceIoControl (fd, TAP_IOCTL_GET_MAC,
+	                 0, 0,
+	                 cached_hwaddr.addr.begin().base(), 6,
+	                 &len, 0);
+	return (len == 6) ? 0 : 1;
 }
 
-int iface_set_hwaddr(uint8_t*d)
+//setting HWADDR is not supported on win32. what a pity.
+
+int iface_write (void*buf, size_t len)
 {
-
+	Log_info ("writefile starting (len %u)", len);
+	if (!WriteFile (fd, buf, len, 0, &o_write) ) {
+		//we need to wait for operation to complete,
+		//because if there was any overlapping, memory corruption
+		//would happen.
+		DWORD len = 0;
+		if (!GetOverlappedResult (fd, &o_write, &len, TRUE) )
+			Log_warn ("writing iface failed with %d",
+			          GetLastError() );
+	}
 }
 
-int iface_write()
+bool read_in_progress = false;
+DWORD read_result = 0;
+char buffer[4096]; //needs to be global, cuz of overlapping
+
+int iface_read (void*buf, size_t len)
 {
-
+	if (read_in_progress) {
+		if (!GetOverlappedResult (fd, &o_read, &read_result, FALSE) )
+			return -1;
+		read_in_progress = false;
+		return read_result;
+	}
+	if (ReadFile (fd, buf, len, &read_result, &o_read) ) return read_result;
+	else {
+		int i = GetLastError();
+		if (i == ERROR_IO_PENDING) {
+			read_in_progress = true;
+		} else Log_warn ("error %d on iface read", i);
+		return -1;
+	}
 }
 
-int iface_read()
+
+void iface_poll_read()
 {
+	int ret;
 
+	//while (1) {
+	ret = iface_read (buffer, 4096);
+
+	if (ret <= 0) return;
+
+	if (ret <= 2 + (2*6) ) {
+		Log_debug ("discarding packet too short for Ethernet");
+		return;//continue;
+	}
+	Log_info ("got some packet, (size %d)", ret);
+	send_packet ( (uint8_t*) buffer, ret);
+	//}
 }
 
-int iface_poll_read()
-{
-
-}
-
-#endif
+#endif // _WIN32_
 
 /*
  * CloudVPN GATE part
@@ -725,13 +894,18 @@ int gate_poll_read()
 
 		b = recv_q.get_buffer (8192);
 		if (!b) return 0; //out of memory, just wait with receiving.
-		r = recv (gate, b, 8192, 0);
+		r = recv (gate,
+#ifdef __WIN32__
+		          (char*)
+#endif // __WIN32__
+		          b, 8192, 0);
 		if (r == 0) {
 			gate_disconnect();
 			return 1;
 		}
 		if (r < 0) {
-			if (errno == EAGAIN) return 0;
+			if (errno == EWOULDBLOCK) return 0;
+			Log_error ("gate recv() error %d", errno);
 			gate_disconnect();
 			return 1;
 		}
@@ -744,13 +918,18 @@ int gate_poll_write()
 {
 	int r;
 	while (send_q.len() ) {
-		r = send (gate, send_q.begin(), send_q.len(), 0);
+		r = send (gate,
+#ifdef __WIN32__
+		          (const char*)
+#endif //__WIN32__
+		          send_q.begin(), send_q.len(), 0);
 		if (r == 0) {
 			gate_disconnect();
 			return 1;
 		}
 		if (r < 0) {
-			if (errno == EAGAIN) return 0;
+			if (errno == EWOULDBLOCK) return 0;
+			Log_error ("gate send() error %d", errno);
 			gate_disconnect();
 			return 1;
 		}
@@ -770,8 +949,13 @@ int do_poll()
 	fd_set r, w, e;
 	struct timeval to;
 
+#ifndef __WIN32__
 	to.tv_sec = 3;
 	to.tv_usec = 141592;
+#else	//dumbpolling
+	to.tv_sec = 0;
+	to.tv_usec = 5000;
+#endif
 
 	FD_ZERO (&r);
 	FD_ZERO (&w);
@@ -779,13 +963,26 @@ int do_poll()
 	FD_SET (gate, &r);
 	if (send_q.len() ) FD_SET (gate, &w);
 	FD_SET (gate, &e);
+#ifndef __WIN32__
 	FD_SET (tun, &r);
 	FD_SET (tun, &e);
+#endif
 
-	int res = select (gate > tun ? gate + 1 : tun + 1, &r, &w, &e, &to);
-	if (res <= 0) return res ? 1 : 0;
+	int res = select (
+#ifndef __WIN32__
+	              gate > tun ? gate + 1 : tun + 1,
+#else
+	              gate + 1,
+#endif
+	              & r, &w, &e, &to);
 
-	if (FD_ISSET (tun, &r) ) iface_poll_read();
+	if (res < 0) return 1;
+
+#ifndef __WIN32__
+	if (FD_ISSET (tun, &r) )
+#endif
+		iface_poll_read();
+
 	if (FD_ISSET (gate, &w) ) gate_poll_write();
 	if (FD_ISSET (gate, &r) || FD_ISSET (gate, &e) ) gate_poll_read();
 
@@ -822,8 +1019,12 @@ int main (int argc, char**argv)
 			if (gate_connect() ) {
 				if (g_terminate) break;
 				Log_info ("gate reconnection in 10s");
+#ifndef __WIN32__
 				struct timeval to = {10, 0};
 				select (0, 0, 0, 0, &to); //reconnection timeout
+#else	 //no idea why select doesnt sleep on windows.
+				Sleep (10000);
+#endif
 			}
 		} else { //try some work
 			if (do_poll() ) {

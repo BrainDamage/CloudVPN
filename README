@@ -8,21 +8,33 @@
 
 The multi-purpose cloud&open VPN by [exa]
 
-Needed goals:
 
-Whole network consists of connected nodes, all with equal functionality.  Nodes
-are connected in a mesh of any shape, topology really doesn't matter. The mesh
-can transfer multiple protocols at once.
+
+Project goals:
+
+Create a  network that consists of nodes with equal functionality, which are
+connected in a mesh of any shape. One such mesh can effectively transport
+packets of multiple protocols.
 
 Optional goals:
 
 Don't use a single malloc(), only stack/STL allocation allowed. (success!)
+
+
 
 Made by:
 [exa] exa.exa@gmail.com
 
 License:
 GNU GPLv3 (see LICENSE file)
+
+Website:
+http://e-x-a.org/?view=cloudvpn
+
+(if you are not searching for technical info, check the quick howto:
+http://e-x-a.org/?view=cloudvpn-howto )
+
+
 
 Contents:
 1] Terminology
@@ -265,6 +277,10 @@ If you hit compile errors, be sure to check that following things are available:
  - STL-capable compiler (any gcc should be good)
  - GnuTLS library version 2.6 or better
 
+To compile CloudVPN for Windows, you will need some kind of MinGW with enough libraries (GnuTLS&co.), and then configure this:
+
+$ LIBS="-lws2_32" ./configure --host=mingw32
+
 
 
 ********************************************************* CONFIGURATION *******
@@ -322,6 +338,10 @@ same name can be specified and valid. If program needs only one of given
 options, then the last specified one is valid. When setting a number, start
 with 'x' character to set a hexadecimal value.
 
+Note of a warning: following list is a list of _all_ options, and 80% of them
+are unusuable for normal people (moreover, those will usually break something).
+If you are searching some good default configuration, check the website first.
+
 
 	COMMON among all programs
 user
@@ -336,7 +356,7 @@ ip_tos
 listen_backlog	--socket parameters
 
 
-	ETH-UNIX
+	ETHER
 
 instance
 proto		--dont set this, its good as it is.
@@ -347,6 +367,12 @@ iface_dev	--dev name
 iface_persist	--persistent bool
 
 gate		--cloud connection point
+
+tap_component_id tap0901
+		--name of TAP you installed on Win32. tap0901 is for the latest
+		--Tap-win32 from OpenVPN-2.1.x. If it doesn't find one, and
+		--you are sure that you installed a TAP, try some others,
+		--like tap0800, tap0802, or tap0801co (from coLinux)
 
 	CLOUD
 
