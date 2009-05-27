@@ -994,6 +994,8 @@ void connection::reset()
 	ubl_available = 0;
 	dbl_over = 0;
 
+	peer_addr_str = "";
+	peer_connected_since = 0;
 	if (connect_address.length() )
 		state = cs_retry_timeout;
 	else state = cs_inactive;

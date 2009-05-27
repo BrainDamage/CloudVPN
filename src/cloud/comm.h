@@ -91,6 +91,8 @@ public:
 		ubl_available = 0;
 		dbl_over = 0;
 		session = 0;
+		connect_address = peer_addr_str = "";
+		peer_connected_since = 0;
 	}
 
 	connection (); //this is supposed to fail, always use c(ID)
