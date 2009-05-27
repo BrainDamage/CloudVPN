@@ -13,7 +13,8 @@
 #ifndef _CVPN_SECURITY_H
 #define _CVPN_SECURITY_H
 
-int do_local_security();
+int do_chroot();
+int do_switch_user();
 int do_memlock();
 
 #endif

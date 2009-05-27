@@ -88,7 +88,7 @@ int main (int argc, char**argv)
 		goto failed_comm;
 	}
 
-	if (do_local_security() ) {
+	if (do_chroot() || do_switch_user() ) {
 		Log_fatal ("local security failed");
 		ret = 6;
 		goto failed_sec;

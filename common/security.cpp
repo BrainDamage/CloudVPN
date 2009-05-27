@@ -21,7 +21,7 @@
 #include <errno.h>
 #endif
 
-static int do_chroot()
+int do_chroot()
 {
 #ifndef __WIN32__
 	string dir;
@@ -30,6 +30,11 @@ static int do_chroot()
 	if (chroot (dir.c_str() ) ) {
 		Log_error ("chroot failed with errno %d", errno);
 		return 1;
+	}
+
+	if (chdir ("/") ) {
+		Log_error ("cannot enter chrooted environment");
+		return 2;
 	}
 
 #endif
@@ -42,7 +47,7 @@ static int do_chroot()
 #include <grp.h>
 #endif
 
-static int do_switch_user()
+int do_switch_user()
 {
 #ifndef __WIN32__
 	struct passwd*pw;
@@ -97,19 +102,6 @@ int do_memlock()
 			return 1;
 		}
 #endif
-	return 0;
-}
-
-int do_local_security()
-{
-	/*
-	 * note that memlock should be called before certs are loaded,
-	 * but chroot and user switching after that. Therefore, do_memlock is
-	 * not here.
-	 */
-
-	if (do_chroot() ) return 1;
-	if (do_switch_user() ) return 2;
 	return 0;
 }
 
