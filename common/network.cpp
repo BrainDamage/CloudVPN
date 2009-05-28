@@ -205,10 +205,12 @@ int tcp_close_socket (int sock, bool do_unlink)
 	if (do_unlink) { //we need to unlink the sockfile
 		sockaddr_type sa;
 		socklen_t sa_len = sizeof (sockaddr_type);
-		if (!getsockname (sock, & (sa.sa), &sa_len) ) {
-			if (sa.sa.sa_family == AF_UNIX)
-				unlink (sa.sa_un.sun_path);
-		}
+		if ( (!getsockname (sock, & (sa.sa), &sa_len) )
+		        && (sa.sa.sa_family == AF_UNIX) )
+			if (unlink (sa.sa_un.sun_path) ) {
+				Log_warn ("could not unlink socket %s",
+				          sa.sa_un.sun_path);
+			}
 	}
 #endif
 	if (close (sock) ) {
