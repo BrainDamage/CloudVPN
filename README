@@ -281,6 +281,16 @@ To compile CloudVPN for Windows, you will need some kind of MinGW with enough li
 
 $ LIBS="-lws2_32" ./configure --host=mingw32
 
+Because of library compatibility, many people asked about compiling CloudVPN
+tools statically. This can be easily achieved with autotools. This works in
+most common cases:
+
+LDFLAGS=-static LIBS="-ltasn1 -lgpg-error -lz" ./configure
+
+(and then continue like everytime.)
+LIBS are needed because gcc doesn't resolve library dependencies when static
+linking is active. You might either need more libraries, or maybe none of those.
+
 
 
 ********************************************************* CONFIGURATION *******
