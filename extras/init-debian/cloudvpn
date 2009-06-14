@@ -1,0 +1,179 @@
+#!/bin/sh -e
+
+### BEGIN INIT INFO
+# Provides:          vpn
+# Required-Start:    $network $local_fs
+# Required-Stop:     $network $local_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: cloudvpn VPN service
+### END INIT INFO
+
+# Original version by Robert Leslie
+# <rob@mars.org>, edited by iwj and cs
+# Modified for cloudvpn by Alberto Gonzalez Iniesta <agi@inittab.org>
+# Modified for restarting / starting / stopping single tunnels by Richard Mueller <mueller@teamix.net>
+# Modified for cloudVPN by Szabolcs Gyuris <szimszon@oregpreshaz.eu>
+. /lib/lsb/init-functions
+
+test $DEBIAN_SCRIPT_DEBUG && set -v -x
+
+DAEMON=/usr/local/bin/cloud
+DESC="virtual private network daemon"
+CONFIG_DIR=/etc/cloudvpn
+test -x $DAEMON || exit 0
+test -d $CONFIG_DIR || exit 0
+
+# Source defaults file; edit that file to configure this script.
+AUTOSTART="all"
+if test -e /etc/default/cloudvpn ; then
+  . /etc/default/cloudvpn
+fi
+
+start_vpn () {
+    log_progress_msg "$NAME"
+    STATUS=0
+
+    # Check to see if it's already started...
+    if test -e /var/run/cloudvpn.$NAME.pid ; then
+      log_failure_msg "Already running (PID file exists)"
+      STATUS=0
+    else
+      start-stop-daemon --start --make-pidfile\
+        --pidfile /var/run/cloudvpn.$NAME.pid --background\
+        --exec $DAEMON -- -@include $CONFIG_DIR/$NAME.cloud || STATUS=1
+    fi
+}
+stop_vpn () {
+  kill `cat $PIDFILE` || true
+  rm -f $PIDFILE
+  rm -f /var/run/cloudvpn.$NAME.status 2> /dev/null
+}
+
+case "$1" in
+start)
+  log_daemon_msg "Starting $DESC"
+
+  # autostart VPNs
+  if test -z "$2" ; then
+    # check if automatic startup is disabled by AUTOSTART=none
+    if test "x$AUTOSTART" = "xnone" -o -z "$AUTOSTART" ; then
+      log_warning_msg " Autostart disabled."
+      exit 0
+    fi
+    if test -z "$AUTOSTART" -o "x$AUTOSTART" = "xall" ; then
+      # all VPNs shall be started automatically
+      for CONFIG in `cd $CONFIG_DIR; ls *.cloud 2> /dev/null`; do
+        NAME=${CONFIG%%.cloud}
+        start_vpn
+      done
+    else
+      # start only specified VPNs
+      for NAME in $AUTOSTART ; do
+        if test -e $CONFIG_DIR/$NAME.cloud ; then
+          start_vpn
+        else
+          log_failure_msg "No such VPN: $NAME"
+          STATUS=1
+        fi
+      done
+    fi
+  #start VPNs from command line
+  else
+    while shift ; do
+      [ -z "$1" ] && break
+      if test -e $CONFIG_DIR/$1.cloud ; then
+        NAME=$1
+        start_vpn
+      else
+       log_failure_msg " No such VPN: $1"
+       STATUS=1
+      fi
+    done
+  fi
+  log_end_msg ${STATUS:-0}
+
+  ;;
+stop)
+  log_daemon_msg "Stopping $DESC"
+
+  if test -z "$2" ; then
+    for PIDFILE in `ls /var/run/cloudvpn.*.pid 2> /dev/null`; do
+      NAME=`echo $PIDFILE | cut -c19-`
+      NAME=${NAME%%.pid}
+      stop_vpn
+      log_progress_msg "$NAME"
+    done
+  else
+    while shift ; do
+      [ -z "$1" ] && break
+      if test -e /var/run/cloudvpn.$1.pid ; then
+        PIDFILE=`ls /var/run/cloudvpn.$1.pid 2> /dev/null`
+        NAME=`echo $PIDFILE | cut -c19-`
+        NAME=${NAME%%.pid}
+        stop_vpn
+        log_progress_msg "$NAME"
+      else
+        log_failure_msg " (failure: No such VPN is running: $1)"
+      fi
+    done
+  fi
+  log_end_msg 0
+  ;;
+# Only 'reload' running VPNs. New ones will only start with 'start' or 'restart'.
+reload|force-reload)
+ log_daemon_msg "Reloading $DESC"
+  for PIDFILE in `ls /var/run/cloudvpn.*.pid 2> /dev/null`; do
+    NAME=`echo $PIDFILE | cut -c19-`
+    NAME=${NAME%%.pid}
+# If cloudvpn if running under a different user than root we'll need to restart
+    if egrep '^[[:blank:]]*user[[:blank:]]' $CONFIG_DIR/$NAME.cloud > /dev/null 2>&1 ; then
+      stop_vpn
+      sleep 1
+      start_vpn
+      log_progress_msg "(restarted)"
+    else
+      kill -HUP `cat $PIDFILE` || true
+    log_progress_msg "$NAME"
+    fi
+  done
+  log_end_msg 0
+  ;;
+
+# Only 'soft-restart' running VPNs. New ones will only start with 'start' or 'restart'.
+soft-restart)
+ log_daemon_msg "$DESC sending SIGUSR1"
+  for PIDFILE in `ls /var/run/cloudvpn.*.pid 2> /dev/null`; do
+    NAME=`echo $PIDFILE | cut -c19-`
+    NAME=${NAME%%.pid}
+    kill -USR1 `cat $PIDFILE` || true
+    log_progress_msg "$NAME"
+  done
+  log_end_msg 0
+ ;;
+
+restart)
+  shift
+  $0 stop ${@}
+  sleep 1
+  $0 start ${@}
+  ;;
+cond-restart)
+  log_daemon_msg "Restarting $DESC."
+  for PIDFILE in `ls /var/run/cloudvpn.*.pid 2> /dev/null`; do
+    NAME=`echo $PIDFILE | cut -c19-`
+    NAME=${NAME%%.pid}
+    stop_vpn
+    sleep 1
+    start_vpn
+  done
+  log_end_msg 0
+  ;;
+*)
+  echo "Usage: $0 {start|stop|reload|restart|force-reload|cond-restart}" >&2
+  exit 1
+  ;;
+esac
+
+exit 0
+
