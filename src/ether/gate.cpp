@@ -679,18 +679,17 @@ void iface_poll_read()
 {
 	int ret;
 
-	//while (1) {
-	ret = iface_read (buffer, 4096);
+	while (1) {
+		ret = iface_read (buffer, 4096);
 
-	if (ret <= 0) return;
+		if (ret < 0) return;
 
-	if (ret <= 2 + (2*6) ) {
-		Log_debug ("discarding packet too short for Ethernet");
-		return;//continue;
+		if (ret <= 2 + (2*6) ) {
+			Log_debug ("discarding packet too short for Ethernet");
+			return;//continue;
+		}
+		send_packet ( (uint8_t*) buffer, ret);
 	}
-	Log_info ("got some packet, (size %d)", ret);
-	send_packet ( (uint8_t*) buffer, ret);
-	//}
 }
 
 #endif // _WIN32_
