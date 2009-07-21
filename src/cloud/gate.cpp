@@ -273,8 +273,12 @@ try_more:
 
 void gate::periodic_update()
 {
-	if (timestamp() - last_activity > 10000000) //ping every 10 seconds
-		if (fd >= 0) send_keepalive();
+	if (timestamp() - last_ping_sent > 10000000) //ping every 10 seconds
+		if (fd >= 0) {
+			send_keepalive();
+			last_ping_sent = timestamp();
+		}
+
 	if (timestamp() - last_activity > gate_timeout ) {
 		Log_error ("gate %d timeout", id);
 		reset();
@@ -407,6 +411,7 @@ void gate_listener_poll (int fd)
 		gate&g = gates[i];
 		g.set_fd (r);
 		g.last_activity = timestamp();
+		g.last_ping_sent = 0;
 		g.start();
 	}
 }

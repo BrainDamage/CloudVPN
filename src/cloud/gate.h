@@ -46,6 +46,7 @@ public:
 	explicit gate (int ID);
 	explicit gate(); //<- never use this one!
 
+	uint64_t last_ping_sent;
 	uint64_t last_activity;
 
 	//I/O handlers
