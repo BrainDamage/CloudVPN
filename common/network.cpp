@@ -27,6 +27,11 @@ static bool tcp_nodelay = false;
 static int ip_tos = 0;
 static int listen_backlog_size = 32;
 
+static int protocol_of(int family)
+{
+	if(family==AF_UNIX) return PF_UNIX;
+	return 0;
+}
 
 bool sock_nonblock (int fd)
 {
@@ -109,7 +114,7 @@ int tcp_listen_socket (const char* addr)
 		return -1;
 	}
 
-	int s = socket (domain, SOCK_STREAM, 0);
+	int s = socket (domain, SOCK_STREAM, protocol_of(domain));
 
 	if (s < 0) {
 		Log_error ("socket() failed with %d", errno);
@@ -157,7 +162,7 @@ int tcp_connect_socket (const char*addr)
 		return -1;
 	}
 
-	int s = socket (domain, SOCK_STREAM, 0);
+	int s = socket (domain, SOCK_STREAM, protocol_of(domain));
 
 	if (s < 0) {
 		Log_error ("socket() failed with %d", errno);
@@ -277,7 +282,7 @@ bool sockaddr_from_str (const char *str,
 		addr->sa_family = AF_UNIX;
 		( (sockaddr_un*) addr)->sun_family = AF_UNIX;
 		strncpy ( ( (sockaddr_un*) addr)->sun_path,
-		          str, 108);
+		          str, sizeof ( ( (sockaddr_un*) addr)->sun_path) );
 		return true;
 	}
 #endif
