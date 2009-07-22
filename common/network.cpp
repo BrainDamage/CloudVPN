@@ -27,9 +27,9 @@ static bool tcp_nodelay = false;
 static int ip_tos = 0;
 static int listen_backlog_size = 32;
 
-static int protocol_of(int family)
+static int protocol_of (int family)
 {
-	if(family==AF_UNIX) return PF_UNIX;
+	if (family == AF_UNIX) return PF_UNIX;
 	return 0;
 }
 
@@ -114,7 +114,7 @@ int tcp_listen_socket (const char* addr)
 		return -1;
 	}
 
-	int s = socket (domain, SOCK_STREAM, protocol_of(domain));
+	int s = socket (domain, SOCK_STREAM, protocol_of (domain) );
 
 	if (s < 0) {
 		Log_error ("socket() failed with %d", errno);
@@ -162,7 +162,7 @@ int tcp_connect_socket (const char*addr)
 		return -1;
 	}
 
-	int s = socket (domain, SOCK_STREAM, protocol_of(domain));
+	int s = socket (domain, SOCK_STREAM, protocol_of (domain) );
 
 	if (s < 0) {
 		Log_error ("socket() failed with %d", errno);
@@ -269,10 +269,10 @@ bool sockaddr_from_str (const char *str,
 #ifndef __WIN32__
 	//Local socket is distinguished by having a '/' in name.
 	//For sockets without '/' please use ./some.sock
-	//TODO: UNIX_MAX_PATH is here hardcoded to 108
+	//TODO: UNIX_MAX_PATH and similar need to be determined in a better way
 
 	if (strchr (str, '/') ) {
-		if (strlen (str) > 108) {
+		if (strlen (str) > sizeof ( ( (sockaddr_un*) addr)->sun_path) ) {
 			Log_error ("path too long for unix socket: %s", str);
 			return false;
 		}
