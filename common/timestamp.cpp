@@ -25,7 +25,7 @@ void timestamp_update()
 {
 	struct timeval tv;
 	gettimeofday (&tv, 0);
-	lasttime = (1000000 * tv.tv_sec) + tv.tv_usec;
+	lasttime = (1000000 * (uint64_t) tv.tv_sec) + (uint64_t) tv.tv_usec;
 }
 
 static struct ts_initializer_t {
