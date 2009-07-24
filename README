@@ -109,15 +109,7 @@ and authenticators.
 
 1] Addresses
 
-	Address is a arbitrarily-long sequence of bytes.
-	Least significant bit in the first byte of address marks the address
-	for broadcasting.
-	Adress bytes translate directly to binary format, and are textually
-	written, for similarity with ethernet addresses, in colon notation:
-
-	0x12345678 (hex) == 12:34:56:78  (and it is NOT broadcast address)
-
-	03:45 (this IS broadcast.)
+	Address is a arbitrarily-long sequence of bytes with instance prefix.
 
 	The Protocol/Instance prefix of address is written in (full) 8 hexes
 	before the address, separated by . Should be written this way:
@@ -131,11 +123,16 @@ and authenticators.
 
 	000100034c00103b83ad
 
-	There is a special address type, a PROMISC address, that tells routing
-	that we want to receive ALL packets of given protocol. This address
-	consists only of instance/proto ID, and is written just like this:
+	Adresses are matched by prefixes. That makes the packet with given
+	address come not only to the destination with exactly the same address,
+	but also to all destinations that request any prefix of given address,
+	or any destinations whose prefix begins with given address. Therefore,
+	among other:
 
-	0001.0003
+	- instance-only destination means that packet is broadcast
+	- instance-only route means that route is promiscuous
+	- you can send a packet to whole "subnet" using a shortened destination
+	- you can route whole subnet to yourself by the same way
 
 2] Packet format
 	
@@ -248,12 +245,7 @@ and authenticators.
 		32b inst
 		address
 
-	Note that client should not request route for a broadcast address.
-
 	packets are sent by both sides, to enable data transfer
-
-	If size of gate-route is zero, the route is identified as promisc
-	request, and the gate expects all instance data to be copied to it.
 
 
 

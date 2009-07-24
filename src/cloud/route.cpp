@@ -190,7 +190,6 @@ static bool multiroute_scatter (const address&a, int from, int*result)
  */
 
 static map<address, route_info> route, reported_route;
-static multimap<address, route_info> promisc;
 
 static int route_dirty = 0;
 static int route_report_ping_diff = 5000;
@@ -295,9 +294,6 @@ void route_update()
 		        k != g->second.local.end();++k) {
 			route_info temp (1, 0, - (1 + g->second.id) );
 			route[*k] = temp;
-			if (!k->addr.size() )
-				promisc.insert (pair<address, route_info>
-				                (*k, temp) );
 		}
 	}
 
@@ -331,9 +327,6 @@ void route_update()
 			                 1 + j->second.dist,
 			                 i->first);
 			route[j->first] = temp;
-			if (!j->first.addr.size() )
-				promisc.insert (pair<address, route_info>
-				                (j->first, temp) );
 
 		}
 	}
@@ -378,58 +371,61 @@ void route_packet (uint32_t id, uint16_t ttl, uint32_t inst,
                    uint16_t sof, uint16_t ss,
                    uint16_t s, const uint8_t*buf, int from)
 {
-	if (s < dof + ds) return; //invalid one
-	if (!ds) return; //cant do zero destination
+	if ( (s < dof + ds) || (s < sof + ss) ) return; //invalid one
+
+	if (!ttl) return; //don't spread this any further
 
 	if (queue_already_sent (id) ) return; //check duplicates
 	queue_add_id (id);
 
 	route_update();
 
-	address a (inst, buf + dof, ds), p (inst, 0, 0);
+	address a (inst, buf + dof, ds);
 
-	if (!a.is_broadcast() ) {
-		set<int> sendlist;
-		int t = 0x666; //neo-satanism.
+	set<int> sendlist;
 
-		//send it to probable destination, if we know it
-		if (do_multiroute) {
-			if (multiroute_scatter (a, from, &t) )
-				sendlist.insert (t);
-		} else {
-			map<address, route_info>::iterator
-			dest = route.find (a);
-
-			/*
-			 * second condition is here because of possible
-			 * temporary route misconfigurations. It triggers
-			 * a broadcast, so the packet isn't just discarded.
-			 */
-			if ( (dest != route.end() ) &&
-			        (dest->second.id != from) )
-				sendlist.insert (dest->second.id);
-		}
-
-		//send it to all known promiscs
-		multimap<address, route_info>::iterator i, e;
-		i = promisc.lower_bound (p);
-		e = promisc.upper_bound (p);
-
-		//if we don't know any promiscs, and no dest to send, broadcast
-		if ( (i == e) && (!sendlist.size() ) ) goto broadcast;
-
-		if (shared_uplink) //in this case, select random promisc
-			sendlist.insert (random_select (i, e)->second.id);
+	{ //bracket cuz of variable scope
 
 		/*
-		 * now feed it to all promiscs, or only
-		 * to gates when uplink is shared.
+		 * note that this could be done with filter() of simple foreach cmp,
+		 * but exploiting the tree properties is much faster. isn't it.
+		 *
+		 * (if lower_bound doesn't work logaritmic here, we are at least
+		 * prepared for the time it will)
 		 */
-		for (;i != e;++i)
-			if ( (!shared_uplink) || (i->second.id < 0) )
-				sendlist.insert (i->second.id);
 
-		sendlist.erase (from); //never send backwards
+		map<address, route_info>::iterator i;
+		size_t addrlen = a.addr.size();
+		address p;
+
+		//select shorter prefixes (abc sending to ab)
+		for (size_t al = 0;al < addrlen;++al) {
+			i = route.find (address
+			                (a.inst, a.addr.begin().base(), al) );
+			if (i == route.end() ) continue;
+			sendlist.insert (i->second.id);
+		}
+
+		//select all longer or equal addresses (abc sends to abcd)
+		i = route.lower_bound (a);
+		for (; (i != route.end() ) && (!i->first.cmp (a, true) );++i)
+			sendlist.insert (i->second.id);
+
+		//sending to gates doesnt cost us anything - so try all.
+		map<int, gate>::iterator
+		gi = gate_gates().begin(),
+		     ge = gate_gates().end();
+
+		list<address>::iterator ai, ae;
+
+		for (;gi != ge;++gi) {
+			ai = gi->second.local.begin();
+			ae = gi->second.local.end();
+			for (;ai != ae;++ai) if (ai->cmp (a, true) )
+					sendlist.insert (- (gi->first) - 1);
+		}
+
+		sendlist.erase (from); //don't send back
 
 		set<int>::iterator k, ke; //now send to all destinations
 		k = sendlist.begin();
@@ -437,25 +433,13 @@ void route_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 		for (;k != ke;++k) if ( (*k < 0) || (ttl > 0) )
 				send_packet_to_id (*k, id, ttl - 1, inst,
 				                   dof, ds, sof, ss, s, buf);
-		return;
+
+		if (sendlist.size() ) return;
+		//otherwise packet is lost and needs...
+
 	}
 
-broadcast:
-
-	map<int, gate>::iterator
-	j = gate_gates().begin(),
-	    je = gate_gates().end();
-
-	for (;j != je;++j) {
-		if (j->first == - (from + 1) ) continue; //dont send back
-		if (j->second.fd < 0) continue; //ready only
-		if (! (j->second.instances.count (p) ) )
-			continue;
-
-		j->second.send_packet (inst, dof, ds, sof, ss, s, buf);
-	}
-
-	if (!ttl) return; //don't spread this any further
+	// the broadcast part!
 
 	map<int, connection>::iterator
 	i = comm_connections().begin(),
@@ -468,6 +452,7 @@ broadcast:
 		return;
 
 	}
+
 	for (;i != e;++i) {
 		if (i->first == from) continue; //dont send back
 		if (i->second.state != cs_active) continue; //ready only

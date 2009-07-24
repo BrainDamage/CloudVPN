@@ -823,7 +823,13 @@ void send_packet (uint8_t*data, int size)
 	b += 3;
 	* (uint32_t*) (b) = htonl ( (proto << 16) | inst);
 	* (uint16_t*) (b + 4) = htons (0);//dof
-	* (uint16_t*) (b + 6) = htons (6);//ds
+
+	//ds - needs to be zerolen when broadcasting
+	if (data[0]&1)
+		* (uint16_t*) (b + 6) = htons (0);
+	else
+		* (uint16_t*) (b + 6) = htons (6);
+
 	* (uint16_t*) (b + 8) = htons (6);//sof
 	* (uint16_t*) (b + 10) = htons (6);//ss
 	* (uint16_t*) (b + 12) = htons (size);

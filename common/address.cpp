@@ -13,7 +13,7 @@
 #include "address.h"
 
 
-int address::cmp (const address&a) const
+int address::cmp (const address&a, bool prefix) const
 {
 	if (inst != a.inst) return (inst < a.inst) ? 1 : -1;
 
@@ -24,6 +24,7 @@ int address::cmp (const address&a) const
 		if (*i == *j) continue;
 		return ( (int) *i) - ( (int) *j);
 	}
+	if (prefix) return 0;
 	if (i == addr.end() )
 		if (j == a.addr.end() ) return 0;
 		else return -1;

@@ -27,7 +27,7 @@ public:
 	uint32_t inst;
 	vector<uint8_t> addr;
 
-	int cmp (const address&) const;
+	int cmp (const address&, bool prefix = false) const;
 	inline bool operator< (const address&a) const {
 		return cmp (a) < 0;
 	}
@@ -38,6 +38,10 @@ public:
 		return cmp (a) == 0;
 	}
 
+	inline bool match (const address&a) const {
+		return cmp (a, true) ? false : true;
+	}
+
 	inline address() {};
 
 	inline address (const address&a) :
@@ -45,7 +49,8 @@ public:
 			addr (a.addr) {}
 
 	inline address (uint32_t i, const uint8_t*data, size_t size) :
-			inst (i), addr (size) {
+			inst (i),
+			addr (size) {
 		copy (data, data + size, addr.begin() );
 	}
 
@@ -54,12 +59,6 @@ public:
 		copy (data, data + size, addr.begin() );
 		inst = i;
 	}
-
-	inline bool is_broadcast() {
-		if (addr.size() ) return addr[0]&1;
-		return false;
-	}
-
 
 	/*
 	 * string handling
