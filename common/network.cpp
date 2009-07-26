@@ -27,12 +27,6 @@ static bool tcp_nodelay = false;
 static int ip_tos = 0;
 static int listen_backlog_size = 32;
 
-static int protocol_of (int family)
-{
-	if (family == AF_UNIX) return PF_UNIX;
-	return 0;
-}
-
 bool sock_nonblock (int fd)
 {
 #ifndef __WIN32__
@@ -114,7 +108,7 @@ int tcp_listen_socket (const char* addr)
 		return -1;
 	}
 
-	int s = socket (domain, SOCK_STREAM, protocol_of (domain) );
+	int s = socket (domain, SOCK_STREAM, 0);
 
 	if (s < 0) {
 		Log_error ("socket() failed with %d", errno);
@@ -162,7 +156,7 @@ int tcp_connect_socket (const char*addr)
 		return -1;
 	}
 
-	int s = socket (domain, SOCK_STREAM, protocol_of (domain) );
+	int s = socket (domain, SOCK_STREAM, 0);
 
 	if (s < 0) {
 		Log_error ("socket() failed with %d", errno);
