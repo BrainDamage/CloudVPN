@@ -14,7 +14,7 @@
 #define LOGNAME "common/network"
 #include "log.h"
 #include "conf.h"
-
+#include "security.h"
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -114,6 +114,9 @@ int tcp_listen_socket (const char* addr)
 		Log_error ("socket() failed with %d", errno);
 		return -2;
 	}
+
+	if (domain == AF_UNIX) //chown/chgrp the socket so it can be deleted after
+		fix_file_owner (addr);
 
 	int opt = 1;
 	if (setsockopt (s, SOL_SOCKET, SO_REUSEADDR,

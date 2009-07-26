@@ -275,6 +275,7 @@ public:
 
 void comm_listener_poll (int fd);
 
+int comm_load();
 int comm_init();
 int comm_shutdown();
 

@@ -1494,7 +1494,7 @@ int connection::dbl_burst = 20480;
 bool connection::red_enabled = true;
 int connection::red_threshold = 50;
 
-int comm_init()
+int comm_load()
 {
 	int t;
 
@@ -1596,6 +1596,11 @@ int comm_init()
 		Log_fatal ("SSL initialization failed");
 		return 2;
 	}
+	return 0;
+}
+
+int comm_init()
+{
 
 	if (comm_listeners_init() ) {
 		Log_fatal ("couldn't initialize listeners");

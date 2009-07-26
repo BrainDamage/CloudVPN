@@ -16,6 +16,7 @@
 int do_chroot();
 int do_switch_user();
 int do_memlock();
+int fix_file_owner (const char*fn);
 
 #endif
 

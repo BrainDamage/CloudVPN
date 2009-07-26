@@ -70,16 +70,16 @@ int main (int argc, char**argv)
 		goto failed_poll;
 	}
 
-	if (gate_init() ) {
-		Log_fatal ("gate initialization failed");
-		ret = 3;
-		goto failed_gate;
-	}
-
 	if (do_memlock() ) {
 		Log_fatal ("locking process to memory failed");
+		ret = 3;
+		goto failed_poll;
+	}
+
+	if (comm_load() ) {
+		Log_fatal ("failed to load comm data");
 		ret = 4;
-		goto failed_comm;
+		goto failed_poll;
 	}
 
 	if (comm_init() ) {
@@ -88,11 +88,23 @@ int main (int argc, char**argv)
 		goto failed_comm;
 	}
 
-	if (do_chroot() || do_switch_user() ) {
-		Log_fatal ("local security failed");
+	if (gate_init() ) {
+		Log_fatal ("gate initialization failed");
 		ret = 6;
+		goto failed_gate;
+	}
+	if (do_chroot() ) {
+		Log_fatal ("chrooting failed");
+		ret = 7;
 		goto failed_sec;
 	}
+
+	if (do_switch_user() ) {
+		Log_fatal ("user switch failed");
+		ret = 8;
+		goto failed_sec;
+	}
+
 
 	/*
 	 * main loop
@@ -132,13 +144,13 @@ int main (int argc, char**argv)
 
 failed_sec:
 
-	comm_shutdown();
-
-failed_comm:
-
 	gate_shutdown();
 
 failed_gate:
+
+	comm_shutdown();
+
+failed_comm:
 
 	if (poll_deinit() )
 		Log_warn ("poll_deinit somehow failed!");

@@ -105,3 +105,35 @@ int do_memlock()
 	return 0;
 }
 
+int fix_file_owner (const char*fn)
+{
+	struct passwd*pw;
+	struct group*gr;
+
+	int gid = -1, uid = -1;
+
+	string t;
+
+	if (config_get ("user", t) ) {
+		pw = getpwnam (t.c_str() );
+		if (!pw) {
+			Log_error ("unknown user `%s'", t.c_str() );
+			return 1;
+		}
+		uid = pw->pw_uid;
+	}
+
+	if (config_get ("group", t) ) {
+		gr = getgrnam (t.c_str() );
+		if (!gr) {
+			Log_error ("unknown group `%s'", t.c_str() );
+			return 2;
+		}
+		gid = gr->gr_gid;
+	}
+
+	if (uid >= 0) if (chown (fn, uid, -1) ) return 3;
+	if (gid >= 0) if (chown (fn, -1, gid) ) return 4;
+
+	return 0;
+}
