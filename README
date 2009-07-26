@@ -269,7 +269,8 @@ If you hit compile errors, be sure to check that following things are available:
  - STL-capable compiler (any gcc should be good)
  - GnuTLS library version 2.6 or better
 
-To compile CloudVPN for Windows, you will need some kind of MinGW with enough libraries (GnuTLS&co.), and then configure this:
+To compile CloudVPN for Windows, you will need some kind of MinGW with enough
+libraries (GnuTLS&co.), and then configure this:
 
 $ LIBS="-lws2_32" ./configure --host=mingw32
 
