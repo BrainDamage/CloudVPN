@@ -855,7 +855,12 @@ void handle_packet (uint8_t*data, int size)
 	s = ntohs (* (uint16_t*) (data + 12) );
 
 	if (instance != (uint32_t) ( (proto << 16) | inst) ) return;
-	if ( (dof != 0) || (ds != 6) || (sof != 6) || (ss != 6) ) return;
+
+	if ( (dof != 0) ||
+		( (ds != 6) && (ds != 0) ) ||
+		(sof != 6) ||
+		(ss != 6) ) return;
+
 	if (s < 14) return;
 	iface_write (data + 14, s);
 }
