@@ -115,9 +115,6 @@ int tcp_listen_socket (const char* addr)
 		return -2;
 	}
 
-	if (domain == AF_UNIX) //chown/chgrp the socket so it can be deleted after
-		fix_file_owner (addr);
-
 	int opt = 1;
 	if (setsockopt (s, SOL_SOCKET, SO_REUSEADDR,
 #ifdef __WIN32__
@@ -137,6 +134,9 @@ int tcp_listen_socket (const char* addr)
 		close (s);
 		return -4;
 	}
+
+	if (domain == AF_UNIX)
+		fix_file_owner (addr);
 
 	if (listen (s, listen_backlog_size) ) {
 		Log_error ("listen(%d,%d) failed with %d",

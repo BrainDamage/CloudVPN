@@ -19,6 +19,7 @@
 
 #include <unistd.h>
 #include <errno.h>
+#include <string.h>
 #endif
 
 int do_chroot()
@@ -132,8 +133,10 @@ int fix_file_owner (const char*fn)
 		gid = gr->gr_gid;
 	}
 
-	if (uid >= 0) if (chown (fn, uid, -1) ) return 3;
-	if (gid >= 0) if (chown (fn, -1, gid) ) return 4;
+	if ( (uid >= 0) || (gid >= 0) ) if (chown (fn, uid, gid) ) {
+			Log_warn ("cannot chown(\"%s\", %d, %d): %s", fn, uid, gid, strerror (errno) );
+			return 3;
+		}
 
 	return 0;
 }
