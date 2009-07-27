@@ -857,9 +857,9 @@ void handle_packet (uint8_t*data, int size)
 	if (instance != (uint32_t) ( (proto << 16) | inst) ) return;
 
 	if ( (dof != 0) ||
-		( (ds != 6) && (ds != 0) ) ||
-		(sof != 6) ||
-		(ss != 6) ) return;
+	        ( (ds != 6) && (ds != 0) ) ||
+	        (sof != 6) ||
+	        (ss != 6) ) return;
 
 	if (s < 14) return;
 	iface_write (data + 14, s);
