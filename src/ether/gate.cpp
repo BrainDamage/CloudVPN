@@ -218,7 +218,8 @@ int iface_set_hwaddr (uint8_t*hwaddr)
 	int ctl = socket (AF_INET, SOCK_DGRAM, 0);
 
 	if (ctl < 0) {
-		Log_error ("iface_set_hwaddr: creating socket failed with %d (%s)", errno, strerror (errno) );
+		Log_error ("iface_set_hwaddr: creating socket failed with %d: %s",
+		           errno, strerror (errno) );
 		return 1;
 	}
 
@@ -234,7 +235,8 @@ int iface_set_hwaddr (uint8_t*hwaddr)
 	close (ctl);
 
 	if (ret < 0) {
-		Log_error ("iface_set_hwaddr: ioctl failed with %d (%s)", errno, strerror (errno) );
+		Log_error ("iface_set_hwaddr: ioctl failed with %d: %s",
+		           errno, strerror (errno) );
 		return 2;
 	}
 
@@ -251,7 +253,8 @@ int iface_retrieve_hwaddr (uint8_t*hwaddr)
 	int ctl = socket (AF_INET, SOCK_DGRAM, 0);
 
 	if (ctl < 0) {
-		Log_error ("iface_retrieve_hwaddr: creating socket failed with %d (%s)", errno, strerror (errno) );
+		Log_error ("iface_retrieve_hwaddr: creating socket failed with %d: %s",
+		           errno, strerror (errno) );
 		return 1;
 	}
 
@@ -263,7 +266,8 @@ int iface_retrieve_hwaddr (uint8_t*hwaddr)
 
 
 	if (ret < 0) {
-		Log_error ("iface_retrieve_hwaddr: ioctl failed with %d (%s)", errno, strerror (errno) );
+		Log_error ("iface_retrieve_hwaddr: ioctl failed with %d: %s",
+		           errno, strerror (errno) );
 		close (ctl);
 		return 2;
 	}
@@ -297,7 +301,8 @@ int iface_set_hwaddr (uint8_t*addr)
 	int ctl = socket (AF_INET, SOCK_DGRAM, 0);
 
 	if (ctl < 0) {
-		Log_error ("iface_set_hwaddr: creating socket failed with %d (%s)", errno, strerror (errno) );
+		Log_error ("iface_set_hwaddr: creating socket failed with %d: %s",
+		           errno, strerror (errno) );
 		return 1;
 	}
 
@@ -321,7 +326,8 @@ int iface_set_hwaddr (uint8_t*addr)
 	close (ctl);
 
 	if (ret < 0) {
-		Log_error ("iface_set_hwaddr: ioctl failed with %d (%s)", errno, strerror (errno) );
+		Log_error ("iface_set_hwaddr: ioctl failed with %d: %s",
+		           errno, strerror (errno) );
 		return 2;
 	}
 
@@ -382,7 +388,8 @@ int iface_destroy()
 	Log_info ("destroying local interface");
 
 	if ( (ret = close (tun) ) ) {
-		Log_error ("iface_destroy: close(%d) failed with %d (%s). this may cause trouble elsewhere.", tun, errno, strerror (errno) );
+		Log_error ("iface_destroy: close(%d) failed with %d (%s). this may cause trouble elsewhere.",
+		           tun, errno, strerror (errno) );
 		return 1;
 	}
 
@@ -403,7 +410,7 @@ int iface_write (void*buf, size_t len)
 	if (res < 0) {
 		if (errno == EWOULDBLOCK) return 0;
 		else {
-			Log_warn ("iface: write failure %d (%s)",
+			Log_warn ("iface: write failure %d: %s",
 			          errno, strerror (errno) );
 			return -1;
 		}
@@ -419,7 +426,7 @@ int iface_read (void*buf, size_t len)
 	if (res < 0) {
 		if (errno == EWOULDBLOCK) return 0;
 		else {
-			Log_error ("iface: read failure %d (%s)",
+			Log_error ("iface: read failure %d: %s",
 			           errno, strerror (errno) );
 			return -1;
 		}
@@ -915,7 +922,8 @@ int gate_poll_read()
 		}
 		if (r < 0) {
 			if (errno == EWOULDBLOCK) return 0;
-			Log_error ("gate recv() error %d", errno);
+			Log_error ("gate recv() error %d: %s",
+			           errno, strerror (errno) );
 			gate_disconnect();
 			return 1;
 		}
@@ -939,7 +947,8 @@ int gate_poll_write()
 		}
 		if (r < 0) {
 			if (errno == EWOULDBLOCK) return 0;
-			Log_error ("gate send() error %d", errno);
+			Log_error ("gate send() error %d: %s",
+			           errno, strerror (errno) );
 			gate_disconnect();
 			return 1;
 		}

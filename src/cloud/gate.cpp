@@ -328,7 +328,8 @@ void gate::poll_read()
 			return;
 		} else if (r < 0) {
 			if (errno != EWOULDBLOCK) {
-				Log_warn ("gate %d read error", id);
+				Log_warn ("gate %d read error %d: %s",
+				          id, errno, strerror (errno) );
 				reset();
 			}
 			return;
@@ -392,7 +393,7 @@ void gate_listener_poll (int fd)
 	if (r < 0)
 		if ( (errno == EWOULDBLOCK) || (!errno) ) {
 			return;
-		} else Log_warn ("gate accept(%d) failed with %d (%s)",
+		} else Log_warn ("gate accept(%d) failed with %d: %s",
 			                 fd, errno, strerror (errno) );
 	else {
 		if (!sock_nonblock (r) ) {

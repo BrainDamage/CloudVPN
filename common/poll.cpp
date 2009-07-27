@@ -320,7 +320,8 @@ int poll_wait_for_event (int timeout)
 	if (ret < 0) {
 		int e = errno;
 		if (e == EINTR) Log_info ("epoll_wait() interrupted");
-		else Log_error ("epoll_wait failed with errno %d", e);
+		else Log_error ("epoll_wait failed with errno %d: %s",
+			                e, strerror (errno) );
 		return 1;
 	}
 
@@ -442,7 +443,8 @@ int poll_wait_for_event (int timeout_usec)
 			Log_info ("kevent() interrupted by a signal");
 			return 0;
 		} else {
-			Log_info ("kevent() failed with errno %d", errno);
+			Log_info ("kevent() failed with errno %d: %s",
+			          errno, strerror (errno) );
 			return 1;
 		}
 	}
@@ -552,7 +554,8 @@ int poll_wait_for_event (int usec)
 			Log_info ("poll() interrupted");
 			return 0;
 		} else {
-			Log_info ("poll() failed with errno %d", errno);
+			Log_info ("poll() failed with errno %d: %s",
+			          errno, strerror (errno) );
 			return 1;
 		}
 	}
@@ -656,7 +659,8 @@ int poll_wait_for_event (int timeout)
 			return 0;
 		}
 
-		Log_error ("select() failed with errno %d", e);
+		Log_error ("select() failed with errno %d: %s",
+		           e, strerror (errno) );
 		return 1;
 	}
 

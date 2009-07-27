@@ -29,7 +29,8 @@ int do_chroot()
 	if (!config_get ("chroot", dir) ) return 0;
 
 	if (chroot (dir.c_str() ) ) {
-		Log_error ("chroot failed with errno %d", errno);
+		Log_error ("chroot failed with errno %d: %s",
+		           errno, strerror (errno) );
 		return 1;
 	}
 
@@ -99,7 +100,8 @@ int do_memlock()
 {
 #ifndef __WIN32__
 	if (config_is_true ("mlockall") ) if (mlockall (MCL_CURRENT | MCL_FUTURE) ) {
-			Log_error ("mlockall() failed with errno %d", errno);
+			Log_error ("mlockall() failed with errno %d: %s",
+			           errno, strerror (errno) );
 			return 1;
 		}
 #endif

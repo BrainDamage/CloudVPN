@@ -111,7 +111,7 @@ int tcp_listen_socket (const char* addr)
 	int s = socket (domain, SOCK_STREAM, 0);
 
 	if (s < 0) {
-		Log_error ("socket() failed with %d", errno);
+		Log_error ("socket() failed with %d: %s",  errno, strerror (errno) );
 		return -2;
 	}
 
@@ -130,7 +130,7 @@ int tcp_listen_socket (const char* addr)
 	}
 
 	if (bind (s, & (sa.sa), sa_len) ) {
-		Log_error ("binding socket %d failed with %d", s, errno);
+		Log_error ("binding socket %d failed with %d: %s", s, errno, strerror (errno) );
 		close (s);
 		return -4;
 	}
@@ -139,8 +139,8 @@ int tcp_listen_socket (const char* addr)
 		fix_file_owner (addr);
 
 	if (listen (s, listen_backlog_size) ) {
-		Log_error ("listen(%d,%d) failed with %d",
-		           s, listen_backlog_size, errno);
+		Log_error ("listen(%d,%d) failed with %d: %s",
+		           s, listen_backlog_size, errno, strerror (errno) );
 		close (s);
 		return -5;
 	}
@@ -162,7 +162,7 @@ int tcp_connect_socket (const char*addr)
 	int s = socket (domain, SOCK_STREAM, 0);
 
 	if (s < 0) {
-		Log_error ("socket() failed with %d", errno);
+		Log_error ("socket() failed with %d: %s", errno, strerror (errno) );
 		return -2;
 	}
 
@@ -216,7 +216,7 @@ int tcp_close_socket (int sock, bool do_unlink)
 	}
 #endif
 	if (close (sock) ) {
-		Log_warn ("closing socket %d failed with %d!", sock, errno);
+		Log_warn ("closing socket %d failed with %d: %s", sock, errno, strerror (errno) );
 		return 1;
 	}
 	return 0;
