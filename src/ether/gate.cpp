@@ -707,6 +707,7 @@ void iface_poll_read()
 
 int gate = -1;
 bool promisc = false;
+bool bridge = false;
 
 uint16_t inst = 0xDEFA;
 uint16_t proto = 0xE78A;
@@ -729,6 +730,10 @@ void gate_init()
 	if (config_get_int ("instance", t) ) inst = t;
 	if (config_get_int ("proto", t) ) proto = t;
 	if (config_is_true ("promisc") ) promisc = true;
+	if (config_is_true ("bridge") ) {
+		bridge = true;
+		proto = 0xE78B; //so it doesn't mess with normal ethernet
+	}
 }
 
 int gate_connect()
@@ -796,12 +801,14 @@ void send_route()
 	uint8_t*b = send_q.append_buffer (3);
 	*b = 2;
 	* (uint16_t*) (b + 1) = htons (12 + (promisc ? 6 : 0) );
+
 	b = send_q.append_buffer (12 + (promisc ? 6 : 0) );
 	* (uint16_t*) (b) = htons (6);
 	* (uint32_t*) (b + 2) = htonl ( (proto << 16) | inst);
 	copy (cached_hwaddr.addr.begin(),
 	      cached_hwaddr.addr.end(), b + 6);
-	if (promisc) {
+
+	if (promisc) {   //promisc doesn't need to be used with bridge, though.
 		b += 12;
 		* (uint16_t*) (b) = htons (0);
 		* (uint32_t*) (b + 2) = htonl ( (proto << 16) | inst);
@@ -831,8 +838,8 @@ void send_packet (uint8_t*data, int size)
 	* (uint32_t*) (b) = htonl ( (proto << 16) | inst);
 	* (uint16_t*) (b + 4) = htons (0);//dof
 
-	//ds - needs to be zerolen when broadcasting
-	if (data[0]&1)
+	//ds - needs to be zerolen when broadcasting or bridge-casting
+	if (bridge || (data[0]&1) )
 		* (uint16_t*) (b + 6) = htons (0);
 	else
 		* (uint16_t*) (b + 6) = htons (6);
@@ -973,7 +980,7 @@ int do_poll()
 	to.tv_usec = 141592;
 #else	//dumbpolling
 	to.tv_sec = 0;
-	to.tv_usec = 5000;
+	to.tv_usec = 1000;
 #endif
 
 	FD_ZERO (&r);
