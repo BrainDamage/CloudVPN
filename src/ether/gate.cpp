@@ -1002,7 +1002,7 @@ int do_poll()
 #endif
 	              & r, &w, &e, &to);
 
-	if (res < 0) return 1;
+	if (res < 0) return (errno == EINTR) ? 0 : 1;
 
 #ifndef __WIN32__
 	if (FD_ISSET (tun, &r) )
