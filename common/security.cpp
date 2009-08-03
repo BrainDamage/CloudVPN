@@ -110,6 +110,7 @@ int do_memlock()
 
 int fix_file_owner (const char*fn)
 {
+#ifndef __WIN32__
 	struct passwd*pw;
 	struct group*gr;
 
@@ -140,5 +141,6 @@ int fix_file_owner (const char*fn)
 			return 3;
 		}
 
+#endif
 	return 0;
 }
