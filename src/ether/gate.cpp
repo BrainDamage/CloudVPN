@@ -647,7 +647,6 @@ int iface_retrieve_hwaddr (uint8_t*x)
 
 int iface_write (void*buf, size_t len)
 {
-	Log_info ("writefile starting (len %u)", len);
 	if (!WriteFile (fd, buf, len, 0, &o_write) ) {
 		//we need to wait for operation to complete,
 		//because if there was any overlapping, memory corruption
