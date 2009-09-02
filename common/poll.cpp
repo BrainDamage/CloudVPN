@@ -48,7 +48,7 @@
 #define USE_KQUEUE 1
 #endif
 
-#ifdef __darwin__ //this is suggested on MACs
+#ifdef __APPLE__ //Thanks to anonymous website reader for suggestion for MACs.
 #undef USE_SELECT
 #define USE_SELECT 1
 #endif
