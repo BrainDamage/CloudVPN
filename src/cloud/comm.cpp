@@ -368,10 +368,9 @@ void connection::deindex()
 //sizes
 #define p_head_size 4
 
-static void add_packet_header (pbuffer&b, uint8_t type,
+static void add_packet_header (pusher&b, uint8_t type,
                                uint8_t special, uint16_t size)
 {
-	b.b.reserve (p_head_size);
 	b.push<uint8_t> (type);
 	b.push<uint8_t> (special);
 	b.push<uint16_t> (htons (size) );
@@ -492,24 +491,6 @@ void connection::handle_route_request ()
  * senders
  */
 
-pbuffer& connection::new_data (size_t size)
-{
-	data_q_size += size;
-	data_q.push_back (pbuffer() );
-	data_q.back().b.reserve (size);
-	stat_packet (false, size);
-	return data_q.back();
-}
-
-pbuffer& connection::new_proto (size_t size)
-{
-	proto_q_size += size;
-	proto_q.push_back (pbuffer() );
-	proto_q.back().b.reserve (size);
-	stat_packet (false, size);
-	return proto_q.back();
-}
-
 void connection::write_packet (uint32_t id, uint16_t ttl,
                                uint32_t inst,
                                uint16_t dof, uint16_t ds,
@@ -522,7 +503,10 @@ void connection::write_packet (uint32_t id, uint16_t ttl,
 	if (!can_write_data (size) ) return;
 
 	if (s > mtu) return;
-	pbuffer& b = new_data (size);
+
+	pusher b (send_q.get_buffer (size) );
+	if (!b.d) return;
+
 	add_packet_header (b, pt_packet, 0, 20 + s);
 	b.push<uint32_t> (htonl (id) );
 	b.push<uint16_t> (htons (ttl) );
@@ -539,10 +523,9 @@ void connection::write_route_set (uint8_t*data, int n)
 {
 	size_t size = p_head_size + n;
 
-	if (!can_write_proto (size) ) try_write();
-	if (!can_write_proto (size) ) return;
+	pusher b (send_q.get_buffer (size) );
+	if (!b.d) return;
 
-	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_route_set, 0, n);
 	b.push (data, n);
 }
@@ -551,10 +534,9 @@ void connection::write_route_diff (uint8_t*data, int n)
 {
 	size_t size = p_head_size + n;
 
-	if (!can_write_proto (size) ) try_write();
-	if (!can_write_proto (size) ) return;
+	pusher b (send_q.get_buffer (size) );
+	if (!b.d) return;
 
-	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_route_diff, 0, n);
 	b.push (data, n);
 }
@@ -563,10 +545,9 @@ void connection::write_ping (uint8_t ID)
 {
 	size_t size = p_head_size;
 
-	if (!can_write_proto (size) ) try_write();
-	if (!can_write_proto (size) ) return;
+	pusher b (send_q.get_buffer (size) );
+	if (!b.d) return;
 
-	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_echo_request, ID, 0);
 }
 
@@ -574,10 +555,9 @@ void connection::write_pong (uint8_t ID)
 {
 	size_t size = p_head_size;
 
-	if (!can_write_proto (size) ) try_write();
-	if (!can_write_proto (size) ) return;
+	pusher b (send_q.get_buffer (size) );
+	if (!b.d) return;
 
-	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_echo_reply, ID, 0);
 }
 
@@ -585,10 +565,9 @@ void connection::write_route_request ()
 {
 	size_t size = p_head_size;
 
-	if (!can_write_proto (size) ) try_write();
-	if (!can_write_proto (size) ) return;
+	pusher b (send_q.get_buffer (size) );
+	if (!b.d) return;
 
-	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_route_request, 0, 0);
 }
 
@@ -695,41 +674,21 @@ bool connection::try_read()
 
 bool connection::try_write()
 {
-	const uint8_t *buf;
-	int n, r;
-
-	if (ubl_enabled && (!ubl_available) && needs_write() ) bl_recompute();
+	int r, n;
 
 	while (needs_write() ) {
 
-		if (sending_from_data_q) {
-			if (!data_q.size() ) {
-				sending_from_data_q = false;
-				continue;
-			} else {
-				buf = data_q.front().b.begin().base();
-				n = data_q.front().b.size();
-			}
-		}
-
-		if (!sending_from_data_q) {
-			if (proto_q.size() ) {
-				buf = proto_q.front().b.begin().base();
-				n = proto_q.front().b.size();
-			} else { //we can be pretty sure there's something.
-				sending_from_data_q = true;
-				buf = data_q.front().b.begin().base();
-				n = data_q.front().b.size();
-			}
-		}
-
 		//choke the bandwidth. Note that we dont want to really
 		//discard the packet here, because of SSL.
-		if (sending_from_data_q && ubl_enabled &&
-		        ( (unsigned int) n > ubl_available) ) break;
+
+		n = send_q.len();
+		if (ubl_enabled && ( (unsigned int) n > ubl_available)
+		        && (n > ubl_available) ) n = ubl_available;
+
+		if (!n) return true; //we ran out of available bandwidth
 
 		//or try to send.
-		r = gnutls_record_send (session, buf, n);
+		r = gnutls_record_send (session, send_q.begin(), n);
 
 		if (r == 0) {
 			Log_info ("connection id %d closed by peer", id);
@@ -743,23 +702,10 @@ bool connection::try_write()
 			}
 			return true;
 		} else {
-			if (sending_from_data_q) {
-				if (ubl_enabled) ubl_available -= n;
-				if (data_q_size < data_q.front().b.size() )
-					data_q_size = 0;
-				else data_q_size -= data_q.front().b.size();
-				data_q.pop_front();
-				sending_from_data_q = false;
-			} else {
-				if (proto_q_size < proto_q.front().b.size() )
-					proto_q_size = 0;
-				else proto_q_size -= proto_q.front().b.size();
-				proto_q.pop_front();
-			}
+			send_q.read (r);
 		}
 	}
 	poll_set_remove_write (fd); //don't need any more write
-	data_q_size = proto_q_size = 0; //to be sure
 	return true;
 }
 
@@ -932,7 +878,6 @@ void connection::send_ping()
 void connection::activate()
 {
 	state = cs_active;
-	sending_from_data_q = false;
 	route_report_to_connection (*this);
 	send_ping();
 }
@@ -971,10 +916,8 @@ void connection::reset()
 	route_overflow = false;
 	route_set_dirty();
 
-	sending_from_data_q = false;
 	recv_q.clear();
-	proto_q.clear();
-	data_q.clear();
+	send_q.clear();
 
 	cached_header.type = 0;
 
@@ -1340,7 +1283,7 @@ void connection::bl_recompute()
 bool connection::red_can_send (size_t s)
 {
 	if (red_enabled) {
-		int fill = (100 * (data_q_size + s) ) / max_waiting_data_size;
+		int fill = (100 * (send_q.len() + s) ) / max_waiting_data_size;
 		if (fill < red_threshold) return true;
 		if (fill > red_threshold + (rand() % (101 - red_threshold) ) )
 			return false;
@@ -1476,8 +1419,7 @@ static int comm_connections_close()
  */
 
 unsigned int connection::mtu = 8192;
-unsigned int connection::max_waiting_data_size = 262144;
-unsigned int connection::max_waiting_proto_size = 65536;
+unsigned int connection::max_waiting_data_size = 1024000;
 unsigned int connection::max_remote_routes = 256;
 bool connection::ubl_enabled = false;
 int connection::ubl_total = 0;
@@ -1505,16 +1447,10 @@ int comm_load()
 	          connection::mtu);
 
 	if (!config_get_int ("max_waiting_data_size", t) )
-		connection::max_waiting_data_size = 262144;
+		connection::max_waiting_data_size = 1024000;
 	else connection::max_waiting_data_size = t;
 	Log_info ("max %d pending data bytes",
 	          connection::max_waiting_data_size);
-
-	if (!config_get_int ("max_waiting_proto_size", t) )
-		connection::max_waiting_proto_size = 65536;
-	else connection::max_waiting_proto_size = t;
-	Log_info ("max %d pending proto bytes",
-	          connection::max_waiting_proto_size);
 
 	if (!config_get_int ("max_remote_routes", t) )
 		connection::max_remote_routes = 256;
@@ -1630,6 +1566,7 @@ void comm_flush_data()
 	/*
 	 * call this after each timeslice. It prevents send-data fragmentation.
 	 */
+	if (connection::ubl_enabled) connection::bl_recompute();
 
 	map<int, connection>::iterator i;
 	for (i = connections.begin();i != connections.end();++i)

@@ -43,6 +43,17 @@ public:
 	}
 };
 
+class pusher
+{
+public:
+	uint8_t*d;
+	inline pusher (void*D) : d ( (uint8_t*) D) {}
+	template<class T>inline void push (const T&a) {
+		push ( (uint8_t*) &a, sizeof (a) );
+	}
+	void push (const uint8_t*, size_t);
+};
+
 void squeue_init();
 
 class squeue

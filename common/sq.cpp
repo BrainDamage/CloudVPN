@@ -38,6 +38,17 @@ void pbuffer::shift (size_t len)
 }
 
 /*
+ * pusher
+ *
+ * thing that is used only for filling bytestreams.
+ */
+
+void pusher::push (const uint8_t*p, size_t size)
+{
+	copy (p, p + size, d);
+}
+
+/*
  * squeue stuff
  *
  * - fill the vector buffer, provide direct access to it

@@ -85,7 +85,6 @@ public:
 		ping = timeout;
 		last_ping = 0;
 		cached_header.type = 0;
-		sending_from_data_q = false;
 		route_overflow = false;
 		stats_clear();
 		ubl_available = 0;
@@ -122,9 +121,7 @@ public:
 	 */
 
 	squeue recv_q;
-	deque<pbuffer> proto_q, data_q;
-	unsigned int proto_q_size, data_q_size;
-	bool sending_from_data_q;
+	squeue send_q;
 
 	struct {
 		uint8_t type;
@@ -133,9 +130,6 @@ public:
 	} cached_header;
 
 	void try_parse_input();
-
-	pbuffer& new_proto (size_t size);
-	pbuffer& new_data (size_t size);
 
 	bool try_read();
 	bool try_write(); //both called by try_data(); dont use directly
@@ -201,17 +195,11 @@ public:
 
 	static unsigned int mtu;
 	static unsigned int max_waiting_data_size;
-	static unsigned int max_waiting_proto_size;
 	static unsigned int max_remote_routes;
 
 	inline bool can_write_data (size_t s) {
-		return (data_q_size + s < max_waiting_data_size)
+		return (send_q.len() + s < max_waiting_data_size)
 		       && red_can_send (s);
-	}
-
-	inline bool can_write_proto (size_t s) {
-		//RED doesn't apply to proto packets
-		return proto_q_size + s < max_waiting_proto_size;
 	}
 
 	/*
@@ -261,7 +249,7 @@ public:
 	static void bl_recompute();
 
 	inline bool needs_write() {
-		return data_q.size() || proto_q.size();
+		return send_q.len();
 	}
 
 	/*
