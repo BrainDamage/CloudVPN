@@ -98,6 +98,7 @@ public:
 
 int gate_init();
 void gate_shutdown();
+void gate_flush_data();
 int gate_periodic_update();
 
 void gate_listener_poll (int fd);

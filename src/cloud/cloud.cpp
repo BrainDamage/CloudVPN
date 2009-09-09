@@ -124,6 +124,9 @@ int main (int argc, char**argv)
 			poll_wait_for_event (heartbeat_usec
 			                     - timestamp()
 			                     + last_beat);
+			//send the results
+			comm_flush_data();
+			gate_flush_data();
 			continue;
 		}
 

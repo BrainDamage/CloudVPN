@@ -517,10 +517,10 @@ void connection::write_packet (uint32_t id, uint16_t ttl,
                                uint16_t s, const uint8_t*buf)
 {
 	size_t size = p_head_size + 20 + s;
-	if (!can_write_data (size) ) {
-		try_write();
-		return;
-	}
+
+	if (!can_write_data (size) ) try_write();
+	if (!can_write_data (size) ) return;
+
 	if (s > mtu) return;
 	pbuffer& b = new_data (size);
 	add_packet_header (b, pt_packet, 0, 20 + s);
@@ -533,69 +533,63 @@ void connection::write_packet (uint32_t id, uint16_t ttl,
 	b.push<uint16_t> (htons (ss) );
 	b.push<uint16_t> (htons (s) );
 	b.push ( (uint8_t*) buf, s);
-	try_write();
 }
 
 void connection::write_route_set (uint8_t*data, int n)
 {
 	size_t size = p_head_size + n;
-	if (!can_write_proto (size) ) {
-		try_write();
-		return;
-	}
+
+	if (!can_write_proto (size) ) try_write();
+	if (!can_write_proto (size) ) return;
+
 	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_route_set, 0, n);
 	b.push (data, n);
-	try_write();
 }
 
 void connection::write_route_diff (uint8_t*data, int n)
 {
 	size_t size = p_head_size + n;
-	if (!can_write_proto (size) ) {
-		try_write();
-		return;
-	}
+
+	if (!can_write_proto (size) ) try_write();
+	if (!can_write_proto (size) ) return;
+
 	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_route_diff, 0, n);
 	b.push (data, n);
-	try_write();
 }
 
 void connection::write_ping (uint8_t ID)
 {
 	size_t size = p_head_size;
-	if (!can_write_proto (size) ) {
-		try_write();
-		return;
-	}
+
+	if (!can_write_proto (size) ) try_write();
+	if (!can_write_proto (size) ) return;
+
 	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_echo_request, ID, 0);
-	try_write();
 }
 
 void connection::write_pong (uint8_t ID)
 {
 	size_t size = p_head_size;
-	if (!can_write_proto (size) ) {
-		try_write();
-		return;
-	}
+
+	if (!can_write_proto (size) ) try_write();
+	if (!can_write_proto (size) ) return;
+
 	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_echo_reply, ID, 0);
-	try_write();
 }
 
 void connection::write_route_request ()
 {
 	size_t size = p_head_size;
-	if (!can_write_proto (size) ) {
-		try_write();
-		return;
-	}
+
+	if (!can_write_proto (size) ) try_write();
+	if (!can_write_proto (size) ) return;
+
 	pbuffer&b = new_proto (size);
 	add_packet_header (b, pt_route_request, 0, 0);
-	try_write();
 }
 
 /*
@@ -1629,6 +1623,17 @@ int comm_shutdown()
 		Log_warn ("SSL shutdown failed!");
 
 	return 0;
+}
+
+void comm_flush_data()
+{
+	/*
+	 * call this after each timeslice. It prevents send-data fragmentation.
+	 */
+
+	map<int, connection>::iterator i;
+	for (i = connections.begin();i != connections.end();++i)
+		i->second.try_write();
 }
 
 void comm_periodic_update()

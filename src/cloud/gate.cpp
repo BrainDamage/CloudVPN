@@ -208,10 +208,11 @@ error:
 
 void gate::send_keepalive()
 {
+	if (!can_send() ) poll_write();
 	if (!can_send() ) return;
+
 	pbuffer& p = new_send();
 	add_packet_header (p, pt_keepalive, 0);
-	poll_write();
 }
 
 void gate::send_packet (uint32_t inst,
@@ -219,8 +220,9 @@ void gate::send_packet (uint32_t inst,
                         uint16_t soff, uint16_t ss,
                         uint16_t size, const uint8_t*data)
 {
-
+	if (!can_send() ) poll_write();
 	if (!can_send() ) return;
+
 	pbuffer&p = new_send();
 	add_packet_header (p, pt_packet, size + 14);
 	p.b.reserve (size + 14);
@@ -231,7 +233,6 @@ void gate::send_packet (uint32_t inst,
 	p.push<uint16_t> (htons (ss) );
 	p.push<uint16_t> (htons (size) );
 	p.push (data, size);
-	poll_write();
 }
 
 void gate::try_parse_input()
@@ -459,6 +460,13 @@ static void stop_listeners()
 /*
  * global stuff
  */
+
+void gate_flush_data()
+{
+	map<int, gate>::iterator i;
+	for (i = gates.begin();i != gates.end();++i)
+		i->second.poll_write();
+}
 
 int gate_periodic_update()
 {

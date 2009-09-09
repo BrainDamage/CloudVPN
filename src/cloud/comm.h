@@ -279,6 +279,7 @@ int comm_load();
 int comm_init();
 int comm_shutdown();
 
+void comm_flush_data();
 void comm_periodic_update();
 
 void comm_broadcast_route_update (uint8_t*data, int n);
