@@ -506,6 +506,7 @@ void connection::write_packet (uint32_t id, uint16_t ttl,
 
 	pusher b (send_q.get_buffer (size) );
 	if (!b.d) return;
+	send_q.append (size);
 
 	add_packet_header (b, pt_packet, 0, 20 + s);
 	b.push<uint32_t> (htonl (id) );
@@ -525,6 +526,7 @@ void connection::write_route_set (uint8_t*data, int n)
 
 	pusher b (send_q.get_buffer (size) );
 	if (!b.d) return;
+	send_q.append (size);
 
 	add_packet_header (b, pt_route_set, 0, n);
 	b.push (data, n);
@@ -536,6 +538,7 @@ void connection::write_route_diff (uint8_t*data, int n)
 
 	pusher b (send_q.get_buffer (size) );
 	if (!b.d) return;
+	send_q.append (size);
 
 	add_packet_header (b, pt_route_diff, 0, n);
 	b.push (data, n);
@@ -547,6 +550,7 @@ void connection::write_ping (uint8_t ID)
 
 	pusher b (send_q.get_buffer (size) );
 	if (!b.d) return;
+	send_q.append (size);
 
 	add_packet_header (b, pt_echo_request, ID, 0);
 }
@@ -557,6 +561,7 @@ void connection::write_pong (uint8_t ID)
 
 	pusher b (send_q.get_buffer (size) );
 	if (!b.d) return;
+	send_q.append (size);
 
 	add_packet_header (b, pt_echo_reply, ID, 0);
 }
@@ -567,6 +572,7 @@ void connection::write_route_request ()
 
 	pusher b (send_q.get_buffer (size) );
 	if (!b.d) return;
+	send_q.append (size);
 
 	add_packet_header (b, pt_route_request, 0, 0);
 }
