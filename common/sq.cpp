@@ -46,6 +46,7 @@ void pbuffer::shift (size_t len)
 void pusher::push (const uint8_t*p, size_t size)
 {
 	copy (p, p + size, d);
+	d += size;
 }
 
 /*
