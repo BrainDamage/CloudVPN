@@ -646,7 +646,7 @@ try_more:
 
 bool connection::try_read()
 {
-	if (pending_write == 1) return true; //do not interrupt writing
+	if (pending_write == 1) return true; //do not interrupt writing. TODO examine
 
 	int r;
 	uint8_t*buf;
@@ -696,7 +696,10 @@ bool connection::try_write()
 		if (!n) return true; //we ran out of available bandwidth
 
 		//or try to send.
-		r = gnutls_record_send (session, send_q.begin(), n);
+
+		r = pending_write ?
+		    gnutls_record_send (session, 0, 0) :
+		    gnutls_record_send (session, send_q.begin(), n);
 
 		if (r == 0) {
 			Log_info ("connection id %d closed by peer", id);
@@ -712,6 +715,7 @@ bool connection::try_write()
 			return true;
 		} else {
 			send_q.read (r);
+			pending_write = 0;
 		}
 	}
 	poll_set_remove_write (fd); //don't need any more write
