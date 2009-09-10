@@ -92,6 +92,7 @@ public:
 		session = 0;
 		connect_address = peer_addr_str = "";
 		peer_connected_since = 0;
+		pending_operation = 0;
 	}
 
 	connection (); //this is supposed to fail, always use c(ID)
@@ -122,6 +123,8 @@ public:
 
 	squeue recv_q;
 	squeue send_q;
+
+	int pending_operation;
 
 	struct {
 		uint8_t type;

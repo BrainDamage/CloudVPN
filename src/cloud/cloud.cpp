@@ -165,8 +165,14 @@ failed_config:
 	return ret;
 }
 
+#include <signal.h>
+
 void kill_cloudvpn (int signum)
 {
+	if (signum == SIGPIPE) {
+		Log_warn ("Got SIGPIPE, something's gonna die.");
+		return;
+	}
 	Log_info ("cloudvpn killed by signal %d, will terminate", signum);
 	g_terminate = 1;
 }

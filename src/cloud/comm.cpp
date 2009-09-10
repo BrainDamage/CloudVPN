@@ -668,6 +668,7 @@ bool connection::try_read()
 				reset();
 				return false;
 			}
+			pending_operation = 2;
 			return true;
 		} else {
 			recv_q.append (r); //confirm read
@@ -675,6 +676,7 @@ bool connection::try_read()
 			if (fd < 0) return false; //we got reset
 		}
 	}
+	pending_operation = 0;
 	return true;
 }
 
@@ -706,12 +708,14 @@ bool connection::try_write()
 				reset();
 				return false;
 			}
+			pending_operation = 1;
 			return true;
 		} else {
 			send_q.read (r);
 		}
 	}
 	poll_set_remove_write (fd); //don't need any more write
+	pending_operation = 0;
 	return true;
 }
 
@@ -727,8 +731,15 @@ void connection::try_data()
 	 *
 	 * Also, no more operations if try_write was forced to reset a conn.
 	 */
-	if (try_write() )
-		try_read();
+	switch (pending_operation) {
+	case 1:
+		if (!try_write() ) return;
+		else break;
+	case 2:
+		if (!try_read() ) return;
+		else break;
+	}
+	if (!pending_operation) if (try_write() ) try_read();
 }
 
 /*
@@ -924,6 +935,8 @@ void connection::reset()
 
 	recv_q.clear();
 	send_q.clear();
+
+	pending_operation = 0;
 
 	cached_header.type = 0;
 
