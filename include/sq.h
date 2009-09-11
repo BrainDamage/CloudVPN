@@ -23,6 +23,7 @@ using namespace std;
 
 #include <stdint.h>
 
+uint8_t* sq_memcpy (uint8_t*dst, const uint8_t*src, size_t size);
 
 class pbuffer
 {

@@ -804,8 +804,8 @@ void send_route()
 	b = send_q.append_buffer (12 + (promisc ? 6 : 0) );
 	* (uint16_t*) (b) = htons (6);
 	* (uint32_t*) (b + 2) = htonl ( (proto << 16) | inst);
-	copy (cached_hwaddr.addr.begin(),
-	      cached_hwaddr.addr.end(), b + 6);
+	sq_memcpy (b + 6, cached_hwaddr.addr.begin().base(),
+	           cached_hwaddr.addr.size() );
 
 	if (promisc) {   //promisc doesn't need to be used with bridge, though.
 		b += 12;

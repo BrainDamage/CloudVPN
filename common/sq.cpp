@@ -15,8 +15,25 @@
 #include "log.h"
 #include "conf.h"
 
-#include <algorithm>
-using namespace std;
+
+/*
+ * as the standard library doesnt seem to have a function with determinable
+ * copying direction, we have this. No idea why bcopy() is marked deprecated.
+ *
+ * also: TURN OPTIMIZATION ON, everyone!
+ * This WILL copy ALL your data, so we need it at least equal to assembler.
+ */
+
+uint8_t* sq_memcpy (uint8_t*dst, const uint8_t*src, size_t size)
+{
+	size_t i;
+	if (dst < src) {
+		for (i = 0;i < size;++i) dst[i] = src[i];
+	} else {
+		for (i = size - 1;i >= 0;--i) dst[i] = src[i];
+	}
+	return dst;
+}
 
 /*
  * pbuffer
@@ -24,15 +41,18 @@ using namespace std;
 
 void pbuffer::push (const uint8_t*d, size_t size)
 {
-	b.reserve (b.size() + size);
-	copy (d, d + size, back_insert_iterator<vector<uint8_t> > (b) );
+	uint8_t*dest = b.end().base();
+	b.resize (b.size() + size);
+	sq_memcpy (dest, d, size);
 }
 
 void pbuffer::shift (size_t len)
 {
 	if (len >= b.size() ) b.clear();
 	else {
-		copy (b.begin() + len, b.end(), b.begin() );
+		sq_memcpy (b.begin().base(),
+		           b.begin().base() + len,
+		           b.size() - len);
 		b.resize (b.size() - len);
 	}
 }
@@ -45,7 +65,7 @@ void pbuffer::shift (size_t len)
 
 void pusher::push (const uint8_t*p, size_t size)
 {
-	copy (p, p + size, d);
+	sq_memcpy (d, p, size);
 	d += size;
 }
 
@@ -75,7 +95,9 @@ void squeue::realloc (size_t size)
 	if ( !len() ) {  //flush to begin
 		front = back = 0;
 	} else if (front > squeue_max_free_size) { //move closer to start
-		copy (d.begin() + front, d.begin() + back, d.begin() );
+		sq_memcpy (d.begin().base(),
+		           d.begin().base() + front,
+		           back - front);
 		back -= front;
 		front = 0;
 	}

@@ -519,7 +519,8 @@ void route_report_to_connection (connection&c)
 		    htonl ( (uint32_t) (r->first.inst) );
 		* (uint16_t*) (datap + 12) =
 		    htons ( (uint16_t) (r->first.addr.size() ) );
-		copy (r->first.addr.begin(), r->first.addr.end(), datap + 14);
+		sq_memcpy (datap + 14, r->first.addr.begin().base(),
+		           r->first.addr.size() );
 		datap += 14 + r->first.addr.size();
 	}
 	c.write_route_set (data.begin().base(), size);
@@ -596,8 +597,8 @@ static void report_route()
 		    htonl ( (uint32_t) (rep->first.inst) );
 		* (uint16_t*) (datap + 12) =
 		    htons ( (uint16_t) (rep->first.addr.size() ) );
-		copy (rep->first.addr.begin(),
-		      rep->first.addr.end(), datap + 14);
+		sq_memcpy (datap + 14, r->first.addr.begin().base(),
+		           r->first.addr.size() );
 		datap += 14 + rep->first.addr.size();
 	}
 	comm_broadcast_route_update (data.begin().base(), size);
