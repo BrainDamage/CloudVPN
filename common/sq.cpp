@@ -58,10 +58,10 @@ void pusher::push (const uint8_t*p, size_t size)
  *   we remove the unused front.
  */
 
-#define squeue_max_free_size 4096
-#define squeue_back_free_space 1024
+#define squeue_max_free_size 0x10000
+#define squeue_back_free_space 0x1000
 
-static int squeue_max_alloc = 4194304;
+static int squeue_max_alloc = 0x1000000; //max allocated space, 16M
 
 uint8_t* squeue::get_buffer (size_t size)
 {
