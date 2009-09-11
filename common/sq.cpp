@@ -24,15 +24,26 @@
  * This WILL copy ALL your data, so we need it at least equal to assembler.
  */
 
-uint8_t* sq_memcpy (uint8_t*dst, const uint8_t*src, size_t size)
+void sq_memcpy (uint8_t*dst, const uint8_t*src, size_t size)
 {
-	size_t i;
+	uint8_t*t;
 	if (dst < src) {
-		for (i = 0;i < size;++i) dst[i] = src[i];
+		t = dst + size;
+		while (dst < t) {
+			*dst = *src;
+			++dst;
+			++src;
+		}
 	} else {
-		for (i = size - 1;i >= 0;--i) dst[i] = src[i];
+		t = dst;
+		dst += size;
+		src += size;
+		while (dst > t) {
+			--dst;
+			--src;
+			*dst = *src;
+		}
 	}
-	return dst;
 }
 
 /*
