@@ -25,6 +25,7 @@ using std::map;
 void route_init();
 void route_shutdown();
 void route_update();
+void route_periodic_update();
 
 uint32_t new_packet_uid();
 uint16_t new_packet_ttl();

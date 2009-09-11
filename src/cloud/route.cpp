@@ -19,6 +19,10 @@
 #include "network.h"
 #include "timestamp.h"
 
+#include <set>
+#include <map>
+using namespace std;
+
 /*
  * utils
  */
@@ -47,40 +51,61 @@ uint32_t new_packet_uid()
  * ID cache
  */
 
-#include <map>
-#include <queue>
-using namespace std;
+static set<uint32_t> idcache;
+static size_t idcache_max_size = 32768;
+static int idcache_reduce_halftime = 1000000;
+static uint64_t last_idcache_reduce = 0;
 
-static map<uint32_t, int> queue_items;
-static queue<uint32_t> queue_age;
-static size_t queue_max_size = 1024;
-
-static void queue_init()
+static void idcache_init()
 {
 	int t;
-	if (!config_get_int ("packet_id_cache_size", t) ) t = 1024;
-	Log_info ("broadcast ID cache size is %d", t);
-	queue_max_size = t;
+	if (!config_get_int ("packet_id_cache_size", t) ) t = 32768;
+	Log_info ("ID cache max size is %d", t);
+	idcache_max_size = t;
+
+	if (!config_get_int ("packet_id_cache_size", t) ) t = 1000000;
+	Log_info ("ID cache reduction halftime is %d", t);
+	idcache_reduce_halftime = t;
 }
 
-static void queue_add_id (uint32_t id)
+static void idcache_reduce()
 {
-	while (queue_age.size() >= queue_max_size) {
-		--queue_items[queue_age.front() ];
-		if (!queue_items[queue_age.front() ])
-			queue_items.erase (queue_age.front() );
-		queue_age.pop();
+	//as we only need single random bits, so
+	//we can usually spare some minor generator effort
+	int randavail = 0, randd = 0;
+
+	for (set<uint32_t>::iterator i = idcache.begin();
+	        i != idcache.end();++i) {
+
+		if (!randavail) {
+			randd = rand();
+			randavail = RAND_MAX;
+		}
+		if (randd&1) {
+			idcache.erase (i++);
+			if (i != idcache.begin() )--i;
+		}
+		randavail >>= 1;
 	}
 
-	if (queue_items.count (id) ) ++queue_items[id];
-	else queue_items[id] = 1;
-	queue_age.push (id);
+	last_idcache_reduce = timestamp();
 }
 
-static bool queue_already_sent (uint32_t id)
+static inline void idcache_periodic_reduce()
 {
-	if (queue_items.count (id) ) return true;
-	return false;
+	if (idcache_reduce_halftime + last_idcache_reduce > timestamp() )
+		idcache_reduce();
+}
+
+static inline void idcache_add_id (uint32_t id)
+{
+	idcache.insert (id);
+	if (idcache.size() > idcache_max_size) idcache_reduce();
+}
+
+static inline bool id_already_seen (uint32_t id)
+{
+	return idcache.count (id) ? true : false;
 }
 
 /*
@@ -197,8 +222,12 @@ static int route_max_dist = 64;
 static int default_broadcast_ttl = 128;
 static int hop_penalization = 0;
 
-
 static bool shared_uplink = false;
+
+void route_periodic_update()
+{
+	idcache_periodic_reduce();
+}
 
 uint16_t new_packet_ttl()
 {
@@ -209,7 +238,7 @@ static void report_route();
 
 void route_init()
 {
-	queue_init();
+	idcache_init();
 	route.clear();
 	reported_route.clear();
 	route_dirty = 0;
@@ -375,8 +404,8 @@ void route_packet (uint32_t id, uint16_t ttl, uint32_t inst,
 
 	if (!ttl) return; //don't spread this any further
 
-	if (queue_already_sent (id) ) return; //check duplicates
-	queue_add_id (id);
+	if (id_already_seen (id) ) return; //check duplicates
+	idcache_add_id (id);
 
 	route_update();
 
