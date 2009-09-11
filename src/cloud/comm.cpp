@@ -333,7 +333,7 @@ static int connect_connection (const string&addr)
  * class connection stuff
  */
 
-int connection::timeout = 60000000; //60 sec
+int connection::timeout = 15000000; //15 sec
 int connection::keepalive = 5000000; //5 sec
 int connection::retry = 10000000; //10 sec
 
@@ -646,7 +646,7 @@ try_more:
 
 bool connection::try_read()
 {
-	if (pending_write == 1) return true; //do not interrupt writing. TODO examine
+	//if (pending_write == 1) return true; //do not interrupt writing. TODO examine
 
 	int r;
 	uint8_t*buf;
@@ -698,7 +698,7 @@ bool connection::try_write()
 		//or try to send.
 
 		r = pending_write ?
-		    gnutls_record_send (session, 0, 0) :
+		    gnutls_record_send (session, send_q.begin(), pending_write) :
 		    gnutls_record_send (session, send_q.begin(), n);
 
 		if (r == 0) {
@@ -711,7 +711,7 @@ bool connection::try_write()
 				reset();
 				return false;
 			}
-			pending_write = 1;
+			pending_write = n;
 			return true;
 		} else {
 			send_q.read (r);
@@ -812,7 +812,6 @@ void connection::try_connect()
 		Log_error ("conn %d failed to allocate SSL stuff", id);
 		reset();
 	} else try_ssl_connect();
-	return;
 }
 
 void connection::try_ssl_connect()
@@ -874,6 +873,7 @@ void connection::start_connect()
 void connection::start_accept()
 {
 	if (alloc_ssl (true) ) {
+		Log_error ("failed to allocate SSL stuff for connection %d", id);
 		reset();
 		return;
 	}
@@ -976,7 +976,7 @@ int connection::handle_ssl_error (int ret)
 	case GNUTLS_E_INTERRUPTED:
 		if (gnutls_record_get_direction (session) )
 			poll_set_add_write (fd);
-		else if (state != cs_active) poll_set_remove_write (fd);
+		else poll_set_remove_write (fd);
 		break;
 	default:
 		Log_warn ("non-fatal ssl error %d (%s) on connection %d",
