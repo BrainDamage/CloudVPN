@@ -646,7 +646,8 @@ try_more:
 
 bool connection::try_read()
 {
-	//if (pending_write == 1) return true; //do not interrupt writing. TODO examine
+	//TODO examine whether this is needed. I guess not, but who knows.
+	//if (pending_write == 1) return true;
 
 	int r;
 	uint8_t*buf;
