@@ -219,7 +219,7 @@ static map<address, route_info> route, reported_route;
 static int route_dirty = 0;
 static int route_report_ping_diff = 5000;
 static int route_max_dist = 64;
-static int default_broadcast_ttl = 128;
+static int default_ttl = 128;
 static int hop_penalization = 0;
 
 static bool shared_uplink = false;
@@ -231,7 +231,7 @@ void route_periodic_update()
 
 uint16_t new_packet_ttl()
 {
-	return default_broadcast_ttl;
+	return default_ttl;
 }
 
 static void report_route();
@@ -258,9 +258,9 @@ void route_init()
 	Log_info ("maximal node distance is %d", t);
 	route_max_dist = t;
 
-	if (!config_get_int ("route_broadcast_ttl", t) ) t = 64;
-	Log_info ("maximal node distance is %d", t);
-	route_max_dist = t;
+	if (!config_get_int ("default_ttl", t) ) t = 128;
+	Log_info ("default TTL is %d", t);
+	default_ttl = t;
 
 	if (!config_get_int ("route_hop_penalization", t) ) t = 0;
 	Log_info ("hop penalization is %d%%", t);
