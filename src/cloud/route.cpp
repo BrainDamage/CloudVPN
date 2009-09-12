@@ -75,18 +75,22 @@ static void idcache_reduce()
 	int randavail = 0, randd = 0;
 	Log_info ("original caches: %d", idcache.size() );
 
-	for (set<uint32_t>::iterator i = idcache.begin();
-	        i != idcache.end();++i) {
+	set<uint32_t>::iterator i, t;
+
+	for (i = idcache.begin(); i != idcache.end();) {
 
 		if (!randavail) {
 			randd = rand();
 			randavail = RAND_MAX;
 		}
-		if (randd&1) {
-			idcache.erase (i++);
-			if (i != idcache.begin() )--i;
-		}
+
+		t = i;
+		++t;
+		if (randd&1) idcache.erase (i);
+		i = t;
+
 		randavail >>= 1;
+		randd >>= 1;
 	}
 
 	Log_info ("reduced caches: %d", idcache.size() );
