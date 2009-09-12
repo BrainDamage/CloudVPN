@@ -73,7 +73,6 @@ static void idcache_reduce()
 	//as we only need single random bits, so
 	//we can usually spare some minor generator effort
 	int randavail = 0, randd = 0;
-	Log_info ("original caches: %d", idcache.size() );
 
 	set<uint32_t>::iterator i, t;
 
@@ -92,8 +91,6 @@ static void idcache_reduce()
 		randavail >>= 1;
 		randd >>= 1;
 	}
-
-	Log_info ("reduced caches: %d", idcache.size() );
 
 	next_idcache_reduce = timestamp() + idcache_reduce_halftime;
 }
