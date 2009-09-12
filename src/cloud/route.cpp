@@ -54,7 +54,7 @@ uint32_t new_packet_uid()
 static set<uint32_t> idcache;
 static size_t idcache_max_size = 32768;
 static int idcache_reduce_halftime = 1000000;
-static uint64_t last_idcache_reduce = 0;
+static uint64_t next_idcache_reduce = 0;
 
 static void idcache_init()
 {
@@ -73,6 +73,7 @@ static void idcache_reduce()
 	//as we only need single random bits, so
 	//we can usually spare some minor generator effort
 	int randavail = 0, randd = 0;
+	Log_info ("original caches: %d", idcache.size() );
 
 	for (set<uint32_t>::iterator i = idcache.begin();
 	        i != idcache.end();++i) {
@@ -88,12 +89,14 @@ static void idcache_reduce()
 		randavail >>= 1;
 	}
 
-	last_idcache_reduce = timestamp();
+	Log_info ("reduced caches: %d", idcache.size() );
+
+	next_idcache_reduce = timestamp() + idcache_reduce_halftime;
 }
 
 static inline void idcache_periodic_reduce()
 {
-	if (idcache_reduce_halftime + last_idcache_reduce > timestamp() )
+	if (next_idcache_reduce < timestamp() )
 		idcache_reduce();
 }
 
@@ -227,6 +230,7 @@ static bool shared_uplink = false;
 void route_periodic_update()
 {
 	idcache_periodic_reduce();
+	route_update();
 }
 
 uint16_t new_packet_ttl()

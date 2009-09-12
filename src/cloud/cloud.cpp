@@ -134,8 +134,8 @@ int main (int argc, char**argv)
 
 		gate_periodic_update();
 		comm_periodic_update();
+		route_periodic_update();
 
-		route_update();
 		status_try_export();
 	}
 
