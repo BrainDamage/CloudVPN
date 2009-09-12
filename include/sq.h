@@ -25,25 +25,6 @@ using namespace std;
 
 void sq_memcpy (uint8_t*dst, const uint8_t*src, size_t size);
 
-class pbuffer
-{
-public:
-	vector<uint8_t> b;
-	inline void clear() {
-		b.clear();
-	}
-	inline int len() const {
-		return b.size();
-	}
-	void shift (size_t len); //remove front bytes
-	void push (const uint8_t*, size_t);
-	void push (const pbuffer&);
-	template<class T> inline void push (const T&a) {
-		b.reserve (sizeof (a) + b.size() );
-		push ( (uint8_t*) &a, sizeof (a) );
-	}
-};
-
 class pusher
 {
 public:

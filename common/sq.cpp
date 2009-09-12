@@ -47,31 +47,11 @@ void sq_memcpy (uint8_t*dst, const uint8_t*src, size_t size)
 }
 
 /*
- * pbuffer
- */
-
-void pbuffer::push (const uint8_t*d, size_t size)
-{
-	uint8_t*dest = b.end().base();
-	b.resize (b.size() + size);
-	sq_memcpy (dest, d, size);
-}
-
-void pbuffer::shift (size_t len)
-{
-	if (len >= b.size() ) b.clear();
-	else {
-		sq_memcpy (b.begin().base(),
-		           b.begin().base() + len,
-		           b.size() - len);
-		b.resize (b.size() - len);
-	}
-}
-
-/*
  * pusher
  *
  * thing that is used only for filling bytestreams.
+ *
+ * R.I.P. pbuffer.
  */
 
 void pusher::push (const uint8_t*p, size_t size)
