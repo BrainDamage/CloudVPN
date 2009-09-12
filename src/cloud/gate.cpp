@@ -117,12 +117,6 @@ gate::gate()
 
 #define p_head_size 3
 
-pbuffer& gate::new_send()
-{
-	send_q.push_back (pbuffer() );
-	return send_q.back();
-}
-
 bool gate::parse_packet_header()
 {
 	if (recv_q.len() < p_head_size) return false;
@@ -132,9 +126,8 @@ bool gate::parse_packet_header()
 	return true;
 }
 
-void gate::add_packet_header (pbuffer&b, uint8_t type, uint16_t size)
+void gate::add_packet_header (pusher&b, uint8_t type, uint16_t size)
 {
-	b.b.reserve (p_head_size);
 	b.push<uint8_t> (type);
 	b.push<uint16_t> (htons (size) );
 }
@@ -211,7 +204,10 @@ void gate::send_keepalive()
 	if (!can_send() ) poll_write();
 	if (!can_send() ) return;
 
-	pbuffer& p = new_send();
+	pusher p (send_q.get_buffer (p_head_size) );
+	if (!p.d) return;
+	send_q.append (p_head_size);
+
 	add_packet_header (p, pt_keepalive, 0);
 }
 
@@ -223,9 +219,11 @@ void gate::send_packet (uint32_t inst,
 	if (!can_send() ) poll_write();
 	if (!can_send() ) return;
 
-	pbuffer&p = new_send();
+	pusher p (send_q.get_buffer (p_head_size + size + 14) );
+	if (!p.d) return;
+	send_q.append (p_head_size + size + 14);
+
 	add_packet_header (p, pt_packet, size + 14);
-	p.b.reserve (size + 14);
 	p.push<uint32_t> (htonl (inst) );
 	p.push<uint16_t> (htons (doff) );
 	p.push<uint16_t> (htons (ds) );
@@ -344,39 +342,18 @@ void gate::poll_write()
 {
 	int r, n;
 	const uint8_t* buf;
-	while (send_q.size() ) {
-		buf = send_q.front().b.begin().base();
-		n = send_q.front().b.size();
+	while (send_q.len() ) {
+		r = send (fd, (char*) send_q.begin(), send_q.len(), 0);
 
-		r = 0;
-		if (n > 0) r = send (fd, (char*) buf, n, 0);
-
-		if (r == 0) {
-			send_q.pop_front();
-			continue;
-		}
-
-		if (r < 0) {
+		if (r <= 0) {
 			if (errno != EWOULDBLOCK) {
 				Log_error ("gate %d write error", id);
 				reset();
 			} else poll_set_add_write (fd);
 			return;
+		} else {
+			send_q.read (r);
 		}
-
-		if (n == r) {
-			send_q.pop_front();
-			continue;
-		}
-
-		if (n < r) {
-			Log_warn ("something strange at %d with send(%d)",
-			          id, fd);
-			return;
-		}
-
-		send_q.front().shift (r);
-		//TRICKY, consider breaking the loop here
 	}
 
 	poll_set_remove_write (fd);

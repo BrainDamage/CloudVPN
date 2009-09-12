@@ -55,7 +55,7 @@ public:
 	uint16_t cached_header_size;
 
 	bool parse_packet_header();
-	void add_packet_header (pbuffer&, uint8_t type, uint16_t size);
+	void add_packet_header (pusher&, uint8_t type, uint16_t size);
 
 	void handle_keepalive();
 	void handle_route (uint16_t size, const uint8_t*data);
@@ -76,16 +76,14 @@ public:
 	void poll_read();
 	void poll_write();
 
-#define gate_max_send_q_len 1024
-#define gate_max_recv_q_len 65536
+#define gate_max_send_q_len 0x100000
+#define gate_max_recv_q_len 0x100000
 
-	squeue recv_q;
-	deque<pbuffer> send_q;
+	squeue recv_q, send_q;
 
 	inline bool can_send() {
-		return send_q.size() < gate_max_send_q_len;
+		return send_q.len() < gate_max_send_q_len;
 	}
-	pbuffer& new_send();
 
 	void periodic_update();
 
