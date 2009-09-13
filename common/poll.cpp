@@ -131,44 +131,93 @@ int poll_wait_for_event (int timeout_usec)
  */
 
 #include <ev.h>
+#include <map>
+using namespace std;
+
+map<int, ev_io> readers, writers;
+
+struct ev_loop*loop;
+
+static void read_callback (struct ev_loop *loop, ev_io *w, int revents)
+{
+	poll_handle_event (w->fd, READ_READY);
+}
+
+static void write_callback (struct ev_loop *loop, ev_io *w, int revents)
+{
+	poll_handle_event (w->fd, WRITE_READY);
+}
+
+static void timeout_callback (EV_P_ ev_timer *w, int revents)
+{
+	ev_unloop (EV_A_ EVUNLOOP_ALL);
+}
 
 int poll_init()
 {
+	loop = ev_default_loop (0);
 	return 0;
 }
 
 int poll_deinit()
 {
-	return 0;
+	return 0; //not much.
 }
 
 int poll_set_add_read (int fd)
 {
+	if (readers.count (fd) ) return 1;
+	ev_io*t = & (readers[fd]);
+	ev_io_init (t, read_callback, fd, EV_READ);
+	ev_io_start (loop, t);
 	return 0;
 }
 
 int poll_set_add_write (int fd)
 {
+	if (writers.count (fd) ) return 1;
+	ev_io*t = & (writers[fd]);
+	ev_io_init (t, write_callback, fd, EV_WRITE);
+	ev_io_start (loop, t);
 	return 0;
 }
 
 int poll_set_remove_read (int fd)
 {
+	if (readers.count (fd) ) {
+		ev_io*t = & (readers[fd]);
+		ev_io_stop (loop, t);
+		readers.erase (fd);
+	}
 	return 0;
 }
 
 int poll_set_remove_write (int fd)
 {
+	if (writers.count (fd) ) {
+		ev_io*t = & (writers[fd]);
+		ev_io_stop (loop, t);
+		writers.erase (fd);
+	}
 	return 0;
 }
 
 int poll_set_clear()
 {
+	while (readers.size() ) poll_set_remove_read (readers.begin()->first);
+	while (writers.size() ) poll_set_remove_write (writers.begin()->first);
 	return 0;
 }
 
 int poll_wait_for_event (int timeout_usec)
 {
+	ev_timer timeout;
+	ev_timer_init (&timeout, timeout_callback, timeout_usec*.000001, 0);
+	ev_timer_start (loop, &timeout);
+
+	ev_loop (loop, EVLOOP_ONESHOT);
+
+	ev_timer_stop (loop, &timeout);
 	return 0;
 }
 
