@@ -20,7 +20,16 @@
 //NOTE that 64bit integer can measure percise time until 07:36:10 UTC on the
 //28th of May year 60425 after Christ's birth. might turn into a fixme later.
 
-uint64_t timestamp();
+#ifndef __TIMESTAMP_CPP__
+extern
+#endif
+	uint64_t timestamp_lasttime;
+
+inline uint64_t timestamp()
+{
+	return timestamp_lasttime;
+}
+
 void timestamp_update();
 
 #endif

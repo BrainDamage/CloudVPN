@@ -10,22 +10,18 @@
  * if not, see <http://www.gnu.org/licenses/>.
  */
 
+#define __TIMESTAMP_CPP__
 #include "timestamp.h"
 
 #include <sys/time.h>
-
-static uint64_t lasttime;
-
-uint64_t timestamp()
-{
-	return lasttime;
-}
 
 void timestamp_update()
 {
 	struct timeval tv;
 	gettimeofday (&tv, 0);
-	lasttime = (1000000 * (uint64_t) tv.tv_sec) + (uint64_t) tv.tv_usec;
+	timestamp_lasttime =
+	    (1000000 * (uint64_t) tv.tv_sec)
+	    + (uint64_t) tv.tv_usec;
 }
 
 static struct ts_initializer_t {
