@@ -14,7 +14,10 @@
 
 #define LOGNAME "cloud/poll"
 #include "log.h"
-#include "timestamp.h"
+
+#ifdef __WIN32__ //be nice to those poor guys.
+#define DISABLE_LIBEV
+#endif
 
 #ifdef DISABLE_LIBEV
 
@@ -156,6 +159,8 @@ static void timeout_callback (EV_P_ ev_timer *w, int revents)
 int poll_init()
 {
 	loop = ev_default_loop (0);
+	Log_info ("available poll backends mask: %x",
+	          ev_supported_backends() );
 	return 0;
 }
 

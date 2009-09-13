@@ -265,9 +265,9 @@ of STL routines, which, unoptimized, are REALLY slow.
 
 If you hit compile errors, be sure to check that following things are available:
 
- - correct polling device for your platform, and headers for it
  - STL-capable compiler (any gcc should be good)
- - GnuTLS library version 2.6 or better
+ - GnuTLS library version 2.6 or better (2.8 would be cool)
+ - libev the event polling library
 
 To compile CloudVPN for Windows, you will need some kind of MinGW with enough
 libraries (GnuTLS&co.), and then configure this:
@@ -278,7 +278,7 @@ Because of library compatibility, many people asked about compiling CloudVPN
 tools statically. This can be easily achieved with autotools. This works in
 most common cases:
 
-LDFLAGS=-static LIBS="-ltasn1 -lgpg-error -lz" ./configure
+LDFLAGS=-static LIBS="-ltasn1 -lgpg-error -lz -lev" ./configure
 
 (and then continue like everytime.)
 LIBS are needed because gcc doesn't resolve library dependencies when static
