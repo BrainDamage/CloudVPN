@@ -31,7 +31,7 @@ int setup_sighandler (void (*func) (int) )
 	sigaction (SIGTERM, &a, 0);
 	sigaction (SIGINT, &a, 0);
 
-	a.sa_handler = func;
+	a.sa_handler = SIG_IGN;
 	sigaction (SIGPIPE, &a, 0);
 
 	return 0;
