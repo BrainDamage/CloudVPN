@@ -284,6 +284,10 @@ LDFLAGS=-static LIBS="-ltasn1 -lgpg-error -lz -lev" ./configure
 LIBS are needed because gcc doesn't resolve library dependencies when static
 linking is active. You might either need more libraries, or maybe none of those.
 
+To get this working on Mac OSX, get TunTapOSX package from
+http://tuntaposx.sourceforge.net/, then follow instructions for BSD as those
+systems are mostly similar. Tested on Leopard.
+
 
 
 ********************************************************* CONFIGURATION *******
