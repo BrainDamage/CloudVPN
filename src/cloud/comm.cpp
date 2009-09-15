@@ -584,21 +584,21 @@ void connection::write_route_request ()
 
 void connection::try_parse_input()
 {
-try_more:
-	if (state != cs_active) return; //safety.
+	while (true) {
+		if (state != cs_active) return; //safety.
 
-	if (cached_header.type == 0)
-		if (!parse_packet_header (recv_q,
-		                          cached_header.type,
-		                          cached_header.special,
-		                          cached_header.size) ) return;
+		if (cached_header.type == 0)
+			if (!parse_packet_header (recv_q,
+			                          cached_header.type,
+			                          cached_header.special,
+			                          cached_header.size) ) return;
 
-	switch (cached_header.type) {
-	case pt_route_set:
-	case pt_route_diff:
-	case pt_packet:
-		if (recv_q.len() >=
-		        (unsigned int) cached_header.size) {
+		switch (cached_header.type) {
+		case pt_route_set:
+		case pt_route_diff:
+		case pt_packet:
+			if (recv_q.len() < (unsigned int)
+			        cached_header.size) return;
 			switch (cached_header.type) {
 			case pt_route_set:
 				handle_route (true, recv_q.begin(),
@@ -615,28 +615,28 @@ try_more:
 			}
 			recv_q.read (cached_header.size);
 			cached_header.type = 0;
-			goto try_more;
+			break;
+
+		case pt_echo_request:
+			handle_ping (cached_header.special);
+			cached_header.type = 0;
+			break;
+
+		case pt_echo_reply:
+			handle_pong (cached_header.special);
+			cached_header.type = 0;
+			break;
+
+		case pt_route_request:
+			handle_route_request ();
+			cached_header.type = 0;
+			break;
+
+		default:
+			Log_error ("invalid packet header received. disconnecting.");
+			disconnect();
+			return;
 		}
-		break;
-
-	case pt_echo_request:
-		handle_ping (cached_header.special);
-		cached_header.type = 0;
-		goto try_more;
-
-	case pt_echo_reply:
-		handle_pong (cached_header.special);
-		cached_header.type = 0;
-		goto try_more;
-
-	case pt_route_request:
-		handle_route_request ();
-		cached_header.type = 0;
-		goto try_more;
-
-	default:
-		Log_error ("invalid packet header received. disconnecting.");
-		disconnect();
 	}
 }
 

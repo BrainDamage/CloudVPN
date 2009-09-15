@@ -63,7 +63,7 @@ static void idcache_init()
 	Log_info ("ID cache max size is %d", t);
 	idcache_max_size = t;
 
-	if (!config_get_int ("packet_id_cache_size", t) ) t = 1000000;
+	if (!config_get_int ("packet_id_cache_time", t) ) t = 1000000;
 	Log_info ("ID cache reduction halftime is %d", t);
 	idcache_reduce_halftime = t;
 }
