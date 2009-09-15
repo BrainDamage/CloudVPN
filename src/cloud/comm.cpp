@@ -1438,7 +1438,7 @@ static int comm_connections_close()
  */
 
 unsigned int connection::mtu = 8192;
-unsigned int connection::max_waiting_data_size = 1024000;
+unsigned int connection::max_waiting_data_size = 512000;
 unsigned int connection::max_remote_routes = 256;
 bool connection::ubl_enabled = false;
 int connection::ubl_total = 0;
@@ -1449,7 +1449,7 @@ int connection::dbl_total = 0;
 int connection::dbl_conn = 0;
 int connection::dbl_burst = 20480;
 bool connection::red_enabled = true;
-int connection::red_threshold = 50;
+int connection::red_threshold = 25;
 
 int comm_load()
 {
