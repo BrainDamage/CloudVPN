@@ -39,7 +39,9 @@ void send_route();
 #else
 # include <net/if.h>
 # include <net/if_arp.h>
+#ifndef __APPLE__
 # include <net/if_tun.h>
+#endif
 #endif
 
 #include <stdlib.h>
@@ -166,7 +168,7 @@ int iface_create()
 		return -1;
 	}
 
-#ifdef __OpenBSD__
+#if defined(__OpenBSD__) || defined(__APPLE__)
 	if (0 > ioctl (tun, FIONBIO) ) {
 		Log_error ("iface: ioctl(FIONBIO) failed with %d: %s",
 		           errno, strerror (errno) );
