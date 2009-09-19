@@ -1032,6 +1032,9 @@ void connection::periodic_update()
 	case cs_connecting:
 		try_connect();
 		break;
+	case cs_ssl_connecting:
+		try_ssl_connect();
+		break;
 	case cs_closing:
 		try_close();
 		break;
