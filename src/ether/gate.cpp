@@ -142,7 +142,9 @@ int iface_create()
 			if (iface_set_hwaddr (new_mac.addr.begin().base() ) )
 				Log_error ("setting hwaddr failed, using default");
 		} else Log_warn ("`%s' is not a valid mac address, using default", mac.c_str() );
-	} else iface_retrieve_hwaddr (0); //only cache the mac
+	}
+
+	iface_retrieve_hwaddr (0); //get the resulting mac
 
 	Log_info ("iface initialized OK");
 
@@ -213,6 +215,8 @@ int iface_create()
 
 #if defined (__linux__)
 
+#include <net/if_arp.h>
+
 int iface_set_hwaddr (uint8_t*hwaddr)
 {
 	struct ifreq ifr;
@@ -229,6 +233,8 @@ int iface_set_hwaddr (uint8_t*hwaddr)
 
 	strncpy (ifr.ifr_name, iface_name, IFNAMSIZ);
 
+	ifr.ifr_addr.sa_family = ARPHRD_ETHER;
+
 	for (int i = 0;i < 6;++i)
 		ifr.ifr_hwaddr.sa_data[i] = hwaddr[i];
 
@@ -241,8 +247,6 @@ int iface_set_hwaddr (uint8_t*hwaddr)
 		           errno, strerror (errno) );
 		return 2;
 	}
-
-	iface_retrieve_hwaddr (0);
 
 	return 0;
 }

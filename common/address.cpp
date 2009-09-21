@@ -71,21 +71,29 @@ static int hexval (char c)
 	return (int) c;
 }
 
+#include "log.h"
 
 bool address::scan_addr (const char*s)
 {
 	addr.clear();
-	char byte = 0;
+	bool half = false;
+	char byte;
 	int val;
 	for (;*s;++s) {
 		if ( (val = hexval (*s) ) < 0) continue;
+		Log_info ("value now %d %x", val, val);
 
-		if (byte) {
+		if (half) {
 			addr.push_back (val + (byte << 4) );
 			byte = 0;
-		} else byte = val;
+			half = false;
+		} else {
+			byte = val;
+			half = true;
+		}
 	}
-	if (byte) return false; //bad padding
+	Log_info ("it has %d bytes, remaining half is %s", addr.size(), half ? "present" : "NOT present");
+	if (half) return false; //bad padding
 	return true;
 }
 
