@@ -278,7 +278,7 @@ Because of library compatibility, many people asked about compiling CloudVPN
 tools statically. This can be easily achieved with autotools. This works in
 most common cases:
 
-LDFLAGS=-static LIBS="-ltasn1 -lgpg-error -lz -lev" ./configure
+LDFLAGS=-static LIBS="-ltasn1 -lgpg-error -lz -lev -lrt" ./configure
 
 (and then continue like everytime.)
 LIBS are needed because gcc doesn't resolve library dependencies when static

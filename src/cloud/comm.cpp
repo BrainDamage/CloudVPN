@@ -1228,7 +1228,8 @@ void connection::stats_clear()
 /*
  * bandwidth limiting
  *
- * as we rely on TCP, we can limit only upload, but that shouldn't be a problem.
+ * please note that download limiting doesnt really 'limit' much, it only drops
+ * incoming overlimit data packets. The actual network traffic is still there.
  */
 
 #define minimum_granularity 10000 //full recompute threshold = 10ms.

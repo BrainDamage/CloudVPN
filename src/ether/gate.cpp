@@ -933,7 +933,7 @@ int gate_poll_read()
 			return 1;
 		}
 		if (r < 0) {
-			if (errno == EWOULDBLOCK) return 0;
+			if ( (!errno) || (errno == EWOULDBLOCK) ) return 0;
 			Log_error ("gate recv() error %d: %s",
 			           errno, strerror (errno) );
 			gate_disconnect();
@@ -958,7 +958,7 @@ int gate_poll_write()
 			return 1;
 		}
 		if (r < 0) {
-			if (errno == EWOULDBLOCK) return 0;
+			if ( (!errno) || (errno == EWOULDBLOCK) ) return 0;
 			Log_error ("gate send() error %d: %s",
 			           errno, strerror (errno) );
 			gate_disconnect();
