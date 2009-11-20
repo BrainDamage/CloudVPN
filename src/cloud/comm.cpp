@@ -22,6 +22,7 @@
 #include "network.h"
 
 #include <gnutls/gnutls.h>
+#include <gnutls/openpgp.h>
 #include <gcrypt.h>
 
 #include <string.h>
@@ -80,13 +81,22 @@ void ssl_logger (int level, const char*msg)
 
 static int ssl_initialize()
 {
-	string keypath, certpath, t;
+	string keypath, certpath, subkey = "auto", t;
+	bool use_x509_keys = false, use_pgp_keys = false;
 
 	Log_info ("Initializing ssl layer");
 
-	if ( (!config_get ("key", keypath) ) ||
-	        (!config_get ("cert", certpath) ) ) {
-		Log_fatal ("you must correctly specify key and cert options");
+	if ( config_get ("x509key", keypath) && config_get ("x509cert", certpath) ) {
+		use_x509_keys = true;
+	}
+	if ( config_get ("pgpkey", keypath) && config_get ("pgpcert", certpath) ) {
+		use_pgp_keys = true;
+		if ( !config_get ("pgpsubkeyid", subkey) ) {
+			subkey = "auto";
+		}
+	}
+	if ( !use_x509_keys && !use_pgp_keys ) {
+		Log_fatal ("you must correctly specify key and cert options in either X.509 or PGP format");
 		return 1;
 	}
 
@@ -110,16 +120,25 @@ static int ssl_initialize()
 	}
 
 	//load the keys
-	if (gnutls_certificate_set_x509_key_file
-	        (xcred, certpath.c_str(), keypath.c_str(), GNUTLS_X509_FMT_PEM) ) {
-		Log_error ("loading keypair failed");
-		return 4;
+	if (use_x509_keys) {
+		if (gnutls_certificate_set_x509_key_file
+			    (xcred, certpath.c_str(), keypath.c_str(), GNUTLS_X509_FMT_PEM) < 0 ) {
+			Log_error ("loading X.509 keypair failed");
+			return 4;
+		}
+	}
+	if (use_pgp_keys) {
+		if (gnutls_certificate_set_openpgp_key_file
+	 			(xcred, certpath.c_str(), keypath.c_str(), GNUTLS_OPENPGP_FMT_BASE64) < 0 ) {
+			Log_error ("loading PGP keypair failed" );
+			return 4;
+		}
 	}
 
 	//load DH params, or generate some.
 	gnutls_dh_params_init (&dh_params);
 
-	if (config_get ("dh", t) ) {
+	if (config_get ("x509dh", t) ) {
 		FILE*f;
 		long s;
 		vector<uint8_t>buffer;
@@ -161,28 +180,40 @@ static int ssl_initialize()
 
 	gnutls_certificate_set_dh_params (xcred, dh_params);
 
-	//load CAs and CRLs
-	list<string> l;
-	list<string>::iterator il;
+	if (use_x509_keys) {
+		//load CAs and CRLs
+		list<string> l;
+		list<string>::iterator il;
 
-	config_get_list ("ca", l);
-	for (il = l.begin();il != l.end();++il) {
-		int t = gnutls_certificate_set_x509_trust_file
-		        (xcred, il->c_str(), GNUTLS_X509_FMT_PEM);
-		if (t < 0) Log_info ("loading CAs from file %s failed",
-			                     il->c_str() );
-		else Log_info ("loaded %d CAs from %s",
-			               t, il->c_str() );
+		config_get_list ("x509ca", l);
+		for (il = l.begin();il != l.end();++il) {
+			int t = gnutls_certificate_set_x509_trust_file
+				    (xcred, il->c_str(), GNUTLS_X509_FMT_PEM);
+			if (t < 0) Log_info ("loading CAs from file %s failed",
+					                 il->c_str() );
+			else Log_info ("loaded %d CAs from %s",
+					           t, il->c_str() );
+		}
+
+		config_get_list ("x509crl", l);
+		for (il = l.begin();il != l.end();++il) {
+			int t = gnutls_certificate_set_x509_crl_file
+				    (xcred, il->c_str(), GNUTLS_X509_FMT_PEM);
+			if (t < 0) Log_info ("loading CRLs from file %s failed",
+					                 il->c_str() );
+			else Log_info ("loaded %d CRLs from %s",
+					           t, il->c_str() );
+		}
 	}
-
-	config_get_list ("crl", l);
-	for (il = l.begin();il != l.end();++il) {
-		int t = gnutls_certificate_set_x509_crl_file
-		        (xcred, il->c_str(), GNUTLS_X509_FMT_PEM);
-		if (t < 0) Log_info ("loading CRLs from file %s failed",
-			                     il->c_str() );
-		else Log_info ("loaded %d CRLs from %s",
-			               t, il->c_str() );
+	if (use_pgp_keys) {
+		//load keyring
+		string keyring;
+		if ( config_get ("pgpkeyring", keyring) ) {
+			if ( gnutls_certificate_set_openpgp_keyring_file
+				    (xcred, keyring.c_str(), GNUTLS_OPENPGP_FMT_BASE64) < 0 )
+				Log_info ("loading pgp keyring from file %s failed", keyring.c_str() );
+			else Log_info ("loaded pgp keyring from %s", keyring.c_str() );
+		}
 	}
 
 	gnutls_certificate_set_verify_limits (xcred, 32768, 8);
@@ -754,6 +785,59 @@ void connection::try_accept()
 	if (r == 0) {
 		Log_info ("socket %d accepted SSL connection id %d", fd, id);
 		activate();
+		unsigned int certificatestatus;
+		if ( gnutls_certificate_verify_peers2
+				( session, &certificatestatus ) < 0) {
+			Log_error ( "error verifying peer %d credentials", id );
+			reset();
+		}
+		else {
+			if (certificatestatus != 0) {
+				if (certificatestatus & GNUTLS_CERT_INVALID)
+					Log_info("%d certificate is not trusted", id);
+
+				if (certificatestatus & GNUTLS_CERT_SIGNER_NOT_FOUND)
+					Log_info("%d certificate hasn't got a known issuer", id);
+
+				if (certificatestatus & GNUTLS_CERT_REVOKED)
+					Log_info("%d certificate has been revoked", id);
+
+				if (certificatestatus & GNUTLS_CERT_INSECURE_ALGORITHM)
+					Log_info("%d certificate uses an insecure algorithm", id);
+
+				reset();
+			}
+			else {
+				 if ( GNUTLS_CRT_OPENPGP == gnutls_certificate_type_get (session) ) {
+				 	unsigned int list_size;
+					const gnutls_datum_t * datum = gnutls_certificate_get_peers
+  						( session, &list_size );
+					if ( datum ) {
+						gnutls_openpgp_crt_t key;
+						gnutls_openpgp_crt_init( &key );
+						if ( gnutls_openpgp_crt_import ( key , datum, GNUTLS_OPENPGP_FMT_RAW ) == GNUTLS_E_SUCCESS ) {
+							unsigned int verification_result = 0;
+							gnutls_openpgp_keyring_t keyring;
+							gnutls_openpgp_keyring_init( &keyring );
+							gnutls_certificate_get_openpgp_keyring ( xcred, &keyring );
+							if ( gnutls_openpgp_crt_verify_ring ( key, keyring , 0, &verification_result ) == GNUTLS_E_SUCCESS ) {
+								Log_info( "client verification: %d", verification_result );
+        					} else {
+								Log_error("error verifying client %d certificate", id);
+								reset();
+        					}
+						} else {
+							Log_error("error acquiring client %d certificate from datum", id);
+							reset();
+						}
+						gnutls_openpgp_crt_deinit( key );
+					} else {
+						Log_error("error acquiring client %d certificate datum", id);
+						reset();
+					}
+				}
+			}
+		}
 
 	} else if (handle_ssl_error (r) ) {
 		Log_error ("accepting fd %d lost", fd);
